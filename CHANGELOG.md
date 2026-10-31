@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.2
 
+- **Fixed:** after an update from 0.4, the app did not load at all (no *Vaults*, no notice above a
+  vault's folder) until the browser's cache was emptied. Nextcloud has browsers keep the app's
+  modules for half a year, and only the main one is loaded with the app's version: the browser
+  combined the new one with the old version's shared module. Every other module's name now carries
+  a hash of its contents.
 - The build writes invisible characters (control characters such as JSZip's `PK\x03\x04`,
   non-breaking spaces, joiners) as escapes, so that Forgejo and editors no longer warn of hidden
   text. The build checks, by parsing each chunk before and after, that the code means the same.

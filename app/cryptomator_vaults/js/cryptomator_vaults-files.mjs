@@ -1,4 +1,4 @@
-import { g as tn, t as en, v as nn, x as jt, K as rn, L as st, M as an, O as Ce, s as on, F as Z, Q as kt, R as sn, V as cn, z as xe, P as Gt, S as ln, y as un, A as Ae, T as dn } from "./cryptomator_vaults-common.mjs";
+import { g as tn, t as en, v as nn, x as jt, K as rn, L as st, M as an, O as Ce, s as on, F as Z, Q as kt, R as sn, V as cn, z as xe, P as Gt, S as ln, y as un, A as Ae, T as dn } from "./cryptomator_vaults-common-DyNnossx.mjs";
 var Et = { exports: {} }, hn = Et.exports, de;
 function pn() {
   return de || (de = 1, (function(t) {
@@ -1050,20 +1050,20 @@ function Te(t) {
   return bn.includes(n) ? { kind: "image", type: n === "svg" ? "image/svg+xml" : "image/" + (n === "jpg" ? "jpeg" : n) } : n === "pdf" ? { kind: "pdf", type: "application/pdf" } : n in he ? { kind: "video", type: he[n] } : n in pe ? { kind: "audio", type: pe[n] } : kn.includes(n) ? { kind: "text", type: "text/plain" } : n === "docx" ? { kind: "docx" } : ["pptx", "odp", "odt"].includes(n) ? { kind: n } : ["md", "markdown"].includes(n) ? { kind: "markdown" } : n === "zip" ? { kind: "zip" } : ["heic", "heif"].includes(n) ? { kind: "heic" } : ["xlsx", "xls", "ods"].includes(n) ? { kind: "sheet" } : { kind: "none" };
 }
 const Ie = {
-  docx: async (t) => (await import("./cryptomator_vaults-documents.mjs")).docxPage(t),
-  sheet: async (t) => (await import("./cryptomator_vaults-documents.mjs")).sheetPage(t),
-  pptx: async (t) => (await import("./cryptomator_vaults-office.mjs")).pptxPage(t),
-  odp: async (t) => (await import("./cryptomator_vaults-office.mjs")).odpPage(t),
-  odt: async (t) => (await import("./cryptomator_vaults-office.mjs")).odtPage(t),
-  markdown: async (t) => (await import("./cryptomator_vaults-previews.mjs")).markdownPage(t),
-  zip: async (t) => (await import("./cryptomator_vaults-previews.mjs")).zipPage(t)
+  docx: async (t) => (await import("./cryptomator_vaults-documents-DqUUeel0.mjs")).docxPage(t),
+  sheet: async (t) => (await import("./cryptomator_vaults-documents-DqUUeel0.mjs")).sheetPage(t),
+  pptx: async (t) => (await import("./cryptomator_vaults-office-B4zWRVTs.mjs")).pptxPage(t),
+  odp: async (t) => (await import("./cryptomator_vaults-office-B4zWRVTs.mjs")).odpPage(t),
+  odt: async (t) => (await import("./cryptomator_vaults-office-B4zWRVTs.mjs")).odtPage(t),
+  markdown: async (t) => (await import("./cryptomator_vaults-previews-ItcQ3O0Y.mjs")).markdownPage(t),
+  zip: async (t) => (await import("./cryptomator_vaults-previews-ItcQ3O0Y.mjs")).zipPage(t)
 };
 function xn(t) {
   return t in Ie || t === "heic";
 }
 async function An(t, n, o) {
   if (t.kind === "heic") {
-    const d = await (await import("./cryptomator_vaults-previews.mjs")).heicToPng(n);
+    const d = await (await import("./cryptomator_vaults-previews-ItcQ3O0Y.mjs")).heicToPng(n);
     return y("img", { class: "cryptomator-preview", src: pt(d, "image/png"), alt: o });
   }
   const l = await Ie[t.kind](n);
@@ -1454,7 +1454,7 @@ async function zn() {
 const { Vault: Pe, checkName: _e } = Se;
 let Rt = null;
 function Xt() {
-  return Rt || (document.head.append(y("link", { rel: "stylesheet", href: dn("cryptomator_vaults", "css", "cryptomator_vaults-files.css") })), Rt = import("./cryptomator_vaults-dialogs.mjs")), Rt;
+  return Rt || (document.head.append(y("link", { rel: "stylesheet", href: dn("cryptomator_vaults", "css", "cryptomator_vaults-files.css") })), Rt = import("./cryptomator_vaults-dialogs-h5ro9skc.mjs")), Rt;
 }
 function F(t) {
   Xt().then(({ showError: n }) => n(t));

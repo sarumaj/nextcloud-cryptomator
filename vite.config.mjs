@@ -6,10 +6,12 @@
 // libraries it uses (the file picker) into css/cryptomator_vaults-files.css. The
 // output is committed: the server installs the app from the repository, without a
 // build of its own.
+import { readdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
 const vaultJs = fileURLToPath(new URL('./app/cryptomator_vaults/js/vault.js', import.meta.url))
+const outJs = fileURLToPath(new URL('./app/cryptomator_vaults/js/', import.meta.url))
 const DIALOGS = /node_modules\/@nextcloud\/dialogs\//
 // The office previews' libraries (src/documents.js), loaded when a document is opened.
 const DOCUMENTS = /node_modules\/(docx-preview|xlsx)\//
@@ -72,6 +74,23 @@ function escapeInvisible() {
 	}
 }
 
+/**
+ * Removes the previous build's modules before a build: the chunks' names change
+ * with their contents (the output folder also holds vault.js, so it is not emptied).
+ */
+function removePreviousBuild() {
+	return {
+		name: 'remove-previous-build',
+		buildStart() {
+			for (const name of readdirSync(outJs)) {
+				if (/^cryptomator_vaults-.*\.mjs$/.test(name)) {
+					rmSync(outJs + name)
+				}
+			}
+		},
+	}
+}
+
 /** Whether the entry imports a module statically (directly or through others): it is needed at once. */
 function fromEntry(id, getModuleInfo, seen = new Map()) {
 	if (seen.has(id)) {
@@ -105,7 +124,7 @@ function onlyThrough(pattern, id, getModuleInfo, seen = new Map()) {
 }
 
 export default defineConfig({
-	plugins: [escapeInvisible()],
+	plugins: [removePreviousBuild(), escapeInvisible()],
 	define: { 'process.env.NODE_ENV': JSON.stringify('production') },
 	build: {
 		outDir: 'app/cryptomator_vaults',
@@ -127,8 +146,11 @@ export default defineConfig({
 				// What only @nextcloud/dialogs needs (toasts, the file picker: Vue and its
 				// components) and what only the office previews need, each in a chunk
 				// loaded when first needed; the libraries the integration uses at once in
-				// another. Fixed names, no hashes.
-				chunkFileNames: 'js/cryptomator_vaults-[name].mjs',
+				// another. The chunks' names carry a hash of their contents: Nextcloud has
+				// browsers keep .mjs files for half a year, and only the entry is loaded
+				// with the app's version (?v=), so a chunk of a fixed name would be one of
+				// the old version after an update, and the entry would fail with it.
+				chunkFileNames: 'js/cryptomator_vaults-[name]-[hash].mjs',
 				manualChunks(id, { getModuleInfo }) {
 					if (!id.includes('node_modules')) {
 						return undefined

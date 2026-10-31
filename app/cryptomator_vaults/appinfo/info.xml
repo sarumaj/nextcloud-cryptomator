@@ -15,7 +15,7 @@
 - Vault format 8 (Cryptomator 1.6 and later), both cipher combinations
 
 Not affiliated with Skymatic GmbH, the makers of Cryptomator.]]></description>
-    <version>0.5.1</version>
+    <version>0.5.2</version>
     <licence>agpl</licence>
     <author>Dawid Ciepiela</author>
     <namespace>CryptomatorVaults</namespace>
