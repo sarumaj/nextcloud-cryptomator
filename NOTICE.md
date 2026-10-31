@@ -44,7 +44,7 @@ by `npm run notice`.
 | is-svg                     | 6.1.0   | MIT                       |
 | jszip                      | 3.10.2  | (MIT OR GPL-3.0-or-later) |
 | libheif-js                 | 1.23.5  | LGPL-3.0                  |
-| marked                     | 18.1.1  | MIT                       |
+| marked                     | 18.1.2  | MIT                       |
 | p-queue                    | 10.0.0  | MIT                       |
 | sax                        | 1.6.1   | BlueOak-1.0.0             |
 | semver                     | 7.8.5   | ISC                       |

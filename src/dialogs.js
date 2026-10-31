@@ -482,8 +482,11 @@ export function showUploads(title) {
 				},
 			}
 		},
-		/** What to do with a taken name: 'replace', 'skip', 'replace-all', 'skip-all' or 'cancel'. */
-		ask(name, total) {
+		/**
+		 * What to do with a taken name: 'replace', 'skip', 'replace-all', 'skip-all' or
+		 * 'cancel'; text and cancel tell what replacing does and what stops.
+		 */
+		ask(name, total, { text, cancel } = {}) {
 			return new Promise((resolve) => {
 				const choose = (choice) => () => {
 					question.hidden = true
@@ -492,13 +495,13 @@ export function showUploads(title) {
 				}
 				question.replaceChildren(
 					el('h3', {}, t('“{name}” already exists', { name })),
-					notice(t('Replace the file in the vault with the one you chose? The vault keeps no copy of the old one; Nextcloud\'s versions keep its encrypted file.')),
+					notice(text || t('Replace the file in the vault with the one you chose? The vault keeps no copy of the old one; Nextcloud\'s versions keep its encrypted file.')),
 					el('div', { class: 'cryptomator-choices' }, [
 						el('button', { type: 'button', class: 'primary', onclick: choose('replace') }, t('Replace')),
 						el('button', { type: 'button', onclick: choose('skip') }, t('Skip')),
 						total > 1 ? el('button', { type: 'button', onclick: choose('replace-all') }, t('Replace all')) : null,
 						total > 1 ? el('button', { type: 'button', onclick: choose('skip-all') }, t('Skip all')) : null,
-						el('button', { type: 'button', onclick: choose('cancel') }, t('Cancel upload')),
+						el('button', { type: 'button', onclick: choose('cancel') }, cancel || t('Cancel upload')),
 					]),
 				)
 				question.hidden = false

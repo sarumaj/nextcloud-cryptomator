@@ -59,12 +59,28 @@ menu leads there.
    already gets the new files; if a file of that name exists, you're asked whether to replace it.
    An entry's menu has **Rename**, **Move …** (to a folder of the vault) and **Delete**; select
    several to move or delete them together.
-5. Choose **Lock** in the bar above an open vault, in the vault's menu in *Vaults*, or **Lock all
+5. To bring files and folders of yours into the vault, choose **Add from your files …** at the
+   top and then **Copy into the vault** or **Move into the vault**. To take entries out of it,
+   decrypted, choose **Export to your files …** in their menu, a folder, and **Copy here** or
+   **Move here**.
+6. Choose **Lock** in the bar above an open vault, in the vault's menu in *Vaults*, or **Lock all
    vaults** at the top.
 
 Files from 16 MB are encrypted, uploaded and checked in parts of 10 MB, so memory holds a part,
 not the file. Downloading a large file in pieces needs a browser that lets a page save a file so
 (Edge, Chrome); others hold the file in memory, and above 1 GB the app asks first.
+
+Moving a file or folder into the vault deletes the original once all of it is in the vault and
+checked, and only if it did not change meanwhile (its ETag: `If-Match` for a file; a folder's,
+which changes with anything inside it, is compared just before, as Nextcloud refuses `If-Match` on
+folders). It is also removed from Nextcloud's deleted files, with its versions, so that no
+unencrypted copy stays on the server. What is shared with you is copied, never deleted: deleting
+it would take it from its owner. A folder that holds a vault cannot go into one.
+
+An export writes the decrypted file into your files and checks it: read back and compared (a large
+one in parts of 10 MB, each against its SHA-256). Moving out removes an entry from the vault only
+once all of it was exported; links, and what does not decrypt, stay in the vault, and so does
+their folder. An export is the one way the app hands the server decrypted files, as you ask it to.
 
 A sync client that finds a file changed on both sides keeps a copy beside it (e.g.
 `… (conflicted copy …).c9r`). The app resolves such copies as Cryptomator does when it lists the

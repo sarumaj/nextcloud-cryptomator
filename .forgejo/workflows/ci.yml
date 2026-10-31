@@ -66,6 +66,9 @@ jobs:
         run: |
           npm run notice
           git diff --exit-code -- NOTICE.md || { echo "::error::Run npm run notice and commit NOTICE.md"; exit 1; }
+          # Its build goes to a folder of its own: the app's must be as committed.
+          test -z "$(git status --porcelain -- app/cryptomator_vaults)" \
+            || { git status --porcelain -- app/cryptomator_vaults; echo "::error::npm run notice changed the app's folder"; exit 1; }
 
       - name: Check the translations are valid and complete
         run: node tests/l10n.js

@@ -16,6 +16,10 @@
  * where something of that name appeared meanwhile. A file is complete or absent:
  * Nextcloud writes a PUT to a .part file and renames it, and assembles a chunked
  * upload (CHUNKED_FROM and up) only at its final MOVE.
+ *
+ * The person's other files (davStorage('')) are read for copying into a vault and
+ * written for exporting out of one; a file moved into a vault is deleted only if
+ * it did not change meanwhile (If-Match), and also from the deleted files.
  */
 import { getCurrentUser } from '@nextcloud/auth'
 import { generateRemoteUrl } from '@nextcloud/router'
@@ -23,6 +27,12 @@ import vaultLib from '../app/cryptomator_vaults/js/vault.js'
 
 const { VaultError } = vaultLib
 const DAV = 'DAV:'
+const OC = 'http://owncloud.org/ns'
+const NC = 'http://nextcloud.org/ns'
+// What a listing asks for: the type, size and time, the ETag (which changes with
+// the contents, a folder's also with anything inside it) and the permissions.
+const PROPS = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop>'
+	+ '<d:resourcetype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><oc:permissions/></d:prop></d:propfind>'
 // Larger files go up in chunks (Nextcloud's chunked upload, v2): each request
 // stays below the server's upload limit, and the object store assembles the parts.
 const CHUNKED_FROM = 20 * 1024 * 1024
@@ -53,7 +63,7 @@ function filesUrl(folder) {
 function parseMultistatus(text) {
 	const xml = new DOMParser().parseFromString(text, 'application/xml')
 	return Array.from(xml.getElementsByTagNameNS(DAV, 'response')).map((response) => {
-		const prop = (name) => response.getElementsByTagNameNS(DAV, name)[0]
+		const prop = (name, ns = DAV) => response.getElementsByTagNameNS(ns, name)[0]
 		const length = prop('getcontentlength')
 		const modified = prop('getlastmodified')
 		return {
@@ -61,6 +71,10 @@ function parseMultistatus(text) {
 			isDir: response.getElementsByTagNameNS(DAV, 'collection').length > 0,
 			size: length ? Number(length.textContent) : 0,
 			mtime: modified ? new Date(modified.textContent) : undefined,
+			etag: prop('getetag')?.textContent || undefined,
+			permissions: prop('permissions', OC)?.textContent ?? '',
+			originalLocation: prop('trashbin-original-location', NC)?.textContent,
+			deletionTime: Number(prop('trashbin-deletion-time', NC)?.textContent) || 0,
 		}
 	})
 }
@@ -197,7 +211,7 @@ export function davStorage(folder) {
 				method: 'PROPFIND',
 				headers: davHeaders({ Depth: '0', 'Content-Type': 'application/xml; charset=utf-8' }),
 				credentials: 'same-origin',
-				body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>',
+				body: PROPS,
 			})
 			if (response.status === 404) {
 				return null
@@ -206,7 +220,7 @@ export function davStorage(folder) {
 				throw davError(response.status, relative, 'PROPFIND')
 			}
 			const [entry] = parseMultistatus(await response.text())
-			return { isDir: entry.isDir, size: entry.size }
+			return { isDir: entry.isDir, size: entry.size, etag: entry.etag, permissions: entry.permissions }
 		},
 		/** Stores a file whole; create: refused (VaultError 'exists') if the name is taken. */
 		async write(relative, data, { create = false, onProgress } = {}) {
@@ -261,13 +275,36 @@ export function davStorage(folder) {
 		async remove(relative) {
 			await davRequest('DELETE', url(relative), {}, relative, [404])
 		},
+		/**
+		 * Deletes a file or folder only as it was (its ETag): VaultError 'changed' if it
+		 * changed meanwhile (a folder: anything inside it), 'not-found' if it is gone.
+		 * A file's DELETE carries If-Match; Nextcloud refuses that on folders, so a
+		 * folder's ETag is compared just before.
+		 */
+		async removeUnchanged(relative, etag, { isDir = false } = {}) {
+			if (isDir) {
+				const found = await this.stat(relative)
+				if (found === null) {
+					throw new VaultError('not-found', relative)
+				}
+				if (found.etag !== etag) {
+					throw new VaultError('changed', relative)
+				}
+			}
+			const response = await fetch(url(relative), { method: 'DELETE', headers: davHeaders(isDir ? {} : { 'If-Match': etag }), credentials: 'same-origin' })
+			if (response.status === 412) {
+				throw new VaultError('changed', relative)
+			}
+			if (!succeeded(response.status, response.redirected)) {
+				throw davError(response.redirected ? 0 : response.status, relative, 'DELETE')
+			}
+		},
 		async list(relative) {
 			const response = await fetch(base + (relative ? encodePath(relative) + '/' : ''), {
 				method: 'PROPFIND',
 				headers: davHeaders({ Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' }),
 				credentials: 'same-origin',
-				body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop>'
-					+ '<d:resourcetype/><d:getcontentlength/><d:getlastmodified/></d:prop></d:propfind>',
+				body: PROPS,
 			})
 			if (response.status === 404) {
 				throw new VaultError('not-found', relative)
@@ -277,7 +314,7 @@ export function davStorage(folder) {
 			}
 			// The first response is the folder itself.
 			return parseMultistatus(await response.text()).slice(1)
-				.map((entry) => ({ name: lastSegment(entry.href), isDir: entry.isDir, size: entry.size, mtime: entry.mtime }))
+				.map((entry) => ({ name: lastSegment(entry.href), isDir: entry.isDir, size: entry.size, mtime: entry.mtime, etag: entry.etag, permissions: entry.permissions }))
 		},
 	}
 }
@@ -307,4 +344,79 @@ export async function findVaults() {
 		.map((href) => '/' + href.slice(href.indexOf(prefix) + prefix.length, -'/vault.cryptomator'.length))
 		.map((folder) => folder.replace(/\/+$/, '') || '/')
 		.sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * The files and folders chosen in the person's files (paths such as /Documents/a),
+ * walked down: one item per chosen path, {path, name, isDir, etag, permissions,
+ * files: [{path, name, size, etag, dirs}], folders: [dirs]}, where dirs are the
+ * folders from the chosen one's parent down to the file (a chosen folder's name
+ * first). A folder that holds a vault (a vault.cryptomator anywhere inside) is
+ * refused (VaultError 'contains-vault'): its encrypted files are no one's to copy.
+ */
+export async function walkFiles(storage, paths) {
+	const items = []
+	for (const chosen of paths) {
+		const path = chosen.replace(/^\/+|\/+$/g, '')
+		const name = path.split('/').pop()
+		const found = await storage.stat(path)
+		if (found === null) {
+			throw new VaultError('not-found', path)
+		}
+		const item = { path, name, isDir: found.isDir, etag: found.etag, permissions: found.permissions, files: [], folders: [] }
+		if (!found.isDir) {
+			item.files.push({ path, name, size: found.size, etag: found.etag, dirs: [] })
+		} else {
+			const visit = async (folder, dirs) => {
+				item.folders.push(dirs)
+				const entries = await storage.list(folder)
+				if (entries.some((entry) => !entry.isDir && entry.name === 'vault.cryptomator')) {
+					throw new VaultError('contains-vault', folder)
+				}
+				for (const entry of entries) {
+					const inside = folder + '/' + entry.name
+					if (entry.isDir) {
+						await visit(inside, [...dirs, entry.name])
+					} else {
+						item.files.push({ path: inside, name: entry.name, size: entry.size, etag: entry.etag, dirs })
+					}
+				}
+			}
+			await visit(path, [name])
+		}
+		items.push(item)
+	}
+	return items
+}
+
+/**
+ * Removes what was just deleted at path (e.g. Documents/a) from the person's
+ * deleted files, with its versions: the newest item from there. True if it was
+ * removed or there are no deleted files (the app is off: deleting was final),
+ * false if it is not among them (e.g. it was in someone else's share).
+ */
+export async function purgeDeleted(path) {
+	const trash = generateRemoteUrl('dav') + '/trashbin/' + encodeURIComponent(userId()) + '/trash/'
+	const response = await fetch(trash, {
+		method: 'PROPFIND',
+		headers: davHeaders({ Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' }),
+		credentials: 'same-origin',
+		body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns"><d:prop>'
+			+ '<nc:trashbin-original-location/><nc:trashbin-deletion-time/></d:prop></d:propfind>',
+	})
+	if (response.status === 404 || response.status === 405) {
+		return true
+	}
+	if (response.status !== 207) {
+		throw davError(response.status, path, 'PROPFIND (deleted files)')
+	}
+	const wanted = path.replace(/^\/+|\/+$/g, '')
+	const [item] = parseMultistatus(await response.text()).slice(1)
+		.filter((entry) => entry.originalLocation === wanted)
+		.sort((a, b) => b.deletionTime - a.deletionTime)
+	if (!item) {
+		return false
+	}
+	await davRequest('DELETE', new URL(item.href, window.location.href).href, {}, path, [404])
+	return true
 }

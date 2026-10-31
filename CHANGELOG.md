@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.0
+
+- **Into a vault from your files:** **Add from your files …** copies or moves files and folders
+  into the vault's folder shown, encrypted and checked as uploads are. Moving deletes the originals
+  once all is in the vault and only if they did not change meanwhile, also from Nextcloud's
+  deleted files (with their versions): no unencrypted copy stays on the server. What is shared with
+  you is copied only; a folder holding a vault is refused.
+- **Out of a vault into your files:** **Export to your files …** copies or moves entries, decrypted,
+  into a folder chosen with Nextcloud's file picker, and checks what was written (a large file part
+  by part, without holding it). Moving removes an entry from the vault once all of it is out.
+- **Slides look like their design:** the pptx and odp previews draw the slides' backgrounds
+  (colours, gradients, pictures), the shapes their master and layout put on every slide, the
+  theme's colours (with their lighter and darker variants) and fonts, the fills and outlines of
+  shapes, groups, rounded and round shapes, bullets, and PowerPoint's default table style. Still
+  left out: animations, charts, SmartArt and effects such as shadows.
+- The vault picker (**Open a vault folder …**) starts at the top of your files.
+
 ## 0.5.2
 
 - **Fixed:** after an update from 0.4, the app did not load at all (no *Vaults*, no notice above a

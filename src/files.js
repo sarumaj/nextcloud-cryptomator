@@ -41,10 +41,10 @@ import { emit, subscribe } from '@nextcloud/event-bus'
 import { generateFilePath, imagePath } from '@nextcloud/router'
 import vaultLib from '../app/cryptomator_vaults/js/vault.js'
 import { LARGE_FILE, askName, askPassword, hasPreview, chooseFolder, closeDialog, confirmAction, download, el, humanSize, notice, revokeAll, showFile, showUploads } from './dialogs.js'
-import { davStorage, findVaults, userId } from './storage.js'
+import { davStorage, findVaults, purgeDeleted, userId, walkFiles } from './storage.js'
 import { t } from './l10n.js'
 
-const { Vault, checkName } = vaultLib
+const { Vault, VaultError, checkName } = vaultLib
 
 // Nextcloud's toasts and file picker (@nextcloud/dialogs, with Vue and its
 // components) load when first needed: not on every page of Files.
@@ -84,6 +84,8 @@ const ICON_RENAME = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 const ICON_MOVE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg>'
 const ICON_DELETE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>'
 const ICON_UNLOCKED = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6a5 5 0 0 0-9.9-1l1.95.45A3 3 0 0 1 15 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm0 12H6V10h12v10z"/></svg>'
+const ICON_EXPORT = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4h-2v4H6V4h7v5h5v1h2V8l-6-6H6zm12 10v3h-4v2h4v3l4-4-4-4z"/></svg>'
+const ICON_IMPORT = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v6h2V4h7v5h5v11H6v-4H4v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM10 11v3H2v2h8v3l4-4-4-4z"/></svg>'
 const ICON_ADD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2zm5 9h-2v2h-2v-2H9v-2h2V9h2v2h2v2z"/></svg>'
 
 // ----- Vaults and their opaque names -----
@@ -225,6 +227,10 @@ function message(error) {
 		return t('The vault is damaged: {detail}', { detail: error.message })
 	case 'locked':
 		return t('The vault is locked.')
+	case 'changed':
+		return t('“{name}” changed meanwhile: it was kept, and the vault may not hold its latest state.', { name: error.message.split('/').pop() })
+	case 'contains-vault':
+		return t('“{name}” holds a Cryptomator vault, which cannot go into a vault.', { name: error.message.split('/').pop() })
 	default:
 		return t('Something went wrong: {detail}', { detail: error?.message || String(error) })
 	}
@@ -328,6 +334,10 @@ async function getContents(path) {
 }
 
 function emptyView(div) {
+	// Files also calls it without an element (when it takes the view down).
+	if (!div) {
+		return
+	}
 	div.replaceChildren()
 	div.classList.add('cryptomator-empty')
 	if (shown.kind === 'insecure') {
@@ -444,6 +454,8 @@ async function pickVault() {
 	try {
 		const { getFilePickerBuilder } = await dialogs()
 		picked = await getFilePickerBuilder(t('Choose a vault'))
+			// At the top, not where a picker was last (e.g. an export's folder).
+			.startAt('/')
 			.setMultiSelect(false)
 			.allowDirectories(true)
 			// A vault is a folder; its vault.cryptomator chooses it too.
@@ -464,7 +476,7 @@ function inVaults(view) {
 	return view?.id === VIEW_ID
 }
 const OWN_ACTIONS = new Set(['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock', 'cryptomator-vaults-open-vault',
-	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-delete'])
+	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-export', 'cryptomator-vaults-delete'])
 const guarded = new WeakSet()
 let guardedCount = 0
 
@@ -738,20 +750,41 @@ let busy = false
 // so: memory holds a part, not the file.
 const STREAM_FROM = 16 * 1024 * 1024
 
-/** A browser's File as the source Vault.writeFileStream reads in pieces. */
-function fileSource(file) {
-	return { size: file.size, read: async (start, end) => new Uint8Array(await file.slice(start, end).arrayBuffer()) }
+/**
+ * What is written into a vault: {name, size, dirs, source}, where source reads the
+ * contents in ranges (read(start, end), for Vault.writeFileStream) or whole (all()).
+ */
+function fromFile(file, dirs) {
+	const source = {
+		size: file.size,
+		read: async (start, end) => new Uint8Array(await file.slice(start, end).arrayBuffer()),
+		all: async () => new Uint8Array(await file.arrayBuffer()),
+	}
+	return { name: file.name, size: file.size, dirs, source }
+}
+
+/** A file of the person's (an item of walkFiles), read from the server. */
+function fromServer(root, file) {
+	const source = {
+		size: file.size,
+		read: (start, end) => root.readRange(file.path, start, end),
+		all: () => root.read(file.path),
+		remote: true,
+	}
+	return { name: file.name, size: file.size, dirs: file.dirs, source, origin: file }
 }
 
 /**
  * Encrypts and writes files into the folder the list shows, one after the other:
  * each is checked before it enters the vault (Vault.writeFile, or writeFileStream
- * for large ones). files: {file, dirs} with the folders below this one it goes to
- * (created, or merged into those there); folders: further folder paths to create
- * (empty ones of a dropped folder). A taken name is replaced only when the person
- * says so.
+ * for large ones). files: {name, size, dirs, source} (fromFile, fromServer) with
+ * the folders below this one it goes to (created, or merged into those there);
+ * folders: further folder paths to create (empty ones of a dropped folder). A taken
+ * name is replaced only when the person says so. options: title, written (a line's
+ * text when done), check(file) after a file is written (throws if it does not
+ * count), after(written files, dialog) before the summary, which it may add to.
  */
-async function uploadFiles(files, folders = []) {
+async function uploadFiles(files, folders = [], options = {}) {
 	const here = writableHere()
 	if (!here || (files.length === 0 && folders.length === 0)) {
 		return
@@ -762,10 +795,12 @@ async function uploadFiles(files, folders = []) {
 	}
 	busy = true
 	const { vault } = here.vault
-	const dialog = showUploads(t('Uploading to {vault}', { vault: here.vault.name }))
+	const dialog = showUploads(options.title || t('Uploading to {vault}', { vault: here.vault.name }))
 	let decision = null
 	let written = 0
+	const done = []
 	const failed = []
+	let extra = ''
 	// The folders the files go to: their paths below this one, and their IDs.
 	const dirIds = new Map([['', here.dirId]])
 	const folderOf = async (dirs) => {
@@ -788,7 +823,8 @@ async function uploadFiles(files, folders = []) {
 				dialog.file(dirs.join('/') + '/').done(message(error), true)
 			}
 		}
-		for (const [index, { file, dirs }] of files.entries()) {
+		for (const [index, file] of files.entries()) {
+			const { dirs } = file
 			const label = [...dirs, file.name].join('/')
 			const line = dialog.file(label)
 			if (dialog.stopped) {
@@ -806,10 +842,14 @@ async function uploadFiles(files, folders = []) {
 					line.phase(phase === 'upload' && large ? t('Encrypting and uploading') : labels[phase], start + width * (total ? done / total : 1))
 				}
 				if (large) {
-					await vault.writeFileStream(target, file.name, fileSource(file), { replace, onProgress })
+					await vault.writeFileStream(target, file.name, file.source, { replace, onProgress })
 				} else {
-					await vault.writeFile(target, file.name, new Uint8Array(await file.arrayBuffer()), { replace, onProgress })
+					if (file.source.remote) {
+						line.phase(t('Reading'), 0)
+					}
+					await vault.writeFile(target, file.name, await file.source.all(), { replace, onProgress })
 				}
+				await options.check?.(file)
 			}
 			try {
 				try {
@@ -834,7 +874,8 @@ async function uploadFiles(files, folders = []) {
 					await write()
 				}
 				written++
-				line.done(t('Uploaded and checked'))
+				done.push(file)
+				line.done(options.written || t('Uploaded and checked'))
 			} catch (error) {
 				if (error?.code === 'exists' && decision === 'skip-all') {
 					line.done(t('Skipped'))
@@ -845,11 +886,14 @@ async function uploadFiles(files, folders = []) {
 			}
 			dialog.progress((index + 1) / files.length)
 		}
+		if (options.after) {
+			extra = await options.after(done, dialog)
+		}
 	} finally {
 		busy = false
-		dialog.finish(failed.length
+		dialog.finish((failed.length
 			? t('{written} uploaded, {failed} failed. The vault is unchanged where an upload failed.', { written, failed: failed.length })
-			: t('{written} uploaded and checked.', { written }), failed.length > 0)
+			: t('{written} uploaded and checked.', { written })) + (extra ? ' ' + extra : ''), failed.length > 0)
 		refresh(here.vault.name)
 	}
 }
@@ -858,7 +902,7 @@ function chooseFiles(directory = false) {
 	const input = el('input', { type: 'file', multiple: true, hidden: true, webkitdirectory: directory || null })
 	input.addEventListener('change', () => {
 		// A chosen folder's files name their place in it (webkitRelativePath: Folder/sub/file).
-		const files = [...input.files].map((file) => ({ file, dirs: (file.webkitRelativePath || file.name).split('/').slice(0, -1) }))
+		const files = [...input.files].map((file) => fromFile(file, (file.webkitRelativePath || file.name).split('/').slice(0, -1)))
 		input.remove()
 		uploadFiles(files)
 	})
@@ -866,13 +910,13 @@ function chooseFiles(directory = false) {
 	input.click()
 }
 
-/** The files and folders of dropped entries, walked down: {files: [{file, dirs}], folders: [dirs]}. */
+/** The files and folders of dropped entries, walked down: {files: [fromFile], folders: [dirs]}. */
 async function walkEntries(entries) {
 	const files = []
 	const folders = []
 	const visit = async (entry, dirs) => {
 		if (entry.isFile) {
-			files.push({ file: await new Promise((resolve, reject) => entry.file(resolve, reject)), dirs })
+			files.push(fromFile(await new Promise((resolve, reject) => entry.file(resolve, reject)), dirs))
 		} else if (entry.isDirectory) {
 			const inside = [...dirs, entry.name]
 			folders.push(inside)
@@ -1019,6 +1063,352 @@ async function deleteNodes(nodes) {
 	})
 }
 
+// ----- Between a vault and the person's other files -----
+
+// An export too large to hold goes up in parts of this size (object storage takes
+// no part below 5 MB but the last).
+const PART_SIZE = 10 * 1024 * 1024
+
+/** Whether a path of the person's files (/Documents/Vault) is a vault's folder or inside one. */
+function insideVault(path) {
+	const folders = [...seenVaults, ...[...vaults.values()].map((vault) => vault.folder)]
+	return folders.some((folder) => path === folder || path.startsWith(folder.replace(/\/+$/, '') + '/'))
+}
+
+function joinBytes(parts) {
+	const joined = new Uint8Array(parts.reduce((length, part) => length + part.length, 0))
+	let offset = 0
+	for (const part of parts) {
+		joined.set(part, offset)
+		offset += part.length
+	}
+	return joined
+}
+
+/** Pieces regrouped into parts of size bytes (the last may be shorter). */
+async function * regroup(pieces, size) {
+	let held = []
+	let length = 0
+	for await (const piece of pieces) {
+		held.push(piece)
+		length += piece.length
+		while (length >= size) {
+			const joined = joinBytes(held)
+			yield joined.subarray(0, size)
+			held = length > size ? [joined.subarray(size)] : []
+			length -= size
+		}
+	}
+	if (length > 0) {
+		yield joinBytes(held)
+	}
+}
+
+async function digest(data) {
+	return new Uint8Array(await crypto.subtle.digest('SHA-256', data))
+}
+
+function sameBytes(a, b) {
+	return a.length === b.length && a.every((byte, index) => byte === b[index])
+}
+
+/** The file chosen in the picker: the vault's entry of a node ({type: 'dir', dirId, name} for a folder). */
+function chosenEntry(node) {
+	const vault = vaults.get(node.attributes?.cryptomatorVault)
+	if (node.type === FileType.Folder) {
+		const dir = vault?.dirs.get(node.basename)
+		return dir ? { type: 'dir', name: dir.name, dirId: dir.dirId } : null
+	}
+	return vault?.entries.get(node.basename) ?? null
+}
+
+/**
+ * Copies or moves files and folders of the person's into the folder of the vault
+ * the list shows: encrypted and checked as uploads are. Moving deletes an
+ * original once everything in it is in the vault, and only if it did not change
+ * meanwhile, also from the deleted files: no unencrypted copy stays on the server.
+ */
+async function importFromFiles() {
+	const here = writableHere()
+	if (!here) {
+		return
+	}
+	let mode = null
+	let paths
+	try {
+		const { getFilePickerBuilder } = await dialogs()
+		paths = await getFilePickerBuilder(t('Copy or move into the vault'))
+			.setMultiSelect(true)
+			.allowDirectories(true)
+			// Vaults' folders hold encrypted files only.
+			.setFilter((node) => !insideVault(node.path))
+			.setButtonFactory((selected) => [
+				{ label: t('Copy into the vault'), variant: 'secondary', disabled: selected.length === 0, callback: () => { mode = 'copy' } },
+				{ label: t('Move into the vault'), variant: 'primary', disabled: selected.length === 0, callback: () => { mode = 'move' } },
+			])
+			.build()
+			.pick()
+	} catch {
+		return
+	}
+	paths = [].concat(paths || [])
+	if (mode === null || paths.length === 0) {
+		return
+	}
+	const root = davStorage('')
+	let items
+	try {
+		items = await walkFiles(root, paths)
+	} catch (error) {
+		showError(message(error))
+		return
+	}
+	await uploadFiles(items.flatMap((item) => item.files.map((file) => fromServer(root, file))), items.flatMap((item) => item.folders), {
+		title: mode === 'move' ? t('Moving into {vault}', { vault: here.vault.name }) : t('Copying into {vault}', { vault: here.vault.name }),
+		written: t('Encrypted and checked'),
+		// A file that changed while it was read may be in the vault half old, half new.
+		async check(file) {
+			if ((await root.stat(file.origin.path))?.etag !== file.origin.etag) {
+				throw new VaultError('changed', file.origin.path)
+			}
+		},
+		after: mode === 'move' ? (done, dialog) => removeOriginals(root, items, done, dialog) : undefined,
+	})
+}
+
+/** Deletes for good what was moved into a vault, where all of it arrived (see importFromFiles). */
+async function removeOriginals(root, items, done, dialog) {
+	const arrived = new Set(done.map((file) => file.origin))
+	let removed = 0
+	for (const item of items) {
+		const line = dialog.file(item.isDir ? item.name + '/' : item.name)
+		if (!item.files.every((file) => arrived.has(file))) {
+			line.done(t('Original kept: not all of it is in the vault'), true)
+			continue
+		}
+		// Shared with the person: deleting would take it from its owner (or only unshare it).
+		if (!item.permissions.includes('D') || item.permissions.includes('S')) {
+			line.done(t('Original kept: it is shared with you'), true)
+			continue
+		}
+		try {
+			await root.removeUnchanged(item.path, item.etag, { isDir: item.isDir })
+			removed++
+			line.done(await purgeDeleted(item.path) ? t('Original deleted for good') : t('Original deleted; it may still be in the deleted files'))
+		} catch (error) {
+			line.done(message(error), true)
+		}
+	}
+	return removed ? t('Originals deleted for good: {removed}.', { removed }) : ''
+}
+
+/**
+ * Writes a vault's file decrypted into the person's files at path and checks it:
+ * read back and compared (a large one part by part, against the parts' SHA-256).
+ * replace allows replacing a file there (Nextcloud keeps it among the versions).
+ */
+async function exportFile(vault, root, entry, path, replace, onProgress) {
+	if (entry.size < STREAM_FROM) {
+		onProgress('decrypt', 0, 1)
+		const data = await vault.readFile(entry)
+		await root.write(path, data, { create: !replace, onProgress: (done, total) => onProgress('upload', done, total) })
+		onProgress('verify', 0, 1)
+		if (!sameBytes(await digest(await root.read(path)), await digest(data))) {
+			throw new VaultError('network', 'the stored copy differs from the decrypted file')
+		}
+		return
+	}
+	const digests = []
+	async function * hashed(parts) {
+		for await (const part of parts) {
+			digests.push(await digest(part))
+			yield part
+		}
+	}
+	await root.writeParts(path, entry.size, hashed(regroup(vault.decryptedPieces(entry), PART_SIZE)),
+		{ create: !replace, onProgress: (done, total) => onProgress('upload', done, total) })
+	if ((await root.stat(path))?.size !== entry.size) {
+		throw new VaultError('network', 'the stored copy has another size than the decrypted file')
+	}
+	for (const [index, expected] of digests.entries()) {
+		const start = index * PART_SIZE
+		if (!sameBytes(await digest(await root.readRange(path, start, Math.min(start + PART_SIZE, entry.size))), expected)) {
+			throw new VaultError('network', 'the stored copy differs from the decrypted file')
+		}
+		onProgress('verify', index + 1, digests.length)
+	}
+}
+
+/**
+ * Copies or moves entries of the vault the list shows, decrypted, into a folder of
+ * the person's files. Moving removes an entry from the vault once all of it is
+ * there and checked.
+ */
+async function exportNodes(nodes) {
+	const here = writableHere()
+	if (!here) {
+		return
+	}
+	let mode = null
+	let target = null
+	try {
+		const { getFilePickerBuilder } = await dialogs()
+		await getFilePickerBuilder(nodes.length === 1
+			? t('Export “{name}” decrypted to …', { name: nodes[0].displayname })
+			: t('Export {count} items decrypted to …', { count: nodes.length }))
+			.setMultiSelect(false)
+			.allowDirectories(true)
+			.setMimeTypeFilter(['httpd/unix-directory'])
+			.setFilter((node) => node.type === FileType.Folder && !insideVault(node.path))
+			.setButtonFactory((selected, path) => [
+				{ label: t('Copy here'), variant: 'secondary', callback: () => { mode = 'copy'; target = path } },
+				{ label: t('Move here'), variant: 'primary', callback: () => { mode = 'move'; target = path } },
+			])
+			.build()
+			.pick()
+	} catch {
+		// Also when no folder was selected: the folder shown is the target.
+	}
+	if (mode === null || target === null) {
+		return
+	}
+	if (insideVault(target)) {
+		showError(t('Choose a folder outside the vault.'))
+		return
+	}
+	if (busy) {
+		showError(t('Another change to the vault is still running.'))
+		return
+	}
+	busy = true
+	const { vault } = here.vault
+	const root = davStorage('')
+	const at = (...names) => [target.replace(/^\/+|\/+$/g, ''), ...names].filter(Boolean).join('/')
+	const dialog = showUploads(mode === 'move' ? t('Moving out of {vault}', { vault: here.vault.name }) : t('Exporting from {vault}', { vault: here.vault.name }))
+	const conflict = { text: t('Replace the file in your files with the one from the vault? Nextcloud keeps the old one among its versions.'), cancel: t('Cancel') }
+	let decision = null
+	let written = 0
+	let removed = 0
+	let cancelled = false
+	const failed = []
+	try {
+		const items = []
+		for (const node of nodes) {
+			const entry = chosenEntry(node)
+			const item = { name: node.displayname, files: [], folders: [], complete: entry !== null }
+			const visit = async (dirId, dirs) => {
+				item.folders.push(dirs)
+				for (const child of await vault.list(dirId)) {
+					if (child.type === 'dir') {
+						await visit(child.dirId, [...dirs, child.name])
+					} else if (child.type === 'file') {
+						item.files.push({ entry: child, dirs })
+					} else {
+						// Links and what does not decrypt stay; so does the folder then.
+						item.complete = false
+					}
+				}
+			}
+			if (entry?.type === 'dir') {
+				await visit(entry.dirId, [entry.name])
+			} else if (entry?.type === 'file') {
+				item.files.push({ entry, dirs: [] })
+			} else {
+				item.complete = false
+			}
+			items.push(item)
+		}
+		const total = items.reduce((count, item) => count + item.files.length, 0)
+		let index = 0
+		for (const item of items) {
+			for (const dirs of item.folders) {
+				try {
+					await root.mkdir(at(...dirs), { existsOk: true })
+				} catch (error) {
+					item.complete = false
+					failed.push(dirs.join('/'))
+					dialog.file(dirs.join('/') + '/').done(message(error), true)
+				}
+			}
+			for (const { entry, dirs } of item.files) {
+				const label = [...dirs, entry.name].join('/')
+				const line = dialog.file(label)
+				index++
+				if (dialog.stopped || cancelled) {
+					item.complete = false
+					line.done(t('Not exported'))
+					continue
+				}
+				const labels = { decrypt: t('Decrypting'), upload: entry.size >= STREAM_FROM ? t('Decrypting and uploading') : t('Uploading'), verify: t('Checking') }
+				const share = { decrypt: [0, 0.2], upload: [0.2, 0.6], verify: [0.8, 0.2] }
+				const onProgress = (phase, done, all) => line.phase(labels[phase], share[phase][0] + share[phase][1] * (all ? done / all : 1))
+				let replace = decision === 'replace-all'
+				try {
+					try {
+						await exportFile(vault, root, entry, at(...dirs, entry.name), replace, onProgress)
+					} catch (error) {
+						if (error?.code !== 'exists' || decision === 'skip-all') {
+							throw error
+						}
+						const answer = decision === 'replace-all' ? 'replace' : await dialog.ask(label, total, conflict)
+						if (answer === 'cancel') {
+							cancelled = true
+							throw Object.assign(new Error('cancelled'), { cancelled: true })
+						}
+						if (answer.endsWith('-all')) {
+							decision = answer
+						}
+						if (answer.startsWith('skip')) {
+							throw Object.assign(new Error('skipped'), { skipped: true })
+						}
+						replace = true
+						await exportFile(vault, root, entry, at(...dirs, entry.name), replace, onProgress)
+					}
+					written++
+					line.done(t('Exported and checked'))
+				} catch (error) {
+					item.complete = false
+					if (error?.cancelled) {
+						line.done(t('Not exported'))
+						continue
+					}
+					if (error?.skipped || (error?.code === 'exists' && decision === 'skip-all')) {
+						line.done(t('Skipped'))
+					} else {
+						failed.push(label)
+						line.done(message(error), true)
+					}
+				}
+				dialog.progress(index / Math.max(total, 1))
+			}
+			if (mode === 'move') {
+				const line = dialog.file(t('“{name}” in the vault', { name: item.name }))
+				if (!item.complete) {
+					line.done(t('Kept in the vault: not all of it was exported'), true)
+					continue
+				}
+				try {
+					await vault.removeEntry(here.dirId, item.name)
+					removed++
+					line.done(t('Removed from the vault'))
+				} catch (error) {
+					line.done(entryMessage(error, item.name), true)
+				}
+			}
+		}
+	} catch (error) {
+		failed.push('')
+		showError(message(error))
+	} finally {
+		busy = false
+		const summary = failed.length
+			? t('{written} exported, {failed} failed.', { written, failed: failed.length })
+			: t('{written} exported and checked.', { written })
+		dialog.finish(summary + (removed ? ' ' + t('{removed} removed from the vault.', { removed }) : ''), failed.length > 0)
+		refresh(here.vault.name)
+	}
+}
+
 registerFileAction({
 	id: 'cryptomator-vaults-rename',
 	displayName: () => t('Rename'),
@@ -1045,6 +1435,22 @@ registerFileAction({
 		return nodes.map(() => null)
 	},
 	order: -690,
+})
+
+registerFileAction({
+	id: 'cryptomator-vaults-export',
+	displayName: () => t('Export to your files …'),
+	iconSvgInline: () => ICON_EXPORT,
+	enabled: ({ nodes, view }) => editable(nodes, view),
+	async exec({ nodes }) {
+		await exportNodes(nodes)
+		return null
+	},
+	async execBatch({ nodes }) {
+		await exportNodes(nodes)
+		return nodes.map(() => null)
+	},
+	order: -680,
 })
 
 registerFileAction({
@@ -1089,6 +1495,18 @@ registerFileListAction({
 })
 
 registerFileListAction({
+	id: 'cryptomator-vaults-import',
+	displayName: () => t('Add from your files …'),
+	iconSvgInline: () => ICON_IMPORT,
+	order: -1.2,
+	enabled: ({ view }) => inVaults(view) && writableHere() !== null,
+	exec: async () => {
+		await importFromFiles()
+		return null
+	},
+})
+
+registerFileListAction({
 	id: 'cryptomator-vaults-new-folder',
 	displayName: () => t('New folder …'),
 	iconSvgInline: () => ICON_NEW_FOLDER,
@@ -1119,7 +1537,7 @@ function onDrop(event) {
 	// The entries now: the drop's items are gone once the event is over.
 	const entries = [...(event.dataTransfer.items || [])].map((item) => item.webkitGetAsEntry?.()).filter(Boolean)
 	if (entries.length === 0) {
-		uploadFiles([...event.dataTransfer.files].map((file) => ({ file, dirs: [] })))
+		uploadFiles([...event.dataTransfer.files].map((file) => fromFile(file, [])))
 		return
 	}
 	walkEntries(entries).then(({ files, folders }) => uploadFiles(files, folders), (error) => showError(message(error)))

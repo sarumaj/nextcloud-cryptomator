@@ -93,6 +93,13 @@ for (const name of ['vault-gcm', 'vault-ctrmac']) {
 		await vault.readFileStream(entry, (piece) => { read.push(Buffer.from(piece)) })
 		assert.equal(sha(Buffer.concat(read)), sha(data))
 		assert.ok(read.length > 1, 'handed over in pieces')
+		// Pulled, as an export uploads them: the same pieces.
+		const pulled = []
+		for await (const piece of vault.decryptedPieces(entry)) {
+			pulled.push(Buffer.from(piece))
+		}
+		assert.deepEqual(pulled.map((piece) => piece.length), read.map((piece) => piece.length))
+		assert.equal(sha(Buffer.concat(pulled)), sha(data))
 		await assert.rejects(vault.writeFileStream('', 'large.bin', pieces(data)), { code: 'exists' })
 		const other = randomBytes(100000)
 		await vault.writeFileStream('', 'large.bin', pieces(other), { replace: true, partSize: PART_SIZE })

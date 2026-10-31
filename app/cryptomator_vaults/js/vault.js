@@ -1069,6 +1069,17 @@
 		 * authenticated; onProgress(done, total).
 		 */
 		async readFileStream(entry, onPiece, onProgress) {
+			for await (const piece of this.decryptedPieces(entry, onProgress)) {
+				await onPiece(piece)
+			}
+		}
+
+		/**
+		 * A file's decrypted contents in pieces of up to 64 chunks (2 MiB), in order,
+		 * each read in one range and checked: what readFileStream hands on, for a
+		 * reader that pulls (e.g. an upload in parts). Nothing for an empty file.
+		 */
+		async * decryptedPieces(entry, onProgress) {
 			this.requireKeys()
 			const scheme = SCHEMES[this.scheme]
 			const found = await this.storage.stat(entry.path)
@@ -1093,7 +1104,7 @@
 					const offset = (number - first) * chunkSize
 					pieces.push(await this.decryptChunk(stored.subarray(offset, Math.min(offset + chunkSize, stored.length)), number, headerNonce, contentKey))
 				}
-				await onPiece(concat(...pieces))
+				yield concat(...pieces)
 				onProgress?.(Math.min(last * CHUNK, size), size)
 			}
 		}

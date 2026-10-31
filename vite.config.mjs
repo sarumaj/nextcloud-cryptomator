@@ -6,12 +6,12 @@
 // libraries it uses (the file picker) into css/cryptomator_vaults-files.css. The
 // output is committed: the server installs the app from the repository, without a
 // build of its own.
-import { readdirSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
 const vaultJs = fileURLToPath(new URL('./app/cryptomator_vaults/js/vault.js', import.meta.url))
-const outJs = fileURLToPath(new URL('./app/cryptomator_vaults/js/', import.meta.url))
 const DIALOGS = /node_modules\/@nextcloud\/dialogs\//
 // The office previews' libraries (src/documents.js), loaded when a document is opened.
 const DOCUMENTS = /node_modules\/(docx-preview|xlsx)\//
@@ -75,16 +75,25 @@ function escapeInvisible() {
 }
 
 /**
- * Removes the previous build's modules before a build: the chunks' names change
- * with their contents (the output folder also holds vault.js, so it is not emptied).
+ * Removes the previous build's modules from the folder this build writes to,
+ * before it writes: the chunks' names change with their contents (the app's
+ * folder also holds vault.js, so it is not emptied). Only there: npm run notice
+ * builds into a folder of its own and leaves the app's alone.
  */
 function removePreviousBuild() {
+	let js = null
 	return {
 		name: 'remove-previous-build',
+		configResolved(config) {
+			js = join(resolve(config.root, config.build.outDir), 'js')
+		},
 		buildStart() {
-			for (const name of readdirSync(outJs)) {
+			if (!js || !existsSync(js)) {
+				return
+			}
+			for (const name of readdirSync(js)) {
 				if (/^cryptomator_vaults-.*\.mjs$/.test(name)) {
-					rmSync(outJs + name)
+					rmSync(join(js, name))
 				}
 			}
 		},
