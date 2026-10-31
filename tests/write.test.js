@@ -16,6 +16,36 @@ const { folderStorage } = require('./storage.js')
 
 const { FIXTURES, PART_SIZE, copyVault, editSamples, makeConflicts, orphans, pieces, sha, walk, writeSamples } = require('./samples.js')
 
+test('unlocking leaves a write going on alone, and removes what an old one left', async () => {
+	const name = 'vault-gcm'
+	const manifest = JSON.parse(fs.readFileSync(path.join(FIXTURES, name + '.json'), 'utf8'))
+	const root = copyVault(name)
+	const old = new Date(Date.now() - 25 * 60 * 60 * 1000)
+	const at = (item) => path.join(root, item)
+	fs.writeFileSync(at(STAGING_PREFIX + 'old-file.tmp'), 'half an upload')
+	fs.mkdirSync(at(STAGING_PREFIX + 'old-folder.tmp'))
+	fs.writeFileSync(at(STAGING_PREFIX + 'old-folder.tmp/dir.c9r'), 'x')
+	for (const item of ['old-file.tmp', 'old-folder.tmp']) {
+		fs.utimesSync(at(STAGING_PREFIX + item), old, old)
+	}
+	fs.writeFileSync(at(STAGING_PREFIX + 'going-on.tmp'), 'an upload going on')
+	fs.writeFileSync(at('.cryptomator-other'), 'not ours')
+	fs.utimesSync(at('.cryptomator-other'), old, old)
+	const before = await Vault.open(folderStorage(root, { writable: true }))
+	await assert.rejects(before.removeLeftovers(), { code: 'locked' })
+	await before.unlock(manifest.password)
+	assert.deepEqual((await before.removeLeftovers()).sort(), [STAGING_PREFIX + 'old-file.tmp', STAGING_PREFIX + 'old-folder.tmp'])
+	assert.deepEqual(fs.readdirSync(root).filter((item) => item.startsWith('.cryptomator')).sort(), ['.cryptomator-other', STAGING_PREFIX + 'going-on.tmp'])
+	assert.deepEqual(await walk(before), manifest.entries)
+	// A vault that cannot be written is left as it is.
+	fs.utimesSync(at(STAGING_PREFIX + 'going-on.tmp'), old, old)
+	const readOnly = await Vault.open(folderStorage(root))
+	await readOnly.unlock(manifest.password)
+	assert.deepEqual(await readOnly.removeLeftovers(), [])
+	assert.ok(fs.existsSync(at(STAGING_PREFIX + 'going-on.tmp')))
+	fs.rmSync(root, { recursive: true })
+})
+
 test('names are stored as Cryptomator stores them, unusable ones refused', () => {
 	assert.equal(checkName('Café'), 'Café')
 	for (const bad of ['', '.', '..', 'a/b', 'a\\b', 'tab\there', 'x'.repeat(256)]) {

@@ -356,6 +356,10 @@
 	// Staging names of files and entries being written (Vault.stagingPath), in the
 	// vault's top folder: Cryptomator passes them by.
 	const STAGING_PREFIX = '.cryptomator-vaults-'
+	// How old a staging name must be before Vault.removeLeftovers takes it for one a
+	// browser left behind: a write still going on (in another tab or on another
+	// device) keeps its staging name for as long as its upload and check take.
+	const LEFTOVER_AGE = 24 * 60 * 60 * 1000
 	const MAX_NAME_LENGTH = 255
 
 	function randomBytes(length) {
@@ -838,7 +842,8 @@
 		// - a file is written under a staging name that Cryptomator ignores (in the
 		//   vault's top folder, outside d/), read back and compared, and only then moved into place in one
 		//   step (over the old file when replacing): a failed check leaves the vault
-		//   as it was;
+		//   as it was, and what a browser that closed midway left there is removed
+		//   when the vault is next unlocked (removeLeftovers);
 		// - an entry of several files (a folder's dir.c9r, a long name's name.c9s) is
 		//   put together in a staging folder and moved into place in one step;
 		// - a new folder's own directory (with its dirid.c9r) exists before the entry
@@ -1100,6 +1105,29 @@
 		 */
 		stagingPath() {
 			return STAGING_PREFIX + randomUuid() + '.tmp'
+		}
+
+		/**
+		 * Removes the staging files and folders that writes which never finished (a
+		 * browser closed midway) left in the vault's top folder, once they are older
+		 * than olderThan (milliseconds; LEFTOVER_AGE), so that a write still going on
+		 * elsewhere is left alone. Nothing for a vault that cannot be written. Returns
+		 * the names removed.
+		 */
+		async removeLeftovers({ olderThan = LEFTOVER_AGE, now = Date.now() } = {}) {
+			this.requireKeys()
+			if (typeof this.storage.write !== 'function') {
+				return []
+			}
+			const removed = []
+			for (const item of await this.storage.list('')) {
+				if (item.name.startsWith(STAGING_PREFIX) && item.name.endsWith('.tmp')
+					&& item.mtime && now - item.mtime.getTime() >= olderThan) {
+					await this.storage.remove(item.name)
+					removed.push(item.name)
+				}
+			}
+			return removed
 		}
 
 		/**

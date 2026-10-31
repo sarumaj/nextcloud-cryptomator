@@ -258,6 +258,8 @@ async function unlock(vault) {
 	}, vault.folder)
 	if (ok) {
 		startIdleTimer()
+		// What a browser that closed while writing left behind; not worth an error.
+		vault.vault.removeLeftovers().catch(() => {})
 	}
 	return ok
 }

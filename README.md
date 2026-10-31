@@ -110,6 +110,10 @@ and its `dirid.c9r`, headers and chunks) and in this order:
 4. Only then is it moved into place, in one step: refused if the name was taken meanwhile, and
    over the old file only when replacing was chosen. A failed check leaves the vault as it was.
 
+If the browser is closed midway, the staging file stays behind (Cryptomator passes it by). When the
+vault is next unlocked, staging files and folders older than a day are removed; younger ones may
+belong to a write still going on in another tab or on another device.
+
 An entry of several files (a new folder's `dir.c9r`, a long name's `name.c9s`) is put together in a
 staging folder and moved into place the same way. A new folder's own directory, with its
 `dirid.c9r`, exists before the entry that points to it. Nothing is ever replaced by a folder, nor a

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- Unlocking a vault removes the staging files and folders older than a day that uploads which never
+  finished (a browser closed midway) left in its top folder.
+
 ## 0.5.0
 
 - **Lock** in a bar above an open vault's list, which says the vault is unlocked in this browser.
