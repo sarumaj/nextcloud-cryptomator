@@ -3,7 +3,8 @@
 // The integration in a real browser against a real Nextcloud with the test vault
 // in /Vault (README.md, "Tests"): the view "Vaults" in Files finds it, refuses a
 // wrong password, unlocks, browses in Files' own list, previews and downloads as
-// Cryptomator wrote the files, offers only its own actions on the vault's
+// Cryptomator wrote the files, creates a folder and uploads files (one in chunks,
+// one replacing another), offers only its own actions on the vault's
 // entries, opens a vault from the person's files (its notice, its menu) and with
 // the file picker, and locks. Throughout, no
 // request may carry what the server must not learn: the password, a decrypted
@@ -12,16 +13,25 @@
 //   NC_URL=http://localhost NC_USER=admin NC_PASSWORD=... node tests/e2e/check.mjs
 
 import { chromium } from 'playwright'
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 
 const base = process.env.NC_URL
 const manifest = JSON.parse(readFileSync(new URL('../fixtures/vault-gcm.json', import.meta.url)))
 const PASSWORD = manifest.password
 const shots = process.env.SCREENSHOTS || ''
+// What is uploaded into the vault: names and contents the server must not see.
+const MARKER = 'plaintext-marker-' + randomBytes(8).toString('hex')
+const UPLOADS = {
+	'Notiz über ✓ Uploads.txt': Buffer.from(MARKER + ' first\n'),
+	'big upload.bin': Buffer.concat([Buffer.from(MARKER), randomBytes(25 * 1024 * 1024)]),
+}
+const REPLACED = Buffer.from(MARKER + ' replaced\n')
+const NESTED = Buffer.from(MARKER + ' nested\n')
 // Every decrypted name in the vault: none may reach the server.
-const NAMES = [...new Set(Object.keys(manifest.entries).flatMap((path) => path.split('/')))]
+const NAMES = [...new Set([...Object.keys(manifest.entries).flatMap((path) => path.split('/')), ...Object.keys(UPLOADS), 'Neuer Ordner ✓', 'inside new.txt'])]
+const sha = (data) => createHash('sha256').update(data).digest('hex')
 const OWN_ACTIONS = ['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock']
 
 // Web Crypto needs a secure origin: HTTPS, or the test Nextcloud at http://localhost.
@@ -32,7 +42,7 @@ const sent = []
 const consoleLines = []
 page.on('pageerror', (error) => problems.push('page error: ' + error.message))
 page.on('console', (message) => consoleLines.push(message.type() + ': ' + message.text()))
-page.on('request', (request) => sent.push({ url: decodeURIComponent(request.url()), body: request.postData() || '' }))
+page.on('request', (request) => sent.push({ url: decodeURIComponent(request.url()), body: request.postDataBuffer() ?? Buffer.alloc(0) }))
 
 const step = (text) => console.log('·', text)
 process.on('uncaughtException', async (error) => {
@@ -126,8 +136,66 @@ const chunks = []
 for await (const chunk of await download.createReadStream()) chunks.push(chunk)
 assert.equal(createHash('sha256').update(Buffer.concat(chunks)).digest('hex'), manifest.entries['chunks.bin'].sha256)
 
+step('a new folder is created in the vault')
+const listAction = async (name) => {
+	const inline = page.getByRole('button', { name })
+	if (await inline.count()) {
+		return inline.first().click()
+	}
+	await page.locator('.files-list__header-actions button[aria-haspopup]').first().click()
+	return page.getByRole('menuitem', { name }).click()
+}
+await listAction(/New folder/)
+await page.locator('.cryptomator-dialog input[type=text]').fill('Neuer Ordner ✓')
+await page.locator('.cryptomator-dialog button[type=submit]').click()
+await row('Neuer Ordner ✓').waitFor()
+
+async function upload(files) {
+	const [chooser] = await Promise.all([page.waitForEvent('filechooser'), listAction(/Upload files/)])
+	await chooser.setFiles(Object.entries(files).map(([name, buffer]) => ({ name, mimeType: 'application/octet-stream', buffer })))
+}
+const finished = () => page.locator('.cryptomator-dialog .cryptomator-notice').filter({ hasText: /uploaded/ }).last().waitFor({ timeout: 180000 })
+
+step('files are uploaded, encrypted in the browser and checked (a large one in chunks)')
+await upload(UPLOADS)
+await finished()
+const summary = await page.locator('.cryptomator-dialog .cryptomator-notice').last().textContent()
+assert.match(summary, /2 uploaded and checked/, summary)
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+await row('big upload.bin').waitFor()
+await openName('Notiz über ✓ Uploads.txt')
+assert.equal(await page.locator('.cryptomator-preview--text').textContent(), MARKER + ' first\n')
+await page.locator('.cryptomator-dialog__close').click()
+
+step('a taken name is replaced only when asked')
+await upload({ 'Notiz über ✓ Uploads.txt': REPLACED })
+await page.locator('.cryptomator-dialog button', { hasText: /^Replace$/ }).click()
+await finished()
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+await openName('Notiz über ✓ Uploads.txt')
+assert.equal(await page.locator('.cryptomator-preview--text').textContent(), MARKER + ' replaced\n')
+await page.locator('.cryptomator-dialog__close').click()
+
+step('a file is uploaded into the new folder')
+await openName('Neuer Ordner ✓')
+await upload({ 'inside new.txt': NESTED })
+await finished()
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+await row('inside new.txt').waitFor()
+// For the check with Cryptomator's own library afterwards (README.md, "Tests").
+if (process.env.EXPECTED_OUT) {
+	writeFileSync(process.env.EXPECTED_OUT, JSON.stringify({
+		...manifest.entries,
+		'Notiz über ✓ Uploads.txt': { sha256: sha(REPLACED), size: REPLACED.length, type: 'file' },
+		'big upload.bin': { sha256: sha(UPLOADS['big upload.bin']), size: UPLOADS['big upload.bin'].length, type: 'file' },
+		'Neuer Ordner ✓': { type: 'dir' },
+		'Neuer Ordner ✓/inside new.txt': { sha256: sha(NESTED), size: NESTED.length, type: 'file' },
+	}))
+}
+
 step('Lock forgets the vault: opening it asks again')
 await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
+await row('Vault').waitFor()
 await row('Vault').waitFor()
 const vaultActions = await rowActions('Vault')
 assert.ok(vaultActions.includes('cryptomator-vaults-lock'), `lock offered: ${vaultActions}`)
@@ -172,11 +240,11 @@ await row('hello.txt').waitFor()
 step('nothing the server must not learn left the browser')
 await browser.close()
 const leaks = sent.filter(({ url, body }) => {
-	const text = url + '\n' + body
+	const text = url + '\n' + body.toString('utf8')
 	return text.includes(PASSWORD) || text.includes('/core/mimeicon') || text.includes('/apps/cryptomator_vaults/cryptomator-vaults')
-		|| NAMES.some((name) => text.includes(name))
+		|| NAMES.some((name) => text.includes(name)) || body.includes(MARKER)
 })
 assert.deepEqual(leaks.map(({ url }) => url), [], 'requests the server must not see')
 assert.ok(sent.some(({ url }) => url.includes('/remote.php/dav/files/')), 'the files came over WebDAV')
 assert.deepEqual(problems, [], 'errors in the page')
-console.log(`ok: ${sent.length} requests, none with the password, a decrypted name, a file type or an entry's address`)
+console.log(`ok: ${sent.length} requests, none with the password, a decrypted name or content, a file type or an entry's address`)

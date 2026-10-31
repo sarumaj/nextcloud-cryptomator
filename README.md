@@ -1,7 +1,7 @@
 # Cryptomator vaults for Nextcloud
 
 Browse the [Cryptomator](https://cryptomator.org/) vaults you keep in Nextcloud in the Files
-app: open their folders, preview files and download them, without installing Cryptomator.
+app: open their folders, preview, download and upload files, without installing Cryptomator.
 
 - **In Files:** *Vaults* in the navigation lists your vaults. An unlocked vault shows in Files' own
   list, with its folders, breadcrumbs, sorting and grid view.
@@ -12,7 +12,9 @@ app: open their folders, preview files and download them, without installing Cry
   itself reads the vault.
 - **Locks itself** after 15 minutes without use, when you choose **Lock**, and when you leave the
   page.
-- **Read only:** nothing is written to the vault. To change it, use Cryptomator.
+- **Upload and new folders:** files are encrypted in your browser and written exactly as
+  Cryptomator writes them, each checked before it enters the vault. Renaming, moving and deleting
+  are left to Cryptomator for now.
 
 Not affiliated with Skymatic GmbH, the makers of Cryptomator.
 
@@ -42,10 +44,13 @@ menu leads there.
 2. Enter the vault's password.
 3. Browse it like any folder in Files. Choose a file to preview it (pictures, PDFs, text, audio and
    video up to 100 MB); its menu has **Download**.
-4. Choose **Lock** in the vault's menu in *Vaults*, or **Lock all vaults** at the top.
+4. To add files, choose **Upload files …** at the top, or drop files on the list; **New
+   folder …** creates a folder. If a file of that name exists, you're asked whether to replace
+   it. Folders can't be dropped yet.
+5. Choose **Lock** in the vault's menu in *Vaults*, or **Lock all vaults** at the top.
 
-Large files are decrypted in the browser's memory, which holds them encrypted and decrypted at
-once: above 1 GB the app asks first.
+Large files are decrypted and encrypted in the browser's memory, which holds them encrypted and
+decrypted at once: above 1 GB the app asks first.
 
 ## How it works, and what it protects
 
@@ -73,6 +78,25 @@ that:
   it each file's type.
 - Locking also removes the vault's entries from Files' memory.
 
+### Writing without harming the vault
+
+A vault must stay readable by Cryptomator at every moment, also if the browser or the connection
+dies midway. `js/vault.js` writes as Cryptomator does (names, long names as `.c9s`, a folder's ID
+and its `dirid.c9r`, headers and chunks) and in this order:
+
+1. The encryption is undone in memory and compared before anything is stored.
+2. A file is written under a staging name in the vault's top folder, which Cryptomator passes by
+   (also its health checks, which look at `d/`).
+3. It is read back from the server and compared (SHA-256 of the decrypted contents).
+4. Only then is it moved into place, in one step: refused if the name was taken meanwhile, and
+   over the old file only when replacing was chosen. A failed check leaves the vault as it was.
+
+An entry of several files (a new folder's `dir.c9r`, a long name's `name.c9s`) is put together in a
+staging folder and moved into place the same way. A new folder's own directory, with its
+`dirid.c9r`, exists before the entry that points to it. Nothing is ever replaced by a folder, nor a
+folder by a file. Nextcloud keeps the replaced file's encrypted version (*Versions*), and Cryptomator
+can open such an old version.
+
 What this protects against, and what it doesn't:
 
 - **It keeps** Cryptomator's promise that the server never sees your files, their names or your
@@ -91,8 +115,8 @@ as a picture, and downloads typed as plain data, which no browser renders.
 ```bash
 npm ci
 npm run build                     # src/ into app/cryptomator_vaults/js and css (committed)
-node --test tests/vault.test.js   # the decryption, against vaults Cryptomator wrote
-node tests/l10n.js                # the translations cover the integration
+npm test                          # decryption, writing, translations
+npm run test:compat               # what the app writes, read by Cryptomator's library
 ```
 
 The build is committed, because servers install the app from the repository without building it;
@@ -119,12 +143,25 @@ store's schema.
       java -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -cp "/tmp/c:/tmp/l/*" Generate /f'
   ```
 
+- **Writing** (`tests/write.test.js`): the format's edges (names of exactly 220 and 224 encrypted
+  characters around the shortening threshold, decomposed Unicode, empty files, a full chunk, long
+  names, nested new folders), what is refused (a taken name, a folder in the way, unusable names),
+  and a storage that changes a file on the way, which must never reach the vault, not even when
+  replacing.
+- **Compatibility** (`tests/compat.sh`, needs Java 25 and Maven, or Docker): the same writes into
+  copies of the test vaults, then Cryptomator's own library (`Verify.java`) opens each vault, looks
+  up every file by its path as Cryptomator does, reads it, and runs cryptofs' health checks. Its
+  entries must be exactly the expected ones, and the health checks must find nothing, also with the
+  staging leftovers of a browser that died midway.
 - **The integration** in a real browser, `tests/e2e/check.mjs` (Playwright), against a Nextcloud
   with this app and `tests/fixtures/vault-gcm` uploaded as `/Vault`. It opens *Vaults*, refuses a
-  wrong password, unlocks, browses in Files' list, previews, downloads, checks that only the app's
-  own actions are offered on the vault's entries, opens the vault from the notice and from its
-  `vault.cryptomator`, and locks. It fails if any request carried the password, a decrypted name, a
-  file type icon or an entry's address. Run it against each new Nextcloud version: the integration
+  wrong password, unlocks, browses in Files' list, previews, downloads, creates a folder, uploads
+  (a 25 MB file in chunks, a replacement after asking, a file into the new folder), checks that only
+  the app's own actions are offered on the vault's entries, opens the vault from the notice and
+  from its `vault.cryptomator`, and locks. It fails if any request carried the password, a
+  decrypted name or content, a file type icon or an entry's address. With `EXPECTED_OUT` set, it
+  writes the entries it expects; copy the vault out of Nextcloud's data directory afterwards and
+  run `Verify.java` on it to check what Nextcloud stored. Run it against each new Nextcloud version: the integration
   relies on how Files decides what to offer. Web Crypto needs HTTPS or `localhost`, so run the
   browser in the Nextcloud container's network:
 

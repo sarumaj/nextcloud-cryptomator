@@ -1,8 +1,9 @@
 ---
 # The app's PHP and JavaScript must parse, its info.xml must pass the app
 # store's schema, the committed build (js/cryptomator_vaults-*.mjs) must be what
-# src/ builds, its translations must cover the integration, and the tests (Node, no
-# Nextcloud and no network: tests/vault.test.js) must pass.
+# src/ builds, its translations must cover the integration, the tests (Node, no
+# Nextcloud and no network: tests/vault.test.js, tests/write.test.js) must pass, and
+# Cryptomator's own library must read what the app writes (tests/compat.sh).
 name: CI
 # A failed job mails whoever started the run. Renovate's bot has no mailbox: when its
 # branch fails, Renovate opens a pull request, which mails the repository's watchers.
@@ -65,4 +66,26 @@ jobs:
         run: node tests/l10n.js
 
       - name: Run the tests
-        run: node --test tests/vault.test.js
+        run: node --test tests/vault.test.js tests/write.test.js
+
+  # What the app writes, read and checked by Cryptomator's own library (cryptofs):
+  # tests/compat.test.js through tests/compat.sh, with Java from the image and Node
+  # from its release.
+  compat:
+    runs-on: docker
+    container: docker.io/library/maven:3.9.11-eclipse-temurin-25
+    timeout-minutes: 15
+    env:
+      NODE_VERSION: v24.22.2
+    steps:
+      - name: Install git and Node
+        run: |
+          apt-get update -qq && apt-get install -qq -y --no-install-recommends git curl ca-certificates >/dev/null
+          curl -fsSL "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.gz" | tar -xz -C /opt
+          echo "/opt/node-$NODE_VERSION-linux-x64/bin" >> "$GITHUB_PATH"
+
+      - name: Check out
+        run: *checkout
+
+      - name: Check what the app writes with Cryptomator's library
+        run: tests/compat.sh

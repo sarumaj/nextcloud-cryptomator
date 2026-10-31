@@ -5,7 +5,8 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "vite build",
-    "test": "node --test tests/vault.test.js && node tests/l10n.js"
+    "test": "node --test tests/vault.test.js tests/write.test.js && node tests/l10n.js",
+    "test:compat": "tests/compat.sh"
   },
   "devDependencies": {
     "@nextcloud/auth": "^2.6.0",

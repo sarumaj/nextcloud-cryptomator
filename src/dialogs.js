@@ -246,3 +246,119 @@ export async function showFile(name, size, read, message) {
 		}
 	}
 }
+
+// ----- Writing -----
+
+/** Asks for a name (a new folder's); null if the dialog is closed. */
+export function askName(title, label, check) {
+	return new Promise((resolve) => {
+		let done = false
+		const input = el('input', { type: 'text', required: true, 'aria-label': label, autocomplete: 'off' })
+		const status = el('div', { 'aria-live': 'polite' })
+		openDialog(title, [
+			el('h2', {}, title),
+			el('form', {
+				class: 'cryptomator-unlock',
+				onsubmit: (event) => {
+					event.preventDefault()
+					const problem = check(input.value)
+					if (problem) {
+						status.replaceChildren(notice(problem, 'error'))
+						return
+					}
+					done = true
+					const value = input.value
+					closeDialog()
+					resolve(value)
+				},
+			}, [el('label', {}, [label, input]), el('button', { type: 'submit', class: 'primary' }, t('Create')),
+				el('button', { type: 'button', onclick: closeDialog }, t('Cancel'))]),
+			status,
+		], () => {
+			if (!done) {
+				resolve(null)
+			}
+		})
+		input.focus()
+	})
+}
+
+/**
+ * The upload's dialog: a line per file with its state, Stop, which ends the
+ * upload after the file being written (a file is never left half-written), and
+ * the question what to do with a taken name (ask), asked within it.
+ */
+export function showUploads(title) {
+	const list = el('ul', { class: 'cryptomator-uploads' })
+	const overall = el('progress', { max: 1, value: 0 })
+	const summary = el('div', { 'aria-live': 'polite' })
+	const question = el('div', { class: 'cryptomator-question', hidden: true })
+	let stopped = false
+	const stop = el('button', { type: 'button', onclick: () => {
+		stopped = true
+		stop.disabled = true
+		stop.textContent = t('Stopping after this file …')
+	} }, t('Stop'))
+	const close = el('button', { type: 'button', class: 'primary', hidden: true, onclick: closeDialog }, t('Close'))
+	openDialog(title, [
+		el('div', { class: 'cryptomator-dialog__head' }, [el('h2', {}, title), stop, close]),
+		overall,
+		question,
+		el('div', { class: 'cryptomator-dialog__body' }, list),
+		summary,
+	])
+	return {
+		get stopped() {
+			return stopped
+		},
+		file(name) {
+			const state = el('span', { class: 'cryptomator-dialog__meta' }, t('Waiting'))
+			const bar = el('progress', { max: 1, value: 0 })
+			list.append(el('li', {}, [el('span', { class: 'cryptomator-uploads__name' }, name), state, bar]))
+			return {
+				phase(text, fraction) {
+					state.textContent = text
+					bar.value = fraction
+				},
+				done(text, failed) {
+					state.textContent = text
+					state.classList.toggle('cryptomator-notice--error', Boolean(failed))
+					bar.value = 1
+				},
+			}
+		},
+		/** What to do with a taken name: 'replace', 'skip', 'replace-all', 'skip-all' or 'cancel'. */
+		ask(name, total) {
+			return new Promise((resolve) => {
+				const choose = (choice) => () => {
+					question.hidden = true
+					question.replaceChildren()
+					resolve(choice)
+				}
+				question.replaceChildren(
+					el('h3', {}, t('“{name}” already exists', { name })),
+					notice(t('Replace the file in the vault with the one you chose? The vault keeps no copy of the old one; Nextcloud\'s versions keep its encrypted file.')),
+					el('div', { class: 'cryptomator-choices' }, [
+						el('button', { type: 'button', class: 'primary', onclick: choose('replace') }, t('Replace')),
+						el('button', { type: 'button', onclick: choose('skip') }, t('Skip')),
+						total > 1 ? el('button', { type: 'button', onclick: choose('replace-all') }, t('Replace all')) : null,
+						total > 1 ? el('button', { type: 'button', onclick: choose('skip-all') }, t('Skip all')) : null,
+						el('button', { type: 'button', onclick: choose('cancel') }, t('Cancel upload')),
+					]),
+				)
+				question.hidden = false
+				question.querySelector('button').focus()
+			})
+		},
+		progress(fraction) {
+			overall.value = fraction
+		},
+		finish(text, failed) {
+			overall.value = 1
+			stop.hidden = true
+			close.hidden = false
+			summary.replaceChildren(notice(text, failed ? 'error' : undefined))
+			close.focus()
+		},
+	}
+}

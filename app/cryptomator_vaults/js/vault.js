@@ -11,7 +11,8 @@
  * that unwraps the vault's two keys from the password, and AES-SIV (RFC 5297),
  * which encrypts the names, built on AES-CBC (for CMAC) and AES-CTR.
  *
- * Read only: nothing here writes to a vault.
+ * Writing (Vault.writeFile, Vault.createDirectory) follows Cryptomator's format
+ * and keeps the vault readable at every step; see "Writing" below.
  */
 (function (root, factory) {
 	'use strict'
@@ -340,6 +341,39 @@
 		return full * CHUNK + Math.max(0, rest - overhead)
 	}
 
+	// ----- Helpers for writing -----
+
+	// Staging names of files and entries being written (Vault.stagingPath), in the
+	// vault's top folder: Cryptomator passes them by.
+	const STAGING_PREFIX = '.cryptomator-vaults-'
+	const MAX_NAME_LENGTH = 255
+
+	function randomBytes(length) {
+		return crypto.getRandomValues(new Uint8Array(length))
+	}
+
+	function randomUuid() {
+		return crypto.randomUUID()
+	}
+
+	async function sha256(data) {
+		return new Uint8Array(await subtle.digest('SHA-256', data))
+	}
+
+	/**
+	 * A name as Cryptomator stores it (Unicode NFC), refused where no vault or
+	 * system could hold it: empty, . or .., with a slash, a backslash or a control
+	 * character, or longer than MAX_NAME_LENGTH.
+	 */
+	function checkName(name) {
+		const normal = String(name).normalize('NFC')
+		// eslint-disable-next-line no-control-regex
+		if (normal === '' || normal === '.' || normal === '..' || /[/\\\u0000-\u001f\u007f]/.test(normal) || normal.length > MAX_NAME_LENGTH) {
+			throw new VaultError('invalid-name', normal)
+		}
+		return normal
+	}
+
 	// ----- The vault -----
 
 	const VAULT_CONFIG = 'vault.cryptomator'
@@ -637,7 +671,226 @@
 				throw new VaultError('corrupt', 'chunk ' + number + ' does not authenticate')
 			}
 		}
+
+		// ----- Writing -----
+		//
+		// As Cryptomator writes (tests/compat.test.js has Cryptomator's own library
+		// read and check what is written here). The vault must never be left in a
+		// state Cryptomator cannot read:
+		// - a file is written under a staging name that Cryptomator ignores (in the
+		//   vault's top folder, outside d/), read back and compared, and only then moved into place in one
+		//   step (over the old file when replacing): a failed check leaves the vault
+		//   as it was;
+		// - an entry of several files (a folder's dir.c9r, a long name's name.c9s) is
+		//   put together in a staging folder and moved into place in one step;
+		// - a new folder's own directory (with its dirid.c9r) exists before the entry
+		//   that points to it;
+		// - nothing is replaced unless asked to (a file only, never a folder), and a
+		//   new entry is refused where one of that name appeared meanwhile;
+		// - the encryption is undone in memory before anything is stored.
+
+		requireWritable() {
+			this.requireKeys()
+			if (typeof this.storage.write !== 'function') {
+				throw new VaultError('read-only')
+			}
+		}
+
+		/**
+		 * Where a directory's entry of this (checked) name lives: {path (its .c9r, or
+		 * .c9s for a long name), long, fullName (the encrypted name)}.
+		 */
+		async entryPath(dirId, name) {
+			const folder = await this.dirPath(dirId)
+			const fullName = base64UrlEncode(await this.siv.encrypt(encoder.encode(name), [encoder.encode(dirId)]), true) + '.c9r'
+			const threshold = this.config.payload.shorteningThreshold ?? 220
+			if (fullName.length > threshold) {
+				const short = base64UrlEncode(new Uint8Array(await subtle.digest('SHA-1', encoder.encode(fullName))), true) + '.c9s'
+				return { folder, path: joinPath(folder, short), long: true, fullName }
+			}
+			return { folder, path: joinPath(folder, fullName), long: false, fullName }
+		}
+
+		/** What is stored at an entry's place: null, 'file', 'dir', 'link' or 'unknown'. */
+		async existing(entry) {
+			const found = await this.storage.stat(entry.path)
+			if (!found) {
+				return null
+			}
+			if (!found.isDir) {
+				return 'file'
+			}
+			const names = (await this.storage.list(entry.path)).map((item) => item.name)
+			if (names.includes('contents.c9r')) {
+				return 'file'
+			}
+			if (names.includes('dir.c9r')) {
+				return 'dir'
+			}
+			return names.includes('symlink.c9r') ? 'link' : 'unknown'
+		}
+
+		/** A file's contents encrypted as Cryptomator does: a new content key, header, chunks. */
+		async encryptContents(data, onProgress) {
+			this.requireKeys()
+			const scheme = SCHEMES[this.scheme]
+			const gcm = this.scheme === 'SIV_GCM'
+			const headerNonce = randomBytes(scheme.nonce)
+			const rawKey = randomBytes(32)
+			// 8 reserved bytes (all ones, as Cryptomator writes them), the content key.
+			const payload = concat(new Uint8Array(8).fill(0xff), rawKey)
+			let header
+			if (gcm) {
+				header = concat(headerNonce, new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv: headerNonce }, this.keys.gcm, payload)))
+			} else {
+				const encrypted = new Uint8Array(await subtle.encrypt({ name: 'AES-CTR', counter: headerNonce, length: 128 }, this.keys.ctr, payload))
+				const mac = new Uint8Array(await subtle.sign('HMAC', this.keys.mac, concat(headerNonce, encrypted)))
+				header = concat(headerNonce, encrypted, mac)
+			}
+			const contentKey = await subtle.importKey('raw', rawKey, gcm ? 'AES-GCM' : 'AES-CTR', false, ['encrypt'])
+			payload.fill(0)
+			rawKey.fill(0)
+			// An empty file is its header alone; a full last chunk has none after it.
+			const chunks = Math.ceil(data.length / CHUNK)
+			const out = new Uint8Array(scheme.header + data.length + chunks * scheme.overhead)
+			out.set(header)
+			for (let number = 0, offset = scheme.header; number < chunks; number++) {
+				const plain = data.subarray(number * CHUNK, Math.min((number + 1) * CHUNK, data.length))
+				const nonce = randomBytes(scheme.nonce)
+				let chunk
+				if (gcm) {
+					chunk = concat(nonce, new Uint8Array(await subtle.encrypt(
+						{ name: 'AES-GCM', iv: nonce, additionalData: concat(uint64(number), headerNonce) }, contentKey, plain)))
+				} else {
+					const encrypted = new Uint8Array(await subtle.encrypt({ name: 'AES-CTR', counter: nonce, length: 128 }, contentKey, plain))
+					const mac = new Uint8Array(await subtle.sign('HMAC', this.keys.mac, concat(headerNonce, uint64(number), nonce, encrypted)))
+					chunk = concat(nonce, encrypted, mac)
+				}
+				out.set(chunk, offset)
+				offset += chunk.length
+				if (onProgress) {
+					onProgress(number + 1, chunks)
+				}
+			}
+			return out
+		}
+
+		/**
+		 * A staging name in the vault's top folder, outside d/: Cryptomator passes it
+		 * by, and its health checks (which look at d/) do not report one a browser
+		 * left behind. Moving from there is still one rename on the server.
+		 */
+		stagingPath() {
+			return STAGING_PREFIX + randomUuid() + '.tmp'
+		}
+
+		/**
+		 * Puts an entry of several files (name -> bytes) together in a staging folder,
+		 * checks it (check(stagingFolder), if given) and moves it into
+		 * place in one step; refused if the place is taken meanwhile. The staging
+		 * folder goes on any failure.
+		 */
+		async stageAndMove(entry, files, check) {
+			const staging = this.stagingPath()
+			await this.storage.mkdir(staging)
+			try {
+				for (const [name, data] of Object.entries(files)) {
+					await this.storage.write(joinPath(staging, name), data, { create: true })
+				}
+				if (check) {
+					await check(staging)
+				}
+				await this.storage.move(staging, entry.path)
+			} catch (error) {
+				await this.storage.remove(staging).catch(() => {})
+				throw error
+			}
+		}
+
+		/** Reads a stored file back and compares it with what was written. */
+		async checkStored(path, expected, onProgress) {
+			const stored = await this.storage.read(path, onProgress)
+			let plain
+			try {
+				plain = await this.decryptContents(stored)
+			} catch (error) {
+				throw new VaultError('corrupt', 'the stored file does not decrypt: ' + error.message)
+			}
+			if (!equalBytes(await sha256(plain), expected)) {
+				throw new VaultError('corrupt', 'the stored file differs from the one written')
+			}
+		}
+
+		/**
+		 * Writes a file into a directory. options.replace allows replacing a file of
+		 * that name (never a folder); onProgress(phase, done, total) with the phases
+		 * 'encrypt', 'upload' and 'verify'. Returns {name, path, size}.
+		 */
+		async writeFile(dirId, rawName, data, options = {}) {
+			this.requireWritable()
+			const { replace = false, onProgress } = options
+			const progress = (phase) => (done, total) => onProgress?.(phase, done, total)
+			const name = checkName(rawName)
+			const entry = await this.entryPath(dirId, name)
+			const before = await this.existing(entry)
+			if (before !== null && (before !== 'file' || !replace)) {
+				throw new VaultError(before === 'file' ? 'exists' : 'exists-other', name)
+			}
+			const expected = await sha256(data)
+			const ciphertext = await this.encryptContents(data, progress('encrypt'))
+			if (!equalBytes(await sha256(await this.decryptContents(ciphertext)), expected)) {
+				throw new VaultError('corrupt', 'the encryption does not read back')
+			}
+			const contentsPath = entry.long ? joinPath(entry.path, 'contents.c9r') : entry.path
+			if (entry.long && before === null) {
+				await this.stageAndMove(entry, { 'name.c9s': encoder.encode(entry.fullName), 'contents.c9r': ciphertext },
+					(staging) => this.checkStored(joinPath(staging, 'contents.c9r'), expected, progress('verify')))
+				return { name, path: contentsPath, size: data.length }
+			}
+			const staging = this.stagingPath()
+			try {
+				await this.storage.write(staging, ciphertext, { create: true, onProgress: progress('upload') })
+				await this.checkStored(staging, expected, progress('verify'))
+				await this.storage.move(staging, contentsPath, { overwrite: before !== null })
+			} catch (error) {
+				await this.storage.remove(staging).catch(() => {})
+				throw error
+			}
+			return { name, path: contentsPath, size: data.length }
+		}
+
+		/** Creates a folder in a directory. Returns {name, dirId}. */
+		async createDirectory(dirId, rawName) {
+			this.requireWritable()
+			const name = checkName(rawName)
+			const entry = await this.entryPath(dirId, name)
+			if (await this.existing(entry) !== null) {
+				throw new VaultError('exists-other', name)
+			}
+			const newId = randomUuid()
+			const own = await this.dirPath(newId)
+			// The folder's own directory first, with its ID for recovery (dirid.c9r):
+			// no entry ever points to a directory that is not there.
+			await this.storage.mkdir(own.split('/').slice(0, 2).join('/'), { existsOk: true })
+			await this.storage.mkdir(own)
+			try {
+				await this.storage.write(joinPath(own, 'dirid.c9r'), await this.encryptContents(encoder.encode(newId)), { create: true })
+				const files = { 'dir.c9r': encoder.encode(newId) }
+				if (entry.long) {
+					files['name.c9s'] = encoder.encode(entry.fullName)
+				}
+				await this.stageAndMove(entry, files)
+			} catch (error) {
+				await this.storage.remove(own).catch(() => {})
+				throw error
+			}
+			const listed = (await this.list(dirId)).find((item) => item.type === 'dir' && item.dirId === newId)
+			if (!listed || listed.name !== name) {
+				throw new VaultError('corrupt', 'the new folder does not read back')
+			}
+			return { name, dirId: newId }
+		}
 	}
 
-	return { Vault, VaultError, cleartextSize, scrypt, Siv, Cmac, base32Encode, base64UrlEncode, base64Decode, VAULT_CONFIG }
+	return { Vault, VaultError, cleartextSize, checkName, scrypt, Siv, Cmac, base32Encode, base64UrlEncode, base64Decode, VAULT_CONFIG, STAGING_PREFIX }
 })

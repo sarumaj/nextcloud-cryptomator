@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- Writing: **Upload files …**, **New folder …** and files dropped on the list put files and
+  folders into an unlocked vault, encrypted in the browser as Cryptomator writes them. A file is
+  written under a staging name, read back and compared, and only then moved into place in one
+  step; a failed check leaves the vault as it was. A name that is taken is replaced only when asked
+  (never a folder). Large files go up in chunks.
+- `tests/compat.sh` (also in CI) has Cryptomator's own library read what the app writes, look up
+  every file by its path and run its health checks.
+
 ## 0.2.0
 
 - Vaults are browsed in the Files app: *Vaults* in its navigation lists them, and an unlocked

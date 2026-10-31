@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
@@ -104,7 +105,7 @@ public class Generate {
 		return data;
 	}
 
-	// Enough JSON for strings, numbers and nested maps.
+	// Enough JSON for strings, numbers, lists and nested maps.
 	@SuppressWarnings("unchecked")
 	static String json(Object value) {
 		if (value instanceof Map<?, ?> map) {
@@ -116,6 +117,16 @@ public class Generate {
 				out.append(json(entry.getKey())).append(": ").append(json(entry.getValue()));
 			}
 			return out.append("}").toString();
+		}
+		if (value instanceof List<?> list) {
+			StringBuilder out = new StringBuilder("[");
+			for (Object item : list) {
+				if (out.length() > 1) {
+					out.append(", ");
+				}
+				out.append(json(item));
+			}
+			return out.append("]").toString();
 		}
 		if (value instanceof Number) {
 			return value.toString();
