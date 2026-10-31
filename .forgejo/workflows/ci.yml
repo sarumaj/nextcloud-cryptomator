@@ -20,7 +20,8 @@ concurrency:
 jobs:
   php:
     runs-on: docker
-    container: docker.io/library/php:8.3-cli
+    # PHP with git (for the checkout), as in the project's other apps.
+    container: docker.io/library/composer:2
     timeout-minutes: 10
     steps:
       - name: Check out
@@ -34,7 +35,7 @@ jobs:
 
       - name: Check info.xml against the app store's schema
         run: |
-          apt-get update -qq && apt-get install -qq -y --no-install-recommends libxml2-utils wget >/dev/null
+          apk add -q libxml2-utils
           wget -q -O /tmp/info.xsd https://apps.nextcloud.com/schema/apps/info.xsd
           xmllint --noout --schema /tmp/info.xsd app/cryptomator_vaults/appinfo/info.xml
 
