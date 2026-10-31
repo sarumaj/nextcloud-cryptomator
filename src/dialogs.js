@@ -119,10 +119,20 @@ export function notice(text, type) {
 /**
  * Asks for a vault's password until unlock(password) succeeds (true) or the
  * dialog is closed (false). unlock throws to refuse, with a message for the person.
+ *
+ * A sign-in form as password managers know one: the vault's folder (account) as
+ * the user name beside the password, so that a manager offers, fills and saves an
+ * entry per vault (its suggestions follow the page's address, not the name of the
+ * Cryptomator app an entry may have been saved for).
  */
-export function askPassword(vaultName, unlock) {
+export function askPassword(vaultName, unlock, account) {
 	return new Promise((resolve) => {
 		let done = false
+		const username = el('input', {
+			type: 'text', name: 'username', autocomplete: 'username', readonly: true,
+			class: 'cryptomator-unlock__account', 'aria-label': t('Vault'),
+		})
+		username.value = account
 		const password = el('input', { type: 'password', name: 'password', autocomplete: 'current-password', required: true, 'aria-label': t('Password') })
 		const status = el('div', { 'aria-live': 'polite' })
 		const submit = el('button', { type: 'submit', class: 'primary' }, t('Unlock'))
@@ -131,6 +141,10 @@ export function askPassword(vaultName, unlock) {
 			notice(t('The password and the vault\'s keys stay in this browser tab: the server only sends the encrypted files.')),
 			el('form', {
 				class: 'cryptomator-unlock',
+				name: 'cryptomator-unlock',
+				method: 'post',
+				action: '#',
+				autocomplete: 'on',
 				onsubmit: async (event) => {
 					event.preventDefault()
 					submit.disabled = true
@@ -149,7 +163,7 @@ export function askPassword(vaultName, unlock) {
 						password.select()
 					}
 				},
-			}, [el('label', {}, [t('Password'), password]), submit,
+			}, [el('label', {}, [t('Vault'), username]), el('label', {}, [t('Password'), password]), submit,
 				el('button', { type: 'button', onclick: closeDialog }, t('Cancel'))]),
 			status,
 		], () => {

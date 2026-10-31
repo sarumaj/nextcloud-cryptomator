@@ -254,7 +254,7 @@ async function unlock(vault) {
 		} catch (error) {
 			throw new Error(message(error))
 		}
-	})
+	}, vault.folder)
 	if (ok) {
 		startIdleTimer()
 	}

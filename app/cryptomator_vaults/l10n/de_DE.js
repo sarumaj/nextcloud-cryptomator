@@ -86,7 +86,8 @@ OC.L10N.register(
         "Folders are deleted with everything in them.": "Ordner werden mit allem darin gelöscht.",
         "The encrypted files go to Nextcloud's deleted files.": "Die verschlüsselten Dateien kommen in Nextclouds gelöschte Dateien.",
         "Delete": "Löschen",
-        "Move …": "Verschieben …"
+        "Move …": "Verschieben …",
+        "Vault": "Tresor"
     },
     "nplurals=2; plural=(n != 1);"
 );

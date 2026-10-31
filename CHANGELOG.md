@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1
+
+- The password dialog is a sign-in form as password managers know one: the vault's folder as the
+  user name (read only) beside the password, so that a manager offers, fills and saves an entry
+  per vault. An entry saved by Cryptomator's apps has the app as its address, not the site: add the
+  site to it (see the README).
+
 ## 0.4.0
 
 - Uploads of 20 MB and more failed with "HTTP 200" on Nextcloud with object storage and Redis:

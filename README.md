@@ -41,7 +41,11 @@ menu leads there.
     - Open a vault's folder in your files: the notice above the list has **Open vault**. So has
       the menu of the folder and of its `vault.cryptomator`; this also works for a vault in a share.
     - **Open a vault folder …** at the top of *Vaults* chooses one with Nextcloud's file picker.
-2. Enter the vault's password.
+2. Enter the vault's password. Beside it, the vault's folder stands as the user name, so that a
+   password manager offers and saves an entry per vault. An entry Cryptomator's phone app saved has
+   the app as its address (e.g. `androidapp://org.cryptomator`), which a browser never matches: add
+   the site to it, e.g. `https://<your cloud>/apps/files/cryptomator-vaults` (match: starts with),
+   with the vault's folder as its user name.
 3. Browse it like any folder in Files. Choose a file to preview it (pictures, PDFs, text, audio and
    video up to 100 MB); its menu has **Download**.
 4. To add files, choose **Upload files …** at the top, or drop files on the list; **New

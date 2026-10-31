@@ -239,3 +239,10 @@
 .cryptomator-dialog button.cryptomator-folders__item:hover:not(:disabled) {
 	background-color: var(--color-background-hover);
 }
+
+/* The vault's folder, the user name of a password manager's entry: shown, not edited. */
+.cryptomator-dialog input.cryptomator-unlock__account {
+	color: var(--color-text-maxcontrast);
+	background-color: var(--color-background-dark);
+	cursor: default;
+}
