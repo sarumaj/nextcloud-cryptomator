@@ -40,7 +40,7 @@ import { DefaultType, File, FileType, Folder, Permission, View, getFileActions, 
 import { emit, subscribe } from '@nextcloud/event-bus'
 import { generateFilePath, imagePath } from '@nextcloud/router'
 import vaultLib from '../app/cryptomator_vaults/js/vault.js'
-import { LARGE_FILE, askName, askPassword, chooseFolder, closeDialog, confirmAction, download, el, humanSize, notice, revokeAll, showFile, showUploads } from './dialogs.js'
+import { LARGE_FILE, askName, askPassword, hasPreview, chooseFolder, closeDialog, confirmAction, download, el, humanSize, notice, revokeAll, showFile, showUploads } from './dialogs.js'
 import { davStorage, findVaults, userId } from './storage.js'
 import { t } from './l10n.js'
 
@@ -83,6 +83,7 @@ const ICON_NEW_FOLDER = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24
 const ICON_RENAME = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>'
 const ICON_MOVE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg>'
 const ICON_DELETE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>'
+const ICON_UNLOCKED = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6a5 5 0 0 0-9.9-1l1.95.45A3 3 0 0 1 15 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm0 12H6V10h12v10z"/></svg>'
 const ICON_ADD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2zm5 9h-2v2h-2v-2H9v-2h2V9h2v2h2v2z"/></svg>'
 
 // ----- Vaults and their opaque names -----
@@ -386,6 +387,7 @@ function lock(vault) {
 	vault.dirs.clear()
 	vault.entries.clear()
 	revokeAll()
+	updateLockBar(lockBar?.folder)
 	if (currentDir().startsWith('/' + vault.seg)) {
 		goTo('/')
 	}
@@ -525,6 +527,9 @@ registerFileAction({
 			showInfo(t('A link to {target}', { target: entry.target }))
 		} else if (entry.type === 'broken') {
 			showError(t('This entry cannot be read: {detail}', { detail: entry.error }))
+		} else if (entry.size >= STREAM_FROM && !hasPreview(entry.name)) {
+			// Nothing to show: straight to the computer, in pieces where possible.
+			await downloadEntry(vault, entry)
 		} else {
 			await showFile(entry.name, entry.size, (onProgress, onDownload) => vault.vault.readFile(entry, onProgress, onDownload), message)
 		}
@@ -534,17 +539,45 @@ registerFileAction({
 	order: -1000,
 })
 
-async function downloadNode(node) {
-	const { vault, entry } = entryOf(node)
-	if (!vault?.vault?.unlocked || !entry) {
-		showError(t('The vault is locked.'))
-		return null
+/**
+ * A file decrypted to the person's computer: a large one in pieces where the browser
+ * lets a file be saved so (Edge, Chrome), else whole from memory.
+ */
+async function downloadEntry(vault, entry) {
+	if (entry.size >= STREAM_FROM && typeof window.showSaveFilePicker === 'function') {
+		let writable
+		try {
+			// Asked at once, while the click still counts as the person's.
+			writable = await (await window.showSaveFilePicker({ suggestedName: entry.name })).createWritable()
+		} catch {
+			return
+		}
+		try {
+			await vault.vault.readFileStream(entry, (piece) => writable.write(piece))
+			await writable.close()
+		} catch (error) {
+			await writable.abort().catch(() => {})
+			showError(message(error))
+		}
+		return
+	}
+	if (entry.size > LARGE_FILE && !window.confirm(t('This file is {size}. Your browser holds it twice while decrypting. Continue?', { size: humanSize(entry.size) }))) {
+		return
 	}
 	try {
 		download(entry.name, await vault.vault.readFile(entry))
 	} catch (error) {
 		showError(message(error))
 	}
+}
+
+async function downloadNode(node) {
+	const { vault, entry } = entryOf(node)
+	if (!vault?.vault?.unlocked || !entry) {
+		showError(t('The vault is locked.'))
+		return null
+	}
+	await downloadEntry(vault, entry)
 	return null
 }
 
@@ -624,6 +657,41 @@ function updateBanner(folder) {
 	banner.el.querySelector('.cryptomator-banner__icon').innerHTML = ICON_VAULT
 }
 
+// In an unlocked vault: a bar above the list that says so, with Lock.
+let lockBar = null
+
+function updateLockBar(folder) {
+	if (!lockBar) {
+		return
+	}
+	lockBar.folder = folder
+	const vault = vaults.get(folder?.attributes?.cryptomatorVault)
+	if (!vault?.vault?.unlocked) {
+		lockBar.el.replaceChildren()
+		return
+	}
+	lockBar.el.replaceChildren(el('div', { class: 'cryptomator-banner cryptomator-banner--unlocked', role: 'status' }, [
+		el('span', { class: 'cryptomator-banner__icon', 'aria-hidden': 'true' }),
+		el('span', { class: 'cryptomator-banner__text' },
+			t('{vault} is unlocked in this browser. It locks after {minutes} minutes without use.', { vault: vault.name, minutes: AUTO_LOCK_MINUTES })),
+		el('button', { type: 'button', class: 'cryptomator-banner__lock', onclick: () => lock(vault) }, t('Lock')),
+	]))
+	lockBar.el.querySelector('.cryptomator-banner__icon').innerHTML = ICON_UNLOCKED
+}
+
+registerFileListHeader({
+	id: 'cryptomator-vaults-unlocked',
+	order: 4,
+	enabled: (folder, view) => SECURE && inVaults(view),
+	render(container, folder) {
+		lockBar = { el: container, folder }
+		updateLockBar(folder)
+	},
+	updated(folder) {
+		updateLockBar(folder)
+	},
+})
+
 registerFileListHeader({
 	id: 'cryptomator-vaults-banner',
 	order: 5,
@@ -663,17 +731,31 @@ let busy = false
  * each is checked before and after it is stored (Vault.writeFile). A taken name
  * is replaced only when the person says so.
  */
-async function uploadFiles(files) {
+// From this size a file is encrypted, uploaded and checked in pieces
+// (Vault.writeFileStream), downloaded in pieces where the browser lets it be saved
+// so: memory holds a part, not the file.
+const STREAM_FROM = 16 * 1024 * 1024
+
+/** A browser's File as the source Vault.writeFileStream reads in pieces. */
+function fileSource(file) {
+	return { size: file.size, read: async (start, end) => new Uint8Array(await file.slice(start, end).arrayBuffer()) }
+}
+
+/**
+ * Encrypts and writes files into the folder the list shows, one after the other:
+ * each is checked before it enters the vault (Vault.writeFile, or writeFileStream
+ * for large ones). files: {file, dirs} with the folders below this one it goes to
+ * (created, or merged into those there); folders: further folder paths to create
+ * (empty ones of a dropped folder). A taken name is replaced only when the person
+ * says so.
+ */
+async function uploadFiles(files, folders = []) {
 	const here = writableHere()
-	if (!here || files.length === 0) {
+	if (!here || (files.length === 0 && folders.length === 0)) {
 		return
 	}
 	if (busy) {
 		showError(t('Another change to the vault is still running.'))
-		return
-	}
-	const large = files.filter((file) => file.size > LARGE_FILE)
-	if (large.length > 0 && !window.confirm(t('{count} of the files are larger than {size}. Your browser holds each twice while encrypting. Continue?', { count: large.length, size: humanSize(LARGE_FILE) }))) {
 		return
 	}
 	busy = true
@@ -682,25 +764,50 @@ async function uploadFiles(files) {
 	let decision = null
 	let written = 0
 	const failed = []
+	// The folders the files go to: their paths below this one, and their IDs.
+	const dirIds = new Map([['', here.dirId]])
+	const folderOf = async (dirs) => {
+		let key = ''
+		for (const name of dirs) {
+			const next = key ? key + '/' + name : name
+			if (!dirIds.has(next)) {
+				dirIds.set(next, (await vault.ensureDirectory(dirIds.get(key), name)).dirId)
+			}
+			key = next
+		}
+		return dirIds.get(key)
+	}
 	try {
-		for (const [index, file] of files.entries()) {
-			const line = dialog.file(file.name)
+		for (const dirs of folders) {
+			try {
+				await folderOf(dirs)
+			} catch (error) {
+				failed.push(dirs.join('/'))
+				dialog.file(dirs.join('/') + '/').done(message(error), true)
+			}
+		}
+		for (const [index, { file, dirs }] of files.entries()) {
+			const label = [...dirs, file.name].join('/')
+			const line = dialog.file(label)
 			if (dialog.stopped) {
 				line.done(t('Not uploaded'))
 				continue
 			}
 			let replace = decision === 'replace-all'
 			const write = async () => {
-				const data = new Uint8Array(await file.arrayBuffer())
+				const target = await folderOf(dirs)
 				const labels = { encrypt: t('Encrypting'), upload: t('Uploading'), verify: t('Checking') }
-				const share = { encrypt: [0, 0.2], upload: [0.2, 0.6], verify: [0.8, 0.2] }
-				await vault.writeFile(here.dirId, file.name, data, {
-					replace,
-					onProgress: (phase, done, total) => {
-						const [start, width] = share[phase]
-						line.phase(labels[phase], start + width * (total ? done / total : 1))
-					},
-				})
+				const large = file.size >= STREAM_FROM
+				const share = large ? { upload: [0, 0.7], verify: [0.7, 0.3] } : { encrypt: [0, 0.2], upload: [0.2, 0.6], verify: [0.8, 0.2] }
+				const onProgress = (phase, done, total) => {
+					const [start, width] = share[phase]
+					line.phase(phase === 'upload' && large ? t('Encrypting and uploading') : labels[phase], start + width * (total ? done / total : 1))
+				}
+				if (large) {
+					await vault.writeFileStream(target, file.name, fileSource(file), { replace, onProgress })
+				} else {
+					await vault.writeFile(target, file.name, new Uint8Array(await file.arrayBuffer()), { replace, onProgress })
+				}
 			}
 			try {
 				try {
@@ -709,7 +816,7 @@ async function uploadFiles(files) {
 					if (error?.code !== 'exists' || decision === 'skip-all') {
 						throw error
 					}
-					const answer = decision === 'replace-all' ? 'replace' : await dialog.ask(file.name, files.length)
+					const answer = decision === 'replace-all' ? 'replace' : await dialog.ask(label, files.length)
 					if (answer === 'cancel') {
 						line.done(t('Not uploaded'))
 						break
@@ -730,7 +837,7 @@ async function uploadFiles(files) {
 				if (error?.code === 'exists' && decision === 'skip-all') {
 					line.done(t('Skipped'))
 				} else {
-					failed.push(file.name)
+					failed.push(label)
 					line.done(message(error), true)
 				}
 			}
@@ -745,15 +852,45 @@ async function uploadFiles(files) {
 	}
 }
 
-function chooseFiles() {
-	const input = el('input', { type: 'file', multiple: true, hidden: true })
+function chooseFiles(directory = false) {
+	const input = el('input', { type: 'file', multiple: true, hidden: true, webkitdirectory: directory || null })
 	input.addEventListener('change', () => {
-		const files = [...input.files]
+		// A chosen folder's files name their place in it (webkitRelativePath: Folder/sub/file).
+		const files = [...input.files].map((file) => ({ file, dirs: (file.webkitRelativePath || file.name).split('/').slice(0, -1) }))
 		input.remove()
 		uploadFiles(files)
 	})
 	document.body.append(input)
 	input.click()
+}
+
+/** The files and folders of dropped entries, walked down: {files: [{file, dirs}], folders: [dirs]}. */
+async function walkEntries(entries) {
+	const files = []
+	const folders = []
+	const visit = async (entry, dirs) => {
+		if (entry.isFile) {
+			files.push({ file: await new Promise((resolve, reject) => entry.file(resolve, reject)), dirs })
+		} else if (entry.isDirectory) {
+			const inside = [...dirs, entry.name]
+			folders.push(inside)
+			const reader = entry.createReader()
+			// A folder's entries come in batches, until an empty one.
+			for (;;) {
+				const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject))
+				if (batch.length === 0) {
+					break
+				}
+				for (const child of batch) {
+					await visit(child, inside)
+				}
+			}
+		}
+	}
+	for (const entry of entries) {
+		await visit(entry, [])
+	}
+	return { files, folders }
 }
 
 async function newFolder() {
@@ -938,6 +1075,18 @@ registerFileListAction({
 })
 
 registerFileListAction({
+	id: 'cryptomator-vaults-upload-folder',
+	displayName: () => t('Upload folder …'),
+	iconSvgInline: () => ICON_UPLOAD,
+	order: -1.5,
+	enabled: ({ view }) => inVaults(view) && writableHere() !== null,
+	exec: async () => {
+		chooseFiles(true)
+		return null
+	},
+})
+
+registerFileListAction({
 	id: 'cryptomator-vaults-new-folder',
 	displayName: () => t('New folder …'),
 	iconSvgInline: () => ICON_NEW_FOLDER,
@@ -965,15 +1114,13 @@ function onDrop(event) {
 	}
 	event.preventDefault()
 	event.stopPropagation()
-	// Files only: a dropped folder would need its tree walked, not supported yet.
-	const items = [...(event.dataTransfer.items || [])].map((item) => ({ entry: item.webkitGetAsEntry?.(), file: item.getAsFile() }))
-	const files = items.length > 0
-		? items.filter(({ entry, file }) => file && !entry?.isDirectory).map(({ file }) => file)
-		: [...event.dataTransfer.files]
-	if (items.some(({ entry }) => entry?.isDirectory)) {
-		showError(t('Folders cannot be dropped into a vault yet: drop the files, or create the folder first.'))
+	// The entries now: the drop's items are gone once the event is over.
+	const entries = [...(event.dataTransfer.items || [])].map((item) => item.webkitGetAsEntry?.()).filter(Boolean)
+	if (entries.length === 0) {
+		uploadFiles([...event.dataTransfer.files].map((file) => ({ file, dirs: [] })))
+		return
 	}
-	uploadFiles(files)
+	walkEntries(entries).then(({ files, folders }) => uploadFiles(files, folders), (error) => showError(message(error)))
 }
 
 window.addEventListener('dragover', onDragOver, true)

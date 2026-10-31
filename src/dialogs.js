@@ -181,8 +181,13 @@ export function askPassword(vaultName, unlock, account) {
 const IMAGE = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'svg']
 const VIDEO = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', ogv: 'video/ogg' }
 const AUDIO = { mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac' }
-const TEXT = ['txt', 'md', 'csv', 'tsv', 'json', 'log', 'xml', 'yml', 'yaml', 'ini', 'conf', 'cfg', 'toml',
+const TEXT = ['txt', 'csv', 'tsv', 'json', 'log', 'xml', 'yml', 'yaml', 'ini', 'conf', 'cfg', 'toml',
 	'js', 'ts', 'py', 'sh', 'php', 'java', 'go', 'rs', 'c', 'h', 'css', 'html', 'htm', 'vcf', 'ics', 'tex']
+
+/** Whether the dialog previews files of this name (else it only offers them for download). */
+export function hasPreview(name) {
+	return previewKind(name).kind !== 'none'
+}
 
 function previewKind(name) {
 	const ext = (/\.([^.]+)$/.exec(name)?.[1] ?? '').toLowerCase()
@@ -201,7 +206,54 @@ function previewKind(name) {
 	if (TEXT.includes(ext)) {
 		return { kind: 'text', type: 'text/plain' }
 	}
+	if (ext === 'docx') {
+		return { kind: 'docx' }
+	}
+	if (['pptx', 'odp', 'odt'].includes(ext)) {
+		return { kind: ext }
+	}
+	if (['md', 'markdown'].includes(ext)) {
+		return { kind: 'markdown' }
+	}
+	if (ext === 'zip') {
+		return { kind: 'zip' }
+	}
+	if (['heic', 'heif'].includes(ext)) {
+		return { kind: 'heic' }
+	}
+	if (['xlsx', 'xls', 'ods'].includes(ext)) {
+		return { kind: 'sheet' }
+	}
 	return { kind: 'none' }
+}
+
+// Previews whose code loads when a file of their kind is opened: those that make a
+// page for the sandboxed frame (sandbox.js), and HEIC, which becomes a picture.
+const PAGES = {
+	docx: async (data) => (await import('./documents.js')).docxPage(data),
+	sheet: async (data) => (await import('./documents.js')).sheetPage(data),
+	pptx: async (data) => (await import('./office.js')).pptxPage(data),
+	odp: async (data) => (await import('./office.js')).odpPage(data),
+	odt: async (data) => (await import('./office.js')).odtPage(data),
+	markdown: async (data) => (await import('./previews.js')).markdownPage(data),
+	zip: async (data) => (await import('./previews.js')).zipPage(data),
+}
+
+export function isLazyPreview(kind) {
+	return kind in PAGES || kind === 'heic'
+}
+
+/**
+ * A preview made by code loaded now: a frame with neither scripts nor an origin of
+ * its own, whose page loads nothing from outside; or, for HEIC, a picture.
+ */
+async function renderDocument(preview, data, name) {
+	if (preview.kind === 'heic') {
+		const png = await (await import('./previews.js')).heicToPng(data)
+		return el('img', { class: 'cryptomator-preview', src: objectUrl(png, 'image/png'), alt: name })
+	}
+	const html = await PAGES[preview.kind](data)
+	return el('iframe', { class: 'cryptomator-preview cryptomator-preview--frame cryptomator-preview--document', sandbox: '', referrerpolicy: 'no-referrer', title: name, srcdoc: html })
 }
 
 function render(preview, data, name) {
@@ -253,7 +305,23 @@ export async function showFile(name, size, read, message) {
 		}
 		downloadButton.disabled = false
 		downloadButton.addEventListener('click', () => download(name, data))
-		body.replaceChildren(previewable ? render(preview, data, name) : notice(t('No preview for this file. Download it to open it.')))
+		if (!previewable) {
+			body.replaceChildren(notice(t('No preview for this file. Download it to open it.')))
+		} else if (isLazyPreview(preview.kind)) {
+			body.replaceChildren(notice(t('Preparing the preview …')))
+			try {
+				const frame = await renderDocument(preview, data, name)
+				if (current?.dialog === dialog) {
+					body.replaceChildren(frame)
+				}
+			} catch (error) {
+				if (current?.dialog === dialog) {
+					body.replaceChildren(notice(t('This document cannot be previewed: {detail}. Download it to open it.', { detail: error.message }), 'error'))
+				}
+			}
+		} else {
+			body.replaceChildren(render(preview, data, name))
+		}
 	} catch (error) {
 		if (current?.dialog === dialog) {
 			body.replaceChildren(notice(message(error), 'error'))

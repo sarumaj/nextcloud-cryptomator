@@ -342,6 +342,15 @@
 		return full * CHUNK + Math.max(0, rest - overhead)
 	}
 
+	// ----- Names as Cryptomator finds them -----
+
+	// The encrypted part of an entry's name (cryptofs' Constants.BASE64_PATTERN): a
+	// sync tool may have added to it, e.g. "<name> (conflicted copy …).c9r".
+	const BASE64_PATTERN = /[a-zA-Z0-9\-_]{20}(?:[a-zA-Z0-9\-_]{4})*(?:[a-zA-Z0-9\-_]{4}|[a-zA-Z0-9\-_]{3}=|[a-zA-Z0-9\-_]{2}==)/g
+	// The longest a folder or a link entry's type file is compared (cryptofs' Constants).
+	const MAX_DIR_ID_LENGTH = 36
+	const MAX_SYMLINK_LENGTH = 32767
+
 	// ----- Helpers for writing -----
 
 	// Staging names of files and entries being written (Vault.stagingPath), in the
@@ -510,6 +519,37 @@
 			return this.dirPaths.get(dirId)
 		}
 
+		/**
+		 * The name in an entry's file name, found as cryptofs finds it (C9rDecryptor):
+		 * the first run of base64 in it that decrypts; where one does not, the run is
+		 * narrowed at its first and last '-' or '_' and tried again. {name, extracted}
+		 * or null.
+		 */
+		async extractName(basename, dirId, start = 0, end = basename.length) {
+			const pattern = new RegExp(BASE64_PATTERN.source, 'g')
+			pattern.lastIndex = start
+			const match = pattern.exec(basename.slice(0, end))
+			if (match === null) {
+				return null
+			}
+			const valid = match[0]
+			try {
+				const name = decoder.decode(await this.siv.decrypt(base64Decode(valid), [encoder.encode(dirId)]))
+				return { name, extracted: valid }
+			} catch {
+				const first = valid.search(/[-_]/)
+				if (first === -1) {
+					return null
+				}
+				const last = Math.max(valid.lastIndexOf('-'), valid.lastIndexOf('_'))
+				const withNewStart = await this.extractName(basename, dirId, match.index + Math.max(1, first), end)
+				if (withNewStart !== null) {
+					return withNewStart
+				}
+				return this.extractName(basename, dirId, start, match.index + valid.length - Math.max(1, valid.length - last))
+			}
+		}
+
 		async decryptName(encrypted, parentDirId) {
 			const base = encrypted.endsWith('.c9r') ? encrypted.slice(0, -4) : encrypted
 			try {
@@ -522,16 +562,124 @@
 		/**
 		 * The entries of a directory (the root's ID is ''): {name, type ('file',
 		 * 'dir', 'link'), size (of a file, decrypted), dirId (of a directory), path
-		 * (in the storage), mtime (the storage's, if known)}. An entry that does not
-		 * decrypt is listed as type 'broken'.
+		 * (in the storage), mtime (the storage's, if known)}. As Cryptomator lists a
+		 * directory (cryptofs' NodeProcessor): an entry whose name does not decrypt is
+		 * left out, a sync conflict's copy is resolved (resolveConflict), a folder whose
+		 * directory is missing is left out (BrokenDirectoryFilter). An entry that cannot
+		 * be read for another reason is listed as type 'broken'.
 		 */
 		async list(dirId) {
 			const folder = await this.dirPath(dirId)
 			const entries = await this.storage.list(folder)
 			const results = await Promise.all(entries.map((entry) => this.describe(folder, entry, dirId)))
+			const listed = results.filter((entry) => entry !== null && !entry.conflict)
+			// One after another: two copies of one name must not race for it.
+			for (const conflict of results.filter((entry) => entry?.conflict)) {
+				const resolved = await this.resolveConflict(folder, dirId, conflict)
+				if (resolved !== null) {
+					listed.push(resolved)
+				}
+			}
+			const present = await Promise.all(listed.map(async (entry) => entry.type !== 'dir'
+				|| await this.storage.stat?.(await this.dirPath(entry.dirId)).then((found) => found !== null, () => true) !== false))
 			// Folders first, then by name.
-			return results.filter((entry) => entry !== null)
+			return listed.filter((entry, index) => present[index])
 				.sort((a, b) => (b.type === 'dir') - (a.type === 'dir') || a.name.localeCompare(b.name))
+		}
+
+		/**
+		 * A sync conflict's copy, resolved as Cryptomator resolves it (cryptofs'
+		 * C9rConflictResolver), so that the vault ends up as if Cryptomator had listed
+		 * the directory: moved to its proper name if that is free; deleted if it and
+		 * the entry of that name are the same folder or link; else renamed to its name
+		 * with the sync tool's suffix, or " (1)" to " (9)". Left for the next listing
+		 * (not listed now) if a folder's type cannot be told yet, or on an error.
+		 * Returns the entry it became, or null.
+		 */
+		async resolveConflict(folder, dirId, conflict) {
+			if (typeof this.storage.move !== 'function') {
+				return null
+			}
+			const canonicalName = conflict.found.extracted + '.c9r'
+			const canonicalPath = joinPath(folder, canonicalName)
+			try {
+				try {
+					await this.storage.move(conflict.path, canonicalPath)
+					return this.describe(folder, { ...conflict.entry, name: canonicalName }, dirId)
+				} catch (error) {
+					if (error?.code !== 'exists') {
+						throw error
+					}
+				}
+				const canonical = await this.storage.stat(canonicalPath)
+				if (conflict.entry.isDir && canonical?.isDir) {
+					const dir = await this.compareTypeFile(conflict.path, canonicalPath, 'dir.c9r', MAX_DIR_ID_LENGTH, true)
+					if (dir.both) {
+						return dir.same ? this.removeDuplicate(conflict.path) : this.renameConflict(folder, dirId, conflict)
+					}
+					const link = await this.compareTypeFile(conflict.path, canonicalPath, 'symlink.c9r', MAX_SYMLINK_LENGTH, false)
+					if (link.both) {
+						return link.same ? this.removeDuplicate(conflict.path) : this.renameConflict(folder, dirId, conflict)
+					}
+					if (!((dir.conflicting || link.conflicting) && (dir.canonical || link.canonical))) {
+						return null
+					}
+				}
+				return this.renameConflict(folder, dirId, conflict)
+			} catch {
+				return null
+			}
+		}
+
+		async removeDuplicate(path) {
+			await this.storage.remove(path)
+			// The entry of the proper name is listed already.
+			return null
+		}
+
+		/** The first bytes of a folder entry's type file in both entries, compared. */
+		async compareTypeFile(conflictingPath, canonicalPath, file, length, fullLength) {
+			const read = (path) => this.storage.read(joinPath(path, file)).then((data) => data.subarray(0, length), (error) => {
+				if (error?.code === 'not-found') {
+					return new Uint8Array(0)
+				}
+				throw error
+			})
+			const [a, b] = await Promise.all([read(conflictingPath), read(canonicalPath)])
+			const least = fullLength ? length : 1
+			const conflicting = a.length >= least
+			const canonical = b.length >= least
+			return { conflicting, canonical, both: conflicting && canonical, same: conflicting && canonical && equalBytes(a, b) }
+		}
+
+		/** Renames a conflict's copy as cryptofs does (renameConflictingFile). */
+		async renameConflict(folder, dirId, conflict) {
+			const cleartext = conflict.found.name
+			const dot = cleartext.lastIndexOf('.')
+			const extension = dot > 0 ? cleartext.slice(dot) : ''
+			const basename = dot > 0 ? cleartext.slice(0, dot) : cleartext
+			const full = conflict.entry.name
+			const endOfCiphertext = full.indexOf(conflict.found.extracted) + conflict.found.extracted.length
+			const originalSuffix = full.slice(endOfCiphertext, full.length - '.c9r'.length)
+			const threshold = this.config.payload.shorteningThreshold ?? 220
+			const maxCleartext = Math.trunc((threshold - 4) / 4) * 3 - 16
+			const net = maxCleartext - extension.length
+			const suffix = originalSuffix.slice(0, Math.min(originalSuffix.length, Math.trunc(net / 2)))
+			const restricted = basename.slice(0, Math.max(0, Math.min(basename.length, net - Math.max(4, suffix.length))))
+			const candidates = [restricted + suffix + extension]
+			for (let i = 1; i < 10; i++) {
+				candidates.push(restricted + ' (' + i + ')' + extension)
+			}
+			for (const name of candidates) {
+				const fullName = base64UrlEncode(await this.siv.encrypt(encoder.encode(name), [encoder.encode(dirId)]), true) + '.c9r'
+				const path = joinPath(folder, fullName)
+				if (await this.storage.stat(path) === null) {
+					await this.storage.move(conflict.path, path)
+					return this.describe(folder, { ...conflict.entry, name: fullName }, dirId)
+				}
+			}
+			// Every candidate taken: Cryptomator keeps the copy as it is, unlisted.
+			return null
 		}
 
 		async describe(folder, entry, dirId) {
@@ -555,12 +703,21 @@
 					}
 					return this.describeNode(name, path, inside.map((item) => item.name))
 				}
-				// dirid.c9r holds the directory's own ID (for recovery, not an entry);
-				// anything without .c9r is not Cryptomator's.
-				if (entry.name === 'dirid.c9r' || !entry.name.endsWith('.c9r')) {
+				// Anything without .c9r is not an entry (.c9u marks a file in use on
+				// another device); dirid.c9r and other names without an encrypted name in
+				// them are left out, as Cryptomator leaves them out.
+				if (!entry.name.endsWith('.c9r')) {
 					return null
 				}
-				const name = await this.decryptName(entry.name, dirId)
+				const found = await this.extractName(entry.name.slice(0, -'.c9r'.length), dirId)
+				if (found === null) {
+					return null
+				}
+				if (entry.name !== found.extracted + '.c9r') {
+					// A sync conflict's copy (resolved by list), unless hidden.
+					return entry.name.startsWith('.') ? null : { conflict: true, entry, found, path }
+				}
+				const name = found.name
 				if (!entry.isDir) {
 					return { name, type: 'file', size: cleartextSize(this.scheme, entry.size), path }
 				}
@@ -731,8 +888,11 @@
 			return names.includes('symlink.c9r') ? 'link' : 'unknown'
 		}
 
-		/** A file's contents encrypted as Cryptomator does: a new content key, header, chunks. */
-		async encryptContents(data, onProgress) {
+		/**
+		 * The start of a file's encryption: a new content key and the header that
+		 * holds it; encryptChunk(number, plain) encrypts the file's chunks in turn.
+		 */
+		async startEncryption() {
 			this.requireKeys()
 			const scheme = SCHEMES[this.scheme]
 			const gcm = this.scheme === 'SIV_GCM'
@@ -751,22 +911,37 @@
 			const contentKey = await subtle.importKey('raw', rawKey, gcm ? 'AES-GCM' : 'AES-CTR', false, ['encrypt'])
 			payload.fill(0)
 			rawKey.fill(0)
+			const keys = this.keys
+			return {
+				header,
+				async encryptChunk(number, plain) {
+					const nonce = randomBytes(scheme.nonce)
+					if (gcm) {
+						return concat(nonce, new Uint8Array(await subtle.encrypt(
+							{ name: 'AES-GCM', iv: nonce, additionalData: concat(uint64(number), headerNonce) }, contentKey, plain)))
+					}
+					const encrypted = new Uint8Array(await subtle.encrypt({ name: 'AES-CTR', counter: nonce, length: 128 }, contentKey, plain))
+					const mac = new Uint8Array(await subtle.sign('HMAC', keys.mac, concat(headerNonce, uint64(number), nonce, encrypted)))
+					return concat(nonce, encrypted, mac)
+				},
+			}
+		}
+
+		/** The size of a file of this many bytes, encrypted. */
+		encryptedSize(size) {
+			const scheme = SCHEMES[this.scheme]
+			return scheme.header + size + Math.ceil(size / CHUNK) * scheme.overhead
+		}
+
+		/** A file's contents encrypted as Cryptomator does: a new content key, header, chunks. */
+		async encryptContents(data, onProgress) {
+			const encryption = await this.startEncryption()
 			// An empty file is its header alone; a full last chunk has none after it.
 			const chunks = Math.ceil(data.length / CHUNK)
-			const out = new Uint8Array(scheme.header + data.length + chunks * scheme.overhead)
-			out.set(header)
-			for (let number = 0, offset = scheme.header; number < chunks; number++) {
-				const plain = data.subarray(number * CHUNK, Math.min((number + 1) * CHUNK, data.length))
-				const nonce = randomBytes(scheme.nonce)
-				let chunk
-				if (gcm) {
-					chunk = concat(nonce, new Uint8Array(await subtle.encrypt(
-						{ name: 'AES-GCM', iv: nonce, additionalData: concat(uint64(number), headerNonce) }, contentKey, plain)))
-				} else {
-					const encrypted = new Uint8Array(await subtle.encrypt({ name: 'AES-CTR', counter: nonce, length: 128 }, contentKey, plain))
-					const mac = new Uint8Array(await subtle.sign('HMAC', this.keys.mac, concat(headerNonce, uint64(number), nonce, encrypted)))
-					chunk = concat(nonce, encrypted, mac)
-				}
+			const out = new Uint8Array(this.encryptedSize(data.length))
+			out.set(encryption.header)
+			for (let number = 0, offset = encryption.header.length; number < chunks; number++) {
+				const chunk = await encryption.encryptChunk(number, data.subarray(number * CHUNK, Math.min((number + 1) * CHUNK, data.length)))
 				out.set(chunk, offset)
 				offset += chunk.length
 				if (onProgress) {
@@ -774,6 +949,148 @@
 				}
 			}
 			return out
+		}
+
+		// ----- Large files, in pieces -----
+		//
+		// A file too large to hold in memory twice: source.size and
+		// source.read(start, end) give its plain bytes in pieces (a File's slices).
+		// It is encrypted chunk by chunk into parts the storage takes in turn
+		// (storage.writeParts), then read back in ranges (storage.readRange), each
+		// chunk decrypted (which authenticates it) and compared byte for byte with
+		// the source. As with writeFile, under a staging name and moved into place
+		// only after; a failed check leaves the vault as it was. In memory: a part.
+
+		/** The encrypted file in parts of about partSize bytes (an async iterable). */
+		async * encryptedParts(source, partSize, onProgress) {
+			const encryption = await this.startEncryption()
+			const window = 32 * CHUNK
+			let part = [encryption.header]
+			let length = encryption.header.length
+			for (let start = 0, number = 0; start < source.size; start += window) {
+				const plain = await source.read(start, Math.min(start + window, source.size))
+				for (let offset = 0; offset < plain.length; offset += CHUNK, number++) {
+					const chunk = await encryption.encryptChunk(number, plain.subarray(offset, Math.min(offset + CHUNK, plain.length)))
+					part.push(chunk)
+					length += chunk.length
+					if (length >= partSize) {
+						yield concat(...part)
+						part = []
+						length = 0
+					}
+				}
+				onProgress?.(Math.min(start + window, source.size), source.size)
+			}
+			if (length > 0) {
+				yield concat(...part)
+			}
+		}
+
+		/**
+		 * Compares a stored file with its source, in ranges: each chunk decrypted and
+		 * authenticated, its bytes equal to the source's.
+		 */
+		async checkStoredStream(path, source, onProgress) {
+			const scheme = SCHEMES[this.scheme]
+			const expected = this.encryptedSize(source.size)
+			const found = await this.storage.stat(path)
+			if (!found || found.size !== expected) {
+				throw new VaultError('corrupt', 'the stored file has ' + (found?.size ?? 'no') + ' bytes, not ' + expected)
+			}
+			const header = await this.storage.readRange(path, 0, scheme.header)
+			const headerNonce = header.subarray(0, scheme.nonce)
+			const contentKey = await this.decryptHeader(header, headerNonce)
+			const chunkSize = CHUNK + scheme.overhead
+			const chunks = Math.ceil(source.size / CHUNK)
+			const perRange = 32
+			for (let first = 0; first < chunks; first += perRange) {
+				const last = Math.min(first + perRange, chunks)
+				const begin = scheme.header + first * chunkSize
+				const stored = await this.storage.readRange(path, begin, Math.min(scheme.header + last * chunkSize, expected))
+				const plain = await source.read(first * CHUNK, Math.min(last * CHUNK, source.size))
+				for (let number = first; number < last; number++) {
+					const offset = (number - first) * chunkSize
+					const decrypted = await this.decryptChunk(stored.subarray(offset, Math.min(offset + chunkSize, stored.length)), number, headerNonce, contentKey)
+					if (!equalBytes(decrypted, plain.subarray((number - first) * CHUNK, (number - first) * CHUNK + decrypted.length))) {
+						throw new VaultError('corrupt', 'the stored file differs from the one written (chunk ' + number + ')')
+					}
+				}
+				onProgress?.(Math.min(last * CHUNK, source.size), source.size)
+			}
+		}
+
+		/**
+		 * writeFile for a source read in pieces (see above). options: replace,
+		 * onProgress(phase, done, total) with the phases 'upload' and 'verify',
+		 * partSize (bytes per part handed to the storage).
+		 */
+		async writeFileStream(dirId, rawName, source, options = {}) {
+			this.requireWritable()
+			const { replace = false, onProgress, partSize = 10 * 1024 * 1024 } = options
+			const progress = (phase) => (done, total) => onProgress?.(phase, done, total)
+			const name = checkName(rawName)
+			const entry = await this.entryPath(dirId, name)
+			const before = await this.existing(entry)
+			if (before !== null && (before !== 'file' || !replace)) {
+				throw new VaultError(before === 'file' ? 'exists' : 'exists-other', name)
+			}
+			const total = this.encryptedSize(source.size)
+			const contentsPath = entry.long ? joinPath(entry.path, 'contents.c9r') : entry.path
+			const staging = this.stagingPath()
+			const longNew = entry.long && before === null
+			const stagedFile = longNew ? joinPath(staging, 'contents.c9r') : staging
+			try {
+				if (longNew) {
+					await this.storage.mkdir(staging)
+					await this.storage.write(joinPath(staging, 'name.c9s'), encoder.encode(entry.fullName), { create: true })
+				}
+				await this.storage.writeParts(stagedFile, total, this.encryptedParts(source, partSize, progress('upload')), { create: true })
+				await this.checkStoredStream(stagedFile, source, progress('verify'))
+				if (longNew) {
+					await this.storage.move(staging, entry.path)
+				} else {
+					await this.storage.move(staging, contentsPath, { overwrite: before !== null })
+				}
+			} catch (error) {
+				await this.storage.remove(staging).catch(() => {})
+				throw error
+			}
+			return { name, path: contentsPath, size: source.size }
+		}
+
+		/**
+		 * A file's decrypted contents in pieces, for a file too large to hold:
+		 * onPiece(bytes) for each range of chunks in turn (awaited), each chunk
+		 * authenticated; onProgress(done, total).
+		 */
+		async readFileStream(entry, onPiece, onProgress) {
+			this.requireKeys()
+			const scheme = SCHEMES[this.scheme]
+			const found = await this.storage.stat(entry.path)
+			if (!found || found.size === 0) {
+				return
+			}
+			if (found.size < scheme.header) {
+				throw new VaultError('corrupt', 'file header too short')
+			}
+			const header = await this.storage.readRange(entry.path, 0, scheme.header)
+			const headerNonce = header.subarray(0, scheme.nonce)
+			const contentKey = await this.decryptHeader(header, headerNonce)
+			const chunkSize = CHUNK + scheme.overhead
+			const size = cleartextSize(this.scheme, found.size)
+			const chunks = Math.ceil((found.size - scheme.header) / chunkSize)
+			const perRange = 64
+			for (let first = 0; first < chunks; first += perRange) {
+				const last = Math.min(first + perRange, chunks)
+				const stored = await this.storage.readRange(entry.path, scheme.header + first * chunkSize, Math.min(scheme.header + last * chunkSize, found.size))
+				const pieces = []
+				for (let number = first; number < last; number++) {
+					const offset = (number - first) * chunkSize
+					pieces.push(await this.decryptChunk(stored.subarray(offset, Math.min(offset + chunkSize, stored.length)), number, headerNonce, contentKey))
+				}
+				await onPiece(concat(...pieces))
+				onProgress?.(Math.min(last * CHUNK, size), size)
+			}
 		}
 
 		/**
@@ -890,6 +1207,23 @@
 				throw new VaultError('corrupt', 'the new folder does not read back')
 			}
 			return { name, dirId: newId }
+		}
+
+		/**
+		 * The folder of this name in a directory: the one there (an upload of a folder
+		 * merges into it), or a new one. Refused where a file or link has the name.
+		 * Returns {name, dirId, created}.
+		 */
+		async ensureDirectory(dirId, rawName) {
+			this.requireWritable()
+			const found = await this.findEntry(dirId, rawName)
+			if (found === null) {
+				return { ...await this.createDirectory(dirId, rawName), created: true }
+			}
+			if (found.kind !== 'dir') {
+				throw new VaultError('exists-other', found.name)
+			}
+			return { name: found.name, dirId: await this.entryDirId(found), created: false }
 		}
 
 		// ----- Renaming, moving, deleting -----

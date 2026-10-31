@@ -1,4 +1,4 @@
-# Cryptomator vaults for Nextcloud
+# Vaults for Cryptomator
 
 Browse the [Cryptomator](https://cryptomator.org/) vaults you keep in Nextcloud in the Files
 app: open their folders, preview, download and upload files, without installing Cryptomator.
@@ -10,11 +10,14 @@ app: open their folders, preview, download and upload files, without installing 
 - **Unlocked in your browser:** the password, the vault's keys and every decrypted name and file
   stay in the browser tab. The server only sends the encrypted files, as it does when Cryptomator
   itself reads the vault.
-- **Locks itself** after 15 minutes without use, when you choose **Lock**, and when you leave the
-  page.
-- **Upload, new folders, rename, move, delete:** files are encrypted in your browser and written
-  exactly as Cryptomator writes them, each checked before it enters the vault; the vault stays
-  readable by Cryptomator at every step.
+- **Locks itself** after 15 minutes without use, when you choose **Lock** (in the bar above an
+  open vault's list), and when you leave the page.
+- **Upload files and folders, new folders, rename, move, delete:** files are encrypted in your
+  browser and written exactly as Cryptomator writes them, each checked before it enters the vault;
+  the vault stays readable by Cryptomator at every step. Large files go in pieces, so the browser
+  never holds a whole file of gigabytes.
+- **Previews** of pictures, PDFs, text, audio, video, Word documents (docx) and spreadsheets (xlsx,
+  xls, ods), all made in the browser.
 
 Not affiliated with Skymatic GmbH, the makers of Cryptomator.
 
@@ -46,16 +49,27 @@ menu leads there.
    the app as its address (e.g. `androidapp://org.cryptomator`), which a browser never matches: add
    the site to it, e.g. `https://<your cloud>/apps/files/cryptomator-vaults` (match: starts with),
    with the vault's folder as its user name.
-3. Browse it like any folder in Files. Choose a file to preview it (pictures, PDFs, text, audio and
-   video up to 100 MB); its menu has **Download**.
-4. To add files, choose **Upload files …** at the top, or drop files on the list; **New
-   folder …** creates a folder. If a file of that name exists, you're asked whether to replace
-   it. Folders can't be dropped yet. An entry's menu has **Rename**, **Move …** (to a folder of
-   the vault) and **Delete**; select several to move or delete them together.
-5. Choose **Lock** in the vault's menu in *Vaults*, or **Lock all vaults** at the top.
+3. Browse it like any folder in Files. Choose a file to preview it (pictures, PDFs, text, audio,
+   video, Markdown, ZIP archives, HEIC photos, Word, PowerPoint and OpenDocument documents and
+   spreadsheets up to 100 MB); its menu has **Download**. A large file
+   without a preview goes straight to your computer: Edge and Chrome ask where to save it and
+   write it in pieces as it is decrypted, other browsers hold it in memory first.
+4. To add files, choose **Upload files …** or **Upload folder …** at the top, or drop files and
+   folders on the list; **New folder …** creates a folder. A folder of a name that is there
+   already gets the new files; if a file of that name exists, you're asked whether to replace it.
+   An entry's menu has **Rename**, **Move …** (to a folder of the vault) and **Delete**; select
+   several to move or delete them together.
+5. Choose **Lock** in the bar above an open vault, in the vault's menu in *Vaults*, or **Lock all
+   vaults** at the top.
 
-Large files are decrypted and encrypted in the browser's memory, which holds them encrypted and
-decrypted at once: above 1 GB the app asks first.
+Files from 16 MB are encrypted, uploaded and checked in parts of 10 MB, so memory holds a part,
+not the file. Downloading a large file in pieces needs a browser that lets a page save a file so
+(Edge, Chrome); others hold the file in memory, and above 1 GB the app asks first.
+
+A sync client that finds a file changed on both sides keeps a copy beside it (e.g.
+`… (conflicted copy …).c9r`). The app resolves such copies as Cryptomator does when it lists the
+folder: it gives a copy its proper name if that is free, deletes a duplicate of a folder or link,
+and otherwise renames the copy so that both files show.
 
 ## How it works, and what it protects
 
@@ -127,7 +141,10 @@ What this protects against, and what it doesn't:
   downloads, which stay in your downloads folder. Locking drops the keys and the previews.
 
 Decrypted files are shown so that they can't act as you in Nextcloud: HTML only as text, SVG only
-as a picture, and downloads typed as plain data, which no browser renders.
+as a picture, and downloads typed as plain data, which no browser renders. Word documents and
+spreadsheets are rendered in the browser (Collabora would need the file on the server) into a
+frame with neither scripts nor an origin of its own, whose page loads nothing from outside; links
+and outside addresses are removed from it.
 
 ## Developing
 
@@ -208,4 +225,5 @@ on the app store.
 
 ## Licence
 
-[AGPL-3.0-or-later](LICENSE).
+[AGPL-3.0-or-later](LICENSE). The third-party packages in the build and their licences are listed
+in [NOTICE.md](NOTICE.md) (`npm run notice`).

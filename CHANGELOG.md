@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.0
+
+- **Lock** in a bar above an open vault's list, which says the vault is unlocked in this browser.
+- **Folders:** dropped folders and **Upload folder …** go into the vault with everything in them;
+  a folder of a name that is there merges into it.
+- **Large files in pieces:** from 16 MB a file is encrypted, uploaded and checked part by part (read
+  back in ranges, each chunk compared with the file), so the browser holds a part, not the file. A
+  large file is downloaded in pieces where the browser lets it be saved so (Edge, Chrome).
+- **Office previews** in the browser: Word (docx) with docx-preview, spreadsheets (xlsx, xls, ods)
+  with SheetJS, in a frame with neither scripts nor network.
+- **More previews:** Markdown (marked), the contents of ZIP archives (JSZip), HEIC photos (libheif,
+  as WebAssembly), and PowerPoint (pptx), OpenDocument text (odt) and presentations (odp), drawn
+  by the app's own renderers: text, tables, pictures and the slides' layout, no animations.
+- **Sync conflicts as Cryptomator resolves them:** a copy a sync client made of an encrypted file
+  (`… (conflicted copy …).c9r`) is moved to its proper name if that is free, deleted if it is a
+  duplicate of a folder or link, and otherwise renamed so that both show, e.g.
+  `Report (conflicted copy 2026-10-31).docx`. Entries that cannot be decrypted, and folders whose
+  contents are missing, are hidden, as in Cryptomator.
+- The app is now called **Vaults for Cryptomator** (its ID stays `cryptomator_vaults`).
+- `NOTICE.md` lists the third-party packages in the build and their licences (`npm run notice`,
+  checked in CI, in the release's archive).
+
 ## 0.4.1
 
 - The password dialog is a sign-in form as password managers know one: the vault's folder as the

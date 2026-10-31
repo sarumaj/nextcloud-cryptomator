@@ -58,6 +58,7 @@ function wr(e) {
 window._nc_files_scope ??= {};
 window._nc_files_scope.v4_0 ??= {};
 const ne = window._nc_files_scope.v4_0;
+var es = typeof globalThis < "u" ? globalThis : typeof window < "u" ? window : typeof global < "u" ? global : typeof self < "u" ? self : {};
 function Ot(e) {
   return e && e.__esModule && Object.prototype.hasOwnProperty.call(e, "default") ? e.default : e;
 }
@@ -443,7 +444,7 @@ function $i(e, ...t) {
   Nn().emit(e, ...t);
 }
 const Mr = (e) => "/remote.php/" + e;
-function es(e, t) {
+function ts(e, t) {
   return Bi(t), Fr() + Mr(e);
 }
 function fi(e, t, o) {
@@ -461,7 +462,7 @@ function Pr(e, t, o) {
   const f = Sn();
   return !c.noRewrite && typeof window < "u" && window.OC?.config?.modRewriteWorking === !0 ? f + fi(e, t) : f + "/index.php" + fi(e, t);
 }
-function ts(e, t) {
+function ns(e, t) {
   return t.includes(".") ? di(e, "img", t) : di(e, "img", `${t}.svg`);
 }
 function di(e, t, o) {
@@ -544,7 +545,7 @@ function $r(e) {
   return new kr(e);
 }
 Br();
-function ns() {
+function is() {
   return globalThis._nc_auth_requestToken ? globalThis._nc_auth_requestToken : globalThis.document ? document.head.dataset.requesttoken ?? null : null;
 }
 function Gi(e) {
@@ -552,7 +553,7 @@ function Gi(e) {
     throw new Error("Invalid CSRF token given", { cause: { token: e } });
   globalThis._nc_auth_requestToken !== e && (globalThis._nc_auth_requestToken = e, globalThis.document && (document.head.dataset.requesttoken = e), $i("csrf-token-update", { token: e, _internal: !0 }));
 }
-async function is() {
+async function rs() {
   const e = Pr("/csrftoken"), t = await fetch(e);
   if (!t.ok)
     throw new Error("Could not fetch CSRF token from API", { cause: t });
@@ -563,7 +564,7 @@ async function is() {
     throw new Error("Could not parse CSRF token from API response", { cause: o });
   }
 }
-function rs(e) {
+function os(e) {
   const t = async ({ token: o }) => {
     try {
       e(o);
@@ -599,7 +600,7 @@ let cn;
 function zr() {
   return cn || (cn = new Gr()), cn;
 }
-function os(e) {
+function ss(e) {
   if (!e || e.trim().length === 0)
     throw new Error("Nickname cannot be empty");
   zr().displayName = e;
@@ -751,14 +752,14 @@ const Yr = Object.freeze({
   DEFAULT: "default",
   HIDDEN: "hidden"
 });
-function ss(e) {
+function as(e) {
   if (Kr(e), ne.fileActions ??= /* @__PURE__ */ new Map(), ne.fileActions.has(e.id)) {
     On.error(`FileAction ${e.id} already registered`, { action: e });
     return;
   }
   ne.fileActions.set(e.id, e), Rn().dispatchTypedEvent("register:action", new CustomEvent("register:action", { detail: e }));
 }
-function as() {
+function cs() {
   return ne.fileActions ? [...ne.fileActions.values()] : [];
 }
 function Kr(e) {
@@ -1148,7 +1149,7 @@ class Dt {
     return JSON.stringify([structuredClone(this._data), this._knownDavService.toString()]);
   }
 }
-class cs extends Dt {
+class ls extends Dt {
   constructor(...[t, o]) {
     super(t, o);
   }
@@ -2721,7 +2722,7 @@ function Qi() {
 function He() {
   return globalThis._nc_l10n_language;
 }
-function ls(e) {
+function us(e) {
   const t = He();
   return [
     "ae",
@@ -2806,7 +2807,7 @@ function _n(e, t, o, c, f) {
     T
   ) : x);
 }
-function us(e, t, o, c, f, g) {
+function fs(e, t, o, c, f, g) {
   const T = "_" + t + "_::_" + o + "_", y = g?.bundle ?? Zi(e), m = y.translations[T];
   if (typeof m < "u") {
     const v = m;
@@ -2817,7 +2818,7 @@ function us(e, t, o, c, f, g) {
   }
   return c === 1 ? _n(e, t, f, c, g) : _n(e, o, f, c, g);
 }
-function fs(e, t = He()) {
+function ds(e, t = He()) {
   switch (t === "pt-BR" && (t = "xbr"), t.length > 3 && (t = t.substring(0, t.lastIndexOf("-"))), t) {
     case "az":
     case "bo":
@@ -2936,7 +2937,7 @@ function fs(e, t = He()) {
       return 0;
   }
 }
-function ds(e = Date.now(), t = {}) {
+function ms(e = Date.now(), t = {}) {
   const o = {
     ignoreSeconds: !1,
     language: He(),
@@ -2988,7 +2989,7 @@ const ct = Object.freeze({
   Modified: "mtime",
   Size: "size"
 });
-function ms(e, t = {}) {
+function ps(e, t = {}) {
   const o = {
     // Default to sort by name
     sortingMode: ct.Name,
@@ -3027,7 +3028,7 @@ function ms(e, t = {}) {
   ];
   return ko(e, f, g);
 }
-class ps extends Dt {
+class hs extends Dt {
   constructor(...[t, o]) {
     super({
       ...t,
@@ -3099,7 +3100,7 @@ class Nt extends Error {
     return this.cause.segment;
   }
 }
-function hs(e) {
+function Es(e) {
   const t = Bo().files, o = t.forbidden_filename_characters ?? ["/", "\\"];
   for (const m of o)
     if (e.includes(m))
@@ -4143,7 +4144,7 @@ function Ko(e, { validate: t = !0 } = {}) {
   }
   return o.fileType?.ext === "svg";
 }
-class Es {
+class gs {
   _view;
   constructor(t) {
     Ji(t), this._view = t;
@@ -4283,11 +4284,11 @@ class Qo extends zi {
     return this._views;
   }
 }
-function gs() {
+function Ts() {
   return ne.navigation ??= new Qo(), ne.navigation;
 }
 const An = ["B", "KB", "MB", "GB", "TB", "PB"], yn = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
-function Ts(e, t = !1, o = !1, c = !1) {
+function _s(e, t = !1, o = !1, c = !1) {
   o = o && !c, typeof e == "string" && (e = Number(e));
   let f = e > 0 ? Math.floor(Math.log(e) / Math.log(c ? 1e3 : 1024)) : 0;
   f = Math.min((o ? yn.length : An.length) - 1, f);
@@ -4295,7 +4296,7 @@ function Ts(e, t = !1, o = !1, c = !1) {
   let T = (e / Math.pow(c ? 1e3 : 1024, f)).toFixed(1);
   return t === !0 && f === 0 ? (T !== "0.0" ? "< 1 " : "0 ") + (o ? yn[1] : An[1]) : (f < 2 ? T = parseFloat(T).toFixed(0) : T = parseFloat(T).toLocaleString(Qi()), T + " " + g);
 }
-function _s(e) {
+function ws(e) {
   if (Zo(e), ne.fileListActions ??= /* @__PURE__ */ new Map(), ne.fileListActions.has(e.id)) {
     On.error(`FileListAction with id "${e.id}" is already registered`, { action: e });
     return;
@@ -4316,7 +4317,7 @@ function Zo(e) {
   if (!e.exec || typeof e.exec != "function")
     throw new Error("Invalid exec function");
 }
-function ws(e) {
+function As(e) {
   if (Jo(e), ne.fileListHeaders ??= /* @__PURE__ */ new Map(), ne.fileListHeaders.has(e.id)) {
     On.error(`Header ${e.id} already registered`, { header: e });
     return;
@@ -4336,50 +4337,51 @@ function Jo(e) {
     throw new Error("Invalid updated property");
 }
 export {
-  It as A,
-  ms as B,
-  Zr as C,
-  Qr as D,
-  $r as E,
+  $i as A,
+  Es as B,
+  It as C,
+  ps as D,
+  Zr as E,
   Dn as F,
-  os as G,
-  Ot as H,
+  Qr as G,
+  $r as H,
   Nt as I,
-  ts as J,
-  ss as K,
-  Yr as L,
-  ws as M,
+  ss as J,
+  ns as K,
+  as as L,
+  Yr as M,
   Jr as N,
-  _s as O,
+  As as O,
   vt as P,
-  gs as Q,
-  as as R,
-  di as S,
-  Es as V,
-  fs as a,
-  us as b,
-  Bo as c,
-  qr as d,
-  Qi as e,
-  ds as f,
-  He as g,
-  ji as h,
-  ls as i,
-  Pr as j,
-  Ts as k,
-  ns as l,
-  is as m,
-  $o as n,
-  rs as o,
+  ws as Q,
+  Ts as R,
+  cs as S,
+  di as T,
+  gs as V,
+  He as a,
+  ds as b,
+  es as c,
+  fs as d,
+  Bo as e,
+  qr as f,
+  Ot as g,
+  Qi as h,
+  us as i,
+  ms as j,
+  ji as k,
+  Pr as l,
+  _s as m,
+  is as n,
+  os as o,
   Mo as p,
-  jr as q,
-  ne as r,
+  rs as q,
+  $o as r,
   vn as s,
   _n as t,
   xr as u,
-  es as v,
-  cs as w,
-  ps as x,
-  $i as y,
+  jr as v,
+  ne as w,
+  ts as x,
+  ls as y,
   hs as z
 };

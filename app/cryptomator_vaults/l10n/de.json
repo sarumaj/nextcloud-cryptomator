@@ -54,7 +54,6 @@
         "“{name}” cannot be a name in a vault.": "„{name}“ kann in einem Tresor kein Name sein.",
         "Your storage is full.": "Dein Speicher ist voll.",
         "This vault cannot be written to.": "In diesen Tresor kann nicht geschrieben werden.",
-        "{count} of the files are larger than {size}. Your browser holds each twice while encrypting. Continue?": "{count} der Dateien sind größer als {size}. Dein Browser hält jede beim Verschlüsseln doppelt im Speicher. Fortfahren?",
         "Uploading to {vault}": "Hochladen in {vault}",
         "Not uploaded": "Nicht hochgeladen",
         "Encrypting": "Wird verschlüsselt",
@@ -68,7 +67,6 @@
         "Folder name": "Ordnername",
         "Upload files …": "Dateien hochladen …",
         "New folder …": "Neuer Ordner …",
-        "Folders cannot be dropped into a vault yet: drop the files, or create the folder first.": "Ordner lassen sich noch nicht in einen Tresor ziehen: Zieh die Dateien hinein oder lege den Ordner zuerst an.",
         "Loading …": "Wird geladen …",
         "No folders in here.": "Hier sind keine Ordner.",
         "A folder cannot be moved into itself or into a folder inside it.": "Ein Ordner kann nicht in sich selbst oder in einen Ordner in ihm verschoben werden.",
@@ -86,7 +84,12 @@
         "The encrypted files go to Nextcloud's deleted files.": "Die verschlüsselten Dateien kommen in Nextclouds gelöschte Dateien.",
         "Delete": "Löschen",
         "Move …": "Verschieben …",
-        "Vault": "Tresor"
+        "Vault": "Tresor",
+        "{vault} is unlocked in this browser. It locks after {minutes} minutes without use.": "{vault} ist in diesem Browser entsperrt. Nach {minutes} Minuten ohne Nutzung sperrt er sich.",
+        "Encrypting and uploading": "Wird verschlüsselt und hochgeladen",
+        "Upload folder …": "Ordner hochladen …",
+        "Preparing the preview …": "Vorschau wird vorbereitet …",
+        "This document cannot be previewed: {detail}. Download it to open it.": "Für dieses Dokument gibt es keine Vorschau: {detail}. Lade es herunter, um es zu öffnen."
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

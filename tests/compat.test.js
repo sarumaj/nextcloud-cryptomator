@@ -8,6 +8,9 @@
 // deleting (tests/samples.js, editSamples). Its entries must be exactly the expected
 // ones, and its health checks must find nothing.
 //
+// Sync conflicts: the same conflicted vault, resolved by this reader and by
+// cryptofs (its listing resolves them), must end the same, file for file.
+//
 // VERIFY_COMMAND: the command that runs Verify (JSON array, the vault's folder
 // and password are appended); tests/compat.sh sets it. Without it, skipped.
 
@@ -20,7 +23,7 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { Vault, STAGING_PREFIX } = require('../app/cryptomator_vaults/js/vault.js')
 const { folderStorage } = require('./storage.js')
-const { FIXTURES, copyVault, editSamples, sha, writeSamples } = require('./samples.js')
+const { FIXTURES, copyVault, editSamples, makeConflicts, sha, writeSamples } = require('./samples.js')
 
 const command = process.env.VERIFY_COMMAND ? JSON.parse(process.env.VERIFY_COMMAND) : null
 
@@ -54,5 +57,32 @@ for (const name of ['vault-gcm', 'vault-ctrmac']) {
 		assert.deepEqual(seen.findings, [], 'cryptofs health checks')
 		assert.deepEqual(seen.entries, expected)
 		fs.rmSync(root, { recursive: true })
+	})
+}
+
+/** Every file and folder of a vault's folder, relative and sorted: its encrypted state. */
+function tree(root) {
+	return fs.readdirSync(root, { recursive: true }).map((item) => item.split(path.sep).join('/')).sort()
+}
+
+for (const name of ['vault-gcm', 'vault-ctrmac']) {
+	const manifest = JSON.parse(fs.readFileSync(path.join(FIXTURES, name + '.json'), 'utf8'))
+
+	test(`${name}: sync conflicts end as Cryptomator ends them`, { skip: command ? false : 'VERIFY_COMMAND not set (tests/compat.sh)' }, async () => {
+		const ours = copyVault(name)
+		const vault = await Vault.open(folderStorage(ours, { writable: true }))
+		await vault.unlock(manifest.password)
+		await makeConflicts(vault, ours)
+		// The same conflicts for Cryptomator: a copy before anything resolves them.
+		const theirs = ours + '-cryptomator'
+		fs.cpSync(ours, theirs, { recursive: true })
+		await vault.list('')
+		const seenTheirs = verify(theirs, manifest.password)
+		const seenOurs = verify(ours, manifest.password)
+		assert.deepEqual(tree(ours), tree(theirs), 'the same files on disk')
+		assert.deepEqual(seenOurs.entries, seenTheirs.entries)
+		assert.deepEqual(seenOurs.findings, [], 'cryptofs health checks')
+		fs.rmSync(ours, { recursive: true })
+		fs.rmSync(theirs, { recursive: true })
 	})
 }

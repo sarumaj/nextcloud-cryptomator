@@ -55,6 +55,38 @@ function folderStorage(root, { writable = false } = {}) {
 			await fs.promises.writeFile(temporary, data)
 			await fs.promises.rename(temporary, at(relative))
 		},
+		// The parts appended to a temporary file, renamed when complete.
+		async writeParts(relative, total, parts, { create = false } = {}) {
+			if (create && fs.existsSync(at(relative))) {
+				throw new VaultError('exists', relative)
+			}
+			const temporary = at(relative) + '.part'
+			const handle = await fs.promises.open(temporary, 'w')
+			let written = 0
+			try {
+				for await (const part of parts) {
+					await handle.write(part)
+					written += part.length
+				}
+			} finally {
+				await handle.close()
+			}
+			if (written !== total) {
+				await fs.promises.rm(temporary, { force: true })
+				throw new VaultError('network', `${written} bytes written, not ${total}`)
+			}
+			await fs.promises.rename(temporary, at(relative))
+		},
+		async readRange(relative, start, end) {
+			const handle = await fs.promises.open(at(relative), 'r')
+			try {
+				const buffer = Buffer.alloc(end - start)
+				const { bytesRead } = await handle.read(buffer, 0, end - start, start)
+				return new Uint8Array(buffer.subarray(0, bytesRead))
+			} finally {
+				await handle.close()
+			}
+		},
 		async mkdir(relative, { existsOk = false } = {}) {
 			try {
 				await fs.promises.mkdir(at(relative))

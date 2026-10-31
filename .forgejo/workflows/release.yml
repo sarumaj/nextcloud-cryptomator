@@ -41,10 +41,10 @@ jobs:
           test "v$version" = "$TAG" || { echo "info.xml says $version, the tag is $TAG"; exit 1; }
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
-      # The app folder alone, named as the app, with its licence.
+      # The app folder alone, named as the app, with its licence and the third-party notice.
       - name: Build the archive
         run: |
-          mkdir build && cp -r app/cryptomator_vaults build/ && cp LICENSE build/cryptomator_vaults/
+          mkdir build && cp -r app/cryptomator_vaults build/ && cp LICENSE NOTICE.md build/cryptomator_vaults/
           tar -C build --owner=0 --group=0 --sort=name --mtime="@$(git log -1 --format=%ct)" \
             -czf "cryptomator_vaults-$VERSION.tar.gz" cryptomator_vaults
           ls -l "cryptomator_vaults-$VERSION.tar.gz"

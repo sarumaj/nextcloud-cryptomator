@@ -54,7 +54,6 @@
         "“{name}” cannot be a name in a vault.": "„{name}” nie może być nazwą w sejfie.",
         "Your storage is full.": "Twoje miejsce jest pełne.",
         "This vault cannot be written to.": "Do tego sejfu nie można zapisywać.",
-        "{count} of the files are larger than {size}. Your browser holds each twice while encrypting. Continue?": "{count} z plików ma więcej niż {size}. Podczas szyfrowania przeglądarka trzyma każdy w pamięci dwa razy. Kontynuować?",
         "Uploading to {vault}": "Wysyłanie do {vault}",
         "Not uploaded": "Nie wysłano",
         "Encrypting": "Szyfrowanie",
@@ -68,7 +67,6 @@
         "Folder name": "Nazwa folderu",
         "Upload files …": "Wyślij pliki …",
         "New folder …": "Nowy folder …",
-        "Folders cannot be dropped into a vault yet: drop the files, or create the folder first.": "Folderów nie można jeszcze upuszczać do sejfu: upuść pliki albo najpierw utwórz folder.",
         "Loading …": "Wczytywanie …",
         "No folders in here.": "Nie ma tu folderów.",
         "A folder cannot be moved into itself or into a folder inside it.": "Folderu nie można przenieść do niego samego ani do folderu w nim.",
@@ -86,7 +84,12 @@
         "The encrypted files go to Nextcloud's deleted files.": "Zaszyfrowane pliki trafią do usuniętych plików Nextclouda.",
         "Delete": "Usuń",
         "Move …": "Przenieś …",
-        "Vault": "Sejf"
+        "Vault": "Sejf",
+        "{vault} is unlocked in this browser. It locks after {minutes} minutes without use.": "{vault} jest odblokowany w tej przeglądarce. Zablokuje się po {minutes} minutach bez użycia.",
+        "Encrypting and uploading": "Szyfrowanie i wysyłanie",
+        "Upload folder …": "Wyślij folder …",
+        "Preparing the preview …": "Przygotowuję podgląd …",
+        "This document cannot be previewed: {detail}. Download it to open it.": "Nie da się pokazać podglądu tego dokumentu: {detail}. Pobierz go, aby go otworzyć."
     },
     "pluralForm": "nplurals=4; plural=(n==1 ? 0 : (n%10>=2 && n%10<=4) && (n%100<12 || n%100>14) ? 1 : n!=1 && (n%10>=0 && n%10<=1) || n!=1 && (n%10>=5 && n%10<=9) || n%100>=12 && n%100<=14 ? 2 : 3);"
 }

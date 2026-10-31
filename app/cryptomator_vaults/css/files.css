@@ -246,3 +246,14 @@
 	background-color: var(--color-background-dark);
 	cursor: default;
 }
+
+/* The bar above an unlocked vault's list. */
+.cryptomator-banner--unlocked {
+	background: var(--color-success-hover, var(--color-background-hover));
+	color: var(--color-main-text);
+}
+
+.cryptomator-preview--document {
+	background: #fff;
+	border-radius: var(--border-radius, 4px);
+}

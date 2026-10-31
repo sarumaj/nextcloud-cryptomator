@@ -124,22 +124,25 @@ async function davRequest(method, url, headers, relative, also = []) {
 export function davStorage(folder) {
 	const base = filesUrl(folder)
 	const url = (relative) => base + encodePath(relative)
-	// A whole file in chunks: an upload folder, its parts, then one MOVE onto the
-	// target, which only then appears.
-	async function writeChunked(relative, data, create, onProgress) {
+	// A file in parts (Nextcloud's chunked upload, v2): an upload folder, its parts in
+	// turn, then one MOVE onto the target, which only then appears.
+	async function writeChunked(relative, total, parts, create, onProgress) {
 		const uploads = generateRemoteUrl('dav') + '/uploads/' + encodeURIComponent(userId()) + '/'
 			+ 'cryptomator-vaults-' + crypto.randomUUID()
 		const target = new URL(url(relative), window.location.href).href
-		const common = { Destination: target, 'OC-Total-Length': String(data.length) }
+		const common = { Destination: target, 'OC-Total-Length': String(total) }
 		await davRequest('MKCOL', uploads, { Destination: target }, relative)
 		try {
-			for (let offset = 0, part = 1; offset < data.length; offset += CHUNK_SIZE, part++) {
-				const chunk = data.subarray(offset, Math.min(offset + CHUNK_SIZE, data.length))
-				const status = await send('PUT', uploads + '/' + String(part).padStart(5, '0'), common, chunk,
-					(done) => onProgress?.(offset + done, data.length))
+			let sent = 0
+			let number = 1
+			for await (const part of parts) {
+				const status = await send('PUT', uploads + '/' + String(number).padStart(5, '0'), common, part,
+					(done) => onProgress?.(sent + done, total))
 				if (!succeeded(status, false)) {
-					throw davError(status, relative, 'PUT (part ' + part + ')')
+					throw davError(status, relative, 'PUT (part ' + number + ')')
 				}
+				sent += part.length
+				number++
 			}
 			const response = await fetch(uploads + '/.file', {
 				method: 'MOVE',
@@ -152,6 +155,13 @@ export function davStorage(folder) {
 		} catch (error) {
 			await fetch(uploads, { method: 'DELETE', headers: davHeaders(), credentials: 'same-origin' }).catch(() => {})
 			throw error
+		}
+	}
+
+	// A whole file in memory, as parts of CHUNK_SIZE.
+	function * slices(data) {
+		for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
+			yield data.subarray(offset, Math.min(offset + CHUNK_SIZE, data.length))
 		}
 	}
 
@@ -201,12 +211,37 @@ export function davStorage(folder) {
 		/** Stores a file whole; create: refused (VaultError 'exists') if the name is taken. */
 		async write(relative, data, { create = false, onProgress } = {}) {
 			if (data.length >= CHUNKED_FROM) {
-				return writeChunked(relative, data, create, onProgress)
+				return writeChunked(relative, data.length, slices(data), create, onProgress)
 			}
 			const status = await send('PUT', url(relative), create ? { 'If-None-Match': '*' } : {}, data, onProgress)
 			if (!succeeded(status, false)) {
 				throw davError(status, relative, 'PUT')
 			}
+		},
+		/** A file too large to hold, from its parts in turn (chunked upload); complete or absent. */
+		async writeParts(relative, total, parts, { create = false, onProgress } = {}) {
+			return writeChunked(relative, total, parts, create, onProgress)
+		},
+		/** Bytes start to end (exclusive) of a stored file. */
+		async readRange(relative, start, end) {
+			if (end <= start) {
+				return new Uint8Array(0)
+			}
+			const response = await fetch(url(relative), {
+				headers: davHeaders({ Range: 'bytes=' + start + '-' + (end - 1) }),
+				credentials: 'same-origin',
+			})
+			if (response.status === 404) {
+				throw new VaultError('not-found', relative)
+			}
+			if (response.status === 206) {
+				return new Uint8Array(await response.arrayBuffer())
+			}
+			if (response.status === 200) {
+				// No ranges served: the whole file, cut here.
+				return new Uint8Array(await response.arrayBuffer()).slice(start, end)
+			}
+			throw new VaultError('network', 'GET (range): HTTP ' + response.status)
 		},
 		async mkdir(relative, { existsOk = false } = {}) {
 			const response = await fetch(url(relative), { method: 'MKCOL', headers: davHeaders(), credentials: 'same-origin' })

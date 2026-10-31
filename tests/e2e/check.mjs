@@ -4,17 +4,26 @@
 // in /Vault (README.md, "Tests"): the view "Vaults" in Files finds it, refuses a
 // wrong password, unlocks, browses in Files' own list, previews and downloads as
 // Cryptomator wrote the files, creates a folder and uploads files (one in chunks,
-// one replacing another), renames, moves and deletes, offers only its own actions on the vault's
+// one replacing another, a folder with a folder in it), previews office documents
+// in a sandboxed frame, renames, moves and deletes, locks from the bar above, offers only its own actions on the vault's
 // entries, opens a vault from the person's files (its notice, its menu) and with
 // the file picker, and locks. Throughout, no
 // request may carry what the server must not learn: the password, a decrypted
 // name, a file's type (/core/mimeicon) or an entry's address.
 //
-//   NC_URL=http://localhost NC_USER=admin NC_PASSWORD=... node tests/e2e/check.mjs
+//   NC_URL=http://localhost NC_USER=admin NC_PASSWORD=... [APP_REPO=<this repository>] node tests/e2e/check.mjs
 
 import { chromium } from 'playwright'
 import { createHash, randomBytes } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+// Office files for the previews, made with the app's own libraries (its node_modules).
+const require = createRequire(join(process.env.APP_REPO || new URL('../..', import.meta.url).pathname, 'package.json'))
+const JSZip = require('jszip')
+const XLSX = require('xlsx')
 import assert from 'node:assert/strict'
 
 const base = process.env.NC_URL
@@ -31,8 +40,56 @@ const REPLACED = Buffer.from(MARKER + ' replaced\n')
 const NESTED = Buffer.from(MARKER + ' nested\n')
 // Every decrypted name in the vault: none may reach the server.
 const RENAMED = 'großer Upload ✓.bin'
+const FOLDER = 'Ordner Upload ✓'
+const FOLDER_FILES = { 'b.txt': Buffer.from(MARKER + ' b\n'), 'sub/a.txt': Buffer.from(MARKER + ' a\n') }
+const DOCX = 'Bericht über Tresore.docx'
+const XLSX_NAME = 'Tabelle Tresor.xlsx'
+const MORE = { md: 'Notizen ✓.md', zip: 'Archiv.zip', heic: 'Foto.heic', pptx: 'Folien.pptx', odp: 'Folien.odp', odt: 'Brief.odt' }
 const LONG_FOLDER = 'a-very-long-name-'.repeat(10) + 'end-folder'
-const NAMES = [...new Set([...Object.keys(manifest.entries).flatMap((path) => path.split('/')), ...Object.keys(UPLOADS), 'Neuer Ordner ✓', 'inside new.txt', RENAMED])]
+const NAMES = [...new Set([...Object.keys(manifest.entries).flatMap((path) => path.split('/')), ...Object.keys(UPLOADS), 'Neuer Ordner ✓', 'inside new.txt', RENAMED,
+	FOLDER, DOCX, XLSX_NAME, ...Object.values(MORE)])]
+
+const PPTX_PARTS = (text) => ({
+	'[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>',
+	'ppt/presentation.xml': '<?xml version="1.0" encoding="UTF-8"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/></p:presentation>',
+	'ppt/_rels/presentation.xml.rels': '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/></Relationships>',
+	'ppt/slides/slide1.xml': '<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree>'
+		+ '<p:sp><p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8229600" cy="1143000"/></a:xfrm></p:spPr><p:txBody><a:p><a:r><a:rPr sz="3200" b="1"/><a:t>' + text + '</a:t></a:r></a:p></p:txBody></p:sp>'
+		+ '</p:spTree></p:cSld></p:sld>',
+})
+const ODF_NS = 'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"'
+const ODT_PARTS = (text) => ({ mimetype: 'application/vnd.oasis.opendocument.text',
+	'content.xml': '<?xml version="1.0" encoding="UTF-8"?><office:document-content ' + ODF_NS + '><office:body><office:text><text:h text:outline-level="1">Brief</text:h><text:p>' + text + '</text:p></office:text></office:body></office:document-content>' })
+const ODP_PARTS = (text) => ({ mimetype: 'application/vnd.oasis.opendocument.presentation',
+	'content.xml': '<?xml version="1.0" encoding="UTF-8"?><office:document-content ' + ODF_NS + '><office:body><office:presentation><draw:page>'
+		+ '<draw:frame svg:x="2cm" svg:y="2cm" svg:width="20cm" svg:height="3cm"><draw:text-box><text:p>' + text + '</text:p></draw:text-box></draw:frame>'
+		+ '</draw:page></office:presentation></office:body></office:document-content>' })
+
+async function zipOf(parts) {
+	const zip = new JSZip()
+	for (const [name, content] of Object.entries(parts)) {
+		zip.file(name, content)
+	}
+	return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+async function makeDocx(text) {
+	const zip = new JSZip()
+	zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+		+ '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+		+ '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
+	zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+		+ '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
+	zip.file('word/document.xml', '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+		+ '<w:body><w:p><w:r><w:t>' + text + '</w:t></w:r></w:p></w:body></w:document>')
+	return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+function makeXlsx(text) {
+	const book = XLSX.utils.book_new()
+	XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Spalte', 'Wert'], [text, 42]]), 'Blatt 1')
+	return XLSX.write(book, { type: 'buffer', bookType: 'xlsx' })
+}
 const sha = (data) => createHash('sha256').update(data).digest('hex')
 const OWN_ACTIONS = ['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock',
 	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-delete']
@@ -157,9 +214,16 @@ await page.locator('.cryptomator-dialog input[type=text]').fill('Neuer Ordner �
 await page.locator('.cryptomator-dialog button[type=submit]').click()
 await row('Neuer Ordner ✓').waitFor()
 
+// Files handed to the browser from disk: large buffers take long through the protocol.
 async function upload(files) {
+	const folder = join(tmpdir(), 'upload-' + randomBytes(4).toString('hex'))
+	mkdirSync(folder, { recursive: true })
+	const paths = Object.entries(files).map(([name, buffer]) => {
+		writeFileSync(join(folder, name), buffer)
+		return join(folder, name)
+	})
 	const [chooser] = await Promise.all([page.waitForEvent('filechooser'), listAction(/Upload files/)])
-	await chooser.setFiles(Object.entries(files).map(([name, buffer]) => ({ name, mimeType: 'application/octet-stream', buffer })))
+	await chooser.setFiles(paths, { timeout: 120000 })
 }
 const finished = () => page.locator('.cryptomator-dialog .cryptomator-notice').filter({ hasText: /uploaded/ }).last().waitFor({ timeout: 180000 })
 
@@ -228,6 +292,74 @@ for (const name of ['link-to-hello', LONG_FOLDER]) {
 	await row(name).waitFor({ state: 'detached' })
 }
 
+step('a folder is uploaded with what is in it')
+const folderOnDisk = join(tmpdir(), 'folder-upload')
+rmSync(folderOnDisk, { recursive: true, force: true })
+for (const [name, data] of Object.entries(FOLDER_FILES)) {
+	mkdirSync(join(folderOnDisk, FOLDER, name, '..'), { recursive: true })
+	writeFileSync(join(folderOnDisk, FOLDER, name), data)
+}
+{
+	const [chooser] = await Promise.all([page.waitForEvent('filechooser'), listAction(/Upload folder/)])
+	await chooser.setFiles(join(folderOnDisk, FOLDER))
+}
+await finished()
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+await openName(FOLDER)
+await row('b.txt').waitFor()
+await openName('sub')
+await openName('a.txt')
+assert.equal(await page.locator('.cryptomator-preview--text').textContent(), MARKER + ' a\n')
+await page.locator('.cryptomator-dialog__close').click()
+await page.goBack()
+await page.goBack()
+await row(RENAMED).waitFor()
+
+step('office documents are previewed in the browser, in a frame without scripts or network')
+const DOCX_DATA = await makeDocx(MARKER + ' im Bericht')
+const XLSX_DATA = makeXlsx(MARKER + ' in der Tabelle')
+await upload({ [DOCX]: DOCX_DATA, [XLSX_NAME]: XLSX_DATA })
+await finished()
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+for (const [name, text] of [[DOCX, ' im Bericht'], [XLSX_NAME, ' in der Tabelle']]) {
+	await openName(name)
+	const frame = page.locator('iframe.cryptomator-preview--document')
+	await frame.waitFor({ timeout: 60000 })
+	assert.equal(await frame.getAttribute('sandbox'), '', 'no scripts, no origin of its own')
+	await page.frameLocator('iframe.cryptomator-preview--document').locator('body', { hasText: MARKER + text }).waitFor()
+	if (shots) await page.screenshot({ path: shots + '/preview-' + name.split('.').pop() + '.png' })
+	await page.locator('.cryptomator-dialog__close').click()
+}
+
+step('Markdown, ZIP, HEIC, pptx, odp and odt are previewed in the browser too')
+const MORE_DATA = {
+	[MORE.md]: Buffer.from('# Notizen\n\n**' + MARKER + ' im Markdown** und [ein Link](https://example.com)\n'),
+	[MORE.zip]: await zipOf({ ['innen/' + MARKER + '.txt']: 'x' }),
+	[MORE.heic]: readFileSync(new URL('../fixtures/sample.heic', import.meta.url)),
+	[MORE.pptx]: await zipOf(PPTX_PARTS(MARKER + ' auf der Folie')),
+	[MORE.odp]: await zipOf(ODP_PARTS(MARKER + ' in Impress')),
+	[MORE.odt]: await zipOf(ODT_PARTS(MARKER + ' im Brief')),
+}
+await upload(MORE_DATA)
+await finished()
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+const framed = page.frameLocator('iframe.cryptomator-preview--document')
+for (const [name, text] of [[MORE.md, MARKER + ' im Markdown'], [MORE.zip, 'innen/' + MARKER + '.txt'], [MORE.pptx, MARKER + ' auf der Folie'],
+	[MORE.odp, MARKER + ' in Impress'], [MORE.odt, MARKER + ' im Brief']]) {
+	await openName(name)
+	await page.locator('iframe.cryptomator-preview--document').waitFor({ timeout: 60000 })
+	assert.equal(await page.locator('iframe.cryptomator-preview--document').getAttribute('sandbox'), '', name + ': sandboxed')
+	await framed.locator('body', { hasText: text }).waitFor()
+	assert.equal(await framed.locator('[href]').count(), 0, name + ': no links')
+	if (shots) await page.screenshot({ path: shots + '/preview-' + name.split('.').pop() + '.png' })
+	await page.locator('.cryptomator-dialog__close').click()
+}
+await openName(MORE.heic)
+const picture = page.locator('.cryptomator-dialog img.cryptomator-preview')
+await picture.waitFor({ timeout: 60000 })
+assert.ok(await picture.evaluate((image) => image.decode().then(() => image.naturalWidth === 96 && image.naturalHeight === 64)), 'the HEIC picture decoded, 96 by 64')
+await page.locator('.cryptomator-dialog__close').click()
+
 // For the check with Cryptomator's own library afterwards (README.md, "Tests").
 if (process.env.EXPECTED_OUT) {
 	const expected = {}
@@ -243,16 +375,27 @@ if (process.env.EXPECTED_OUT) {
 		[RENAMED]: { sha256: sha(UPLOADS['big upload.bin']), size: UPLOADS['big upload.bin'].length, type: 'file' },
 		'Neuer Ordner ✓': { type: 'dir' },
 		'Neuer Ordner ✓/inside new.txt': { sha256: sha(NESTED), size: NESTED.length, type: 'file' },
+		[FOLDER]: { type: 'dir' },
+		[FOLDER + '/sub']: { type: 'dir' },
+		...Object.fromEntries(Object.entries(FOLDER_FILES).map(([name, data]) => [FOLDER + '/' + name, { sha256: sha(data), size: data.length, type: 'file' }])),
+		[DOCX]: { sha256: sha(DOCX_DATA), size: DOCX_DATA.length, type: 'file' },
+		[XLSX_NAME]: { sha256: sha(XLSX_DATA), size: XLSX_DATA.length, type: 'file' },
+		...Object.fromEntries(Object.entries(MORE_DATA).map(([name, data]) => [name, { sha256: sha(data), size: data.length, type: 'file' }])),
 	}))
 }
 
-step('Lock forgets the vault: opening it asks again')
+step('an unlocked vault offers Lock in its menu and in the bar above its list; opening it again asks')
 await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
-await row('Vault').waitFor()
 await row('Vault').waitFor()
 const vaultActions = await rowActions('Vault')
 assert.ok(vaultActions.includes('cryptomator-vaults-lock'), `lock offered: ${vaultActions}`)
-await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-lock"]:visible').click()
+await page.keyboard.press('Escape')
+await openName('Vault')
+await page.locator('.cryptomator-banner--unlocked').waitFor()
+if (shots) await page.screenshot({ path: shots + '/lockbar.png' })
+await page.locator('.cryptomator-banner--unlocked button', { hasText: 'Lock' }).click()
+await row('Vault').waitFor()
+assert.equal(await page.locator('.cryptomator-banner--unlocked').count(), 0)
 await openName('Vault')
 await page.locator('.cryptomator-dialog input[type=password]').waitFor()
 await page.locator('.cryptomator-dialog button', { hasText: 'Cancel' }).click()

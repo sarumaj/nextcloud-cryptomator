@@ -37,6 +37,22 @@ function copyVault(name) {
 	return target
 }
 
+/** A file read in pieces, as a browser's File: the largest piece asked for is noted. */
+function pieces(data) {
+	const source = {
+		size: data.length,
+		largest: 0,
+		async read(start, end) {
+			source.largest = Math.max(source.largest, end - start)
+			return Uint8Array.from(data.subarray(start, end))
+		},
+	}
+	return source
+}
+
+// Parts of 64 KiB for the files written in pieces: many parts from small files.
+const PART_SIZE = 64 * 1024
+
 /** Writes the samples (and two folders with files in them) into a vault; the expected entries. */
 async function writeSamples(vault) {
 	const written = {}
@@ -51,6 +67,15 @@ async function writeSamples(vault) {
 	const deep = Buffer.from('deep inside new folders\n')
 	await vault.writeFile(inner.dirId, 'deep.txt', deep)
 	written['New folder/' + 'd'.repeat(160) + '/deep.txt'] = { type: 'file', size: deep.length, sha256: sha(deep) }
+	// Written in pieces (large files): a short and a long name, and a size that ends a
+	// chunk exactly.
+	for (const [name, size] of [['streamed.bin', 1234567], ['streamed-' + 'long-'.repeat(40) + '.bin', 300000], ['streamed-exact.bin', 32 * 32768]]) {
+		const data = randomBytes(size)
+		const source = pieces(data)
+		await vault.writeFileStream('', name, source, { partSize: PART_SIZE })
+		assert.ok(source.largest <= 32 * 32768, `read in pieces, not whole (${source.largest})`)
+		written[name] = { type: 'file', size, sha256: sha(data) }
+	}
 	return written
 }
 
@@ -176,4 +201,50 @@ async function orphans(vault, root) {
 	return present.filter((dir) => !reachable.has(dir))
 }
 
-module.exports = { FIXTURES, copyVault, dirIdOf, editSamples, orphans, samples, sha, walk, writeSamples }
+/**
+ * Sync conflicts as sync tools leave them, in a vault's top directory: a file's
+ * copy with Nextcloud's suffix (other contents), a copy whose proper name is free,
+ * a folder's identical copy and a folder of another ID under its name, a link's
+ * identical copy, a copy with a suffix of base64 characters (cryptofs narrows the
+ * name at '-'), and a hidden copy, which Cryptomator passes by. Returns what each
+ * should become in this reader's listing (null: gone).
+ */
+async function makeConflicts(vault, root) {
+	const fs = require('node:fs')
+	const top = path.join(root, await vault.dirPath(''))
+	const entries = await vault.list('')
+	const enc = (name) => path.basename(entries.find((entry) => entry.name === name).path.replace(/\/(contents|dir|symlink)\.c9r$/, ''))
+	const copy = (from, to) => fs.cpSync(path.join(top, from), path.join(top, to), { recursive: true })
+	const hello = enc('hello.txt').slice(0, -4)
+	copy(enc('chunks.bin'), hello + ' (conflicted copy 2026-10-31 120000).c9r')
+	const empty = enc('empty.txt').slice(0, -4)
+	fs.renameSync(path.join(top, empty + '.c9r'), path.join(top, empty + ' (1).c9r'))
+	const docs = enc('Docs & Stuff').slice(0, -4)
+	copy(docs + '.c9r', docs + ' (1).c9r')
+	const other = await vault.createDirectory('', 'other folder')
+	const otherEntry = (await vault.list('')).find((entry) => entry.name === 'other folder')
+	fs.renameSync(path.join(top, path.basename(otherEntry.path)), path.join(top, docs + ' (2).c9r'))
+	const link = enc('link-to-hello').slice(0, -4)
+	copy(link + '.c9r', link + ' (1).c9r')
+	// A file whose encrypted name has no padding, so that the suffix's characters
+	// join the base64 run and only narrowing at '-' finds the name.
+	let unpadded = null
+	for (let i = 0; unpadded === null; i++) {
+		const entry = await vault.entryPath('', 'unpadded ' + i + '.txt')
+		if (!entry.fullName.includes('=') && !entry.long) {
+			await vault.writeFile('', 'unpadded ' + i + '.txt', Buffer.from('unpadded\n'))
+			unpadded = { name: 'unpadded ' + i + '.txt', enc: entry.fullName.slice(0, -4) }
+		}
+	}
+	copy(unpadded.enc + '.c9r', unpadded.enc + '-conflict.c9r')
+	copy(hello + '.c9r', '.' + hello + ' (1).c9r')
+	return {
+		'hello (conflicted copy 2026-10-31 120000).txt': 'file',
+		'empty.txt': 'file',
+		'Docs & Stuff (2)': 'dir',
+		[unpadded.name.replace('.txt', '-conflict.txt')]: 'file',
+		otherDirId: other.dirId,
+	}
+}
+
+module.exports = { FIXTURES, PART_SIZE, makeConflicts, copyVault, dirIdOf, editSamples, orphans, pieces, samples, sha, walk, writeSamples }
