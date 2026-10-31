@@ -5,7 +5,7 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "build": "vite build",
-    "test": "node --test tests/vault.test.js tests/write.test.js && node tests/l10n.js",
+    "test": "node --test tests/vault.test.js tests/write.test.js tests/keys.test.js tests/health.test.js && node tests/l10n.js",
     "test:compat": "tests/compat.sh",
     "notice": "node scripts/notice.cjs"
   },

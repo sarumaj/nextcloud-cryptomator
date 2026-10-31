@@ -74,7 +74,7 @@ jobs:
         run: node tests/l10n.js
 
       - name: Run the tests
-        run: node --test tests/vault.test.js tests/write.test.js
+        run: node --test tests/vault.test.js tests/write.test.js tests/keys.test.js tests/health.test.js
 
   # What the app writes, read and checked by Cryptomator's own library (cryptofs):
   # tests/compat.test.js through tests/compat.sh, with Java from the image and Node

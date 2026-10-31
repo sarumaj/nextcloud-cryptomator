@@ -520,3 +520,157 @@ export function showUploads(title) {
 		},
 	}
 }
+
+/**
+ * A form in the dialog. fields: {name, label, type ('text', 'password' or
+ * 'textarea'), autocomplete, value, readonly, account (the vault's folder for a
+ * password manager)}; run(values) does the work, its error shown and the form kept
+ * for another try; resolves with what run returns, or null when closed.
+ */
+export function askForm({ title, intro, fields, action, working, run }) {
+	return new Promise((resolve) => {
+		let result = null
+		const inputs = {}
+		const status = el('div', { 'aria-live': 'polite' })
+		const submit = el('button', { type: 'submit', class: 'primary' }, action)
+		const rows = fields.map((field) => {
+			const input = field.type === 'textarea'
+				? el('textarea', { name: field.name, rows: 4, required: true, spellcheck: 'false', autocomplete: 'off', class: 'cryptomator-form__words' })
+				: el('input', {
+					type: field.type ?? 'text', name: field.name, autocomplete: field.autocomplete ?? 'off',
+					required: !field.readonly, readonly: field.readonly || null, class: field.account ? 'cryptomator-unlock__account' : null,
+				})
+			input.value = field.value ?? ''
+			inputs[field.name] = input
+			return el('label', {}, [field.label, input])
+		})
+		openDialog(title, [
+			el('h2', {}, title),
+			...(intro ? [].concat(intro).map((text) => notice(text)) : []),
+			el('form', {
+				class: 'cryptomator-unlock cryptomator-form',
+				method: 'post',
+				action: '#',
+				autocomplete: 'on',
+				onsubmit: async (event) => {
+					event.preventDefault()
+					submit.disabled = true
+					status.replaceChildren(notice(working ?? t('Working …')))
+					// Let the page paint before scrypt takes the thread for a moment.
+					await new Promise((wait) => setTimeout(wait, 30))
+					try {
+						result = await run(Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value])))
+						closeDialog()
+					} catch (error) {
+						submit.disabled = false
+						status.replaceChildren(notice(error.message, 'error'))
+					}
+				},
+			}, [...rows, el('div', { class: 'cryptomator-choices' }, [submit, el('button', { type: 'button', onclick: closeDialog }, t('Cancel'))])]),
+			status,
+		], () => {
+			for (const input of Object.values(inputs)) {
+				if (input.type === 'password' || input.tagName === 'TEXTAREA') {
+					input.value = ''
+				}
+			}
+			resolve(result)
+		})
+		Object.values(inputs).find((input) => !input.readOnly)?.focus()
+	})
+}
+
+/** A vault's recovery key, to be written down; copied on request. */
+export function showRecoveryKey(vaultName, key, { created = false } = {}) {
+	return new Promise((resolve) => {
+		const words = el('div', { class: 'cryptomator-recovery-key', tabindex: '0' }, key)
+		const copied = el('span', { class: 'cryptomator-dialog__meta', 'aria-live': 'polite' })
+		openDialog(t('Recovery key'), [
+			el('h2', {}, created ? t('{vault} is ready', { vault: vaultName }) : t('Recovery key of {vault}', { vault: vaultName })),
+			notice(t('With this recovery key you can set a new password if you forget the one you have, here or in Cryptomator. Anyone who has it can open the vault: keep it on paper or in your password manager, not in this cloud.')),
+			words,
+			el('div', { class: 'cryptomator-choices' }, [
+				el('button', { type: 'button', onclick: async () => {
+					try {
+						await navigator.clipboard.writeText(key)
+						copied.textContent = t('Copied')
+					} catch {
+						copied.textContent = t('Copying is not allowed here: select the words and copy them.')
+					}
+				} }, t('Copy')),
+				copied,
+				el('button', { type: 'button', class: 'primary', onclick: closeDialog }, t('Done')),
+			]),
+		], () => {
+			words.textContent = ''
+			resolve()
+		})
+		words.focus()
+	})
+}
+
+/**
+ * The health check's dialog: check(onProgress) gives the findings, describe(finding)
+ * a sentence for one, repair(findings) repairs those that can be; checked again after.
+ */
+export function showHealth(vaultName, { check, describe, repair }) {
+	const body = el('div', { class: 'cryptomator-dialog__body' })
+	const status = el('div', { 'aria-live': 'polite' })
+	const progress = el('progress', { max: 1, value: 0 })
+	const severity = { CRITICAL: t('Damaged'), WARN: t('Needs repair'), INFO: t('Note') }
+	const run = async () => {
+		body.replaceChildren()
+		progress.hidden = false
+		progress.value = 0
+		status.replaceChildren(notice(t('Checking the vault …')))
+		let findings
+		try {
+			findings = await check((done, total) => {
+				progress.value = total ? done / total : 1
+			})
+		} catch (error) {
+			progress.hidden = true
+			status.replaceChildren(notice(error.message, 'error'))
+			return
+		}
+		progress.hidden = true
+		if (findings.length === 0) {
+			status.replaceChildren(notice(t('The vault is healthy: the check found nothing to repair.')))
+			return
+		}
+		body.append(el('ul', { class: 'cryptomator-findings' }, findings.map((finding) => el('li', {}, [
+			el('span', { class: 'cryptomator-findings__severity cryptomator-findings__severity--' + finding.severity.toLowerCase() }, severity[finding.severity]),
+			el('span', {}, describe(finding)),
+			el('code', { class: 'cryptomator-dialog__meta' }, finding.path),
+		]))))
+		const fixable = findings.filter((finding) => finding.fixable)
+		const choices = []
+		if (fixable.length) {
+			choices.push(el('button', { type: 'button', class: 'primary', onclick: async (event) => {
+				event.target.disabled = true
+				status.replaceChildren(notice(t('Repairing …')))
+				try {
+					await repair(fixable)
+				} catch (error) {
+					status.replaceChildren(notice(error.message, 'error'))
+					return
+				}
+				await run()
+			} }, t('Repair {count}', { count: fixable.length })))
+		}
+		status.replaceChildren(
+			notice(fixable.length === findings.length
+				? t('Each of these can be repaired, as Cryptomator\'s health check repairs it.')
+				: t('{count} of these can be repaired, as Cryptomator\'s health check repairs them; the others need Cryptomator or a backup.', { count: fixable.length })),
+			el('div', { class: 'cryptomator-choices' }, choices),
+		)
+	}
+	openDialog(t('Health check'), [
+		el('div', { class: 'cryptomator-dialog__head' }, [el('h2', {}, t('Health check of {vault}', { vault: vaultName })),
+			el('button', { type: 'button', onclick: closeDialog }, t('Close'))]),
+		progress,
+		body,
+		status,
+	])
+	run()
+}

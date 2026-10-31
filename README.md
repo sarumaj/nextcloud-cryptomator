@@ -63,7 +63,11 @@ menu leads there.
    top and then **Copy into the vault** or **Move into the vault**. To take entries out of it,
    decrypted, choose **Export to your files …** in their menu, a folder, and **Copy here** or
    **Move here**.
-6. Choose **Lock** in the bar above an open vault, in the vault's menu in *Vaults*, or **Lock all
+6. **New vault …** at the top of *Vaults* creates a vault in a folder you choose (as Cryptomator's
+   desktop app does: vault format 8, AES-GCM), opens it and shows its recovery key. A vault's
+   menu in *Vaults* has **Change password …**, **Show recovery key …**, **Reset password with
+   recovery key …** and **Check health …**.
+7. Choose **Lock** in the bar above an open vault, in the vault's menu in *Vaults*, or **Lock all
    vaults** at the top.
 
 Files from 16 MB are encrypted, uploaded and checked in parts of 10 MB, so memory holds a part,
@@ -81,6 +85,23 @@ An export writes the decrypted file into your files and checks it: read back and
 one in parts of 10 MB, each against its SHA-256). Moving out removes an entry from the vault only
 once all of it was exported; links, and what does not decrypt, stay in the vault, and so does
 their folder. An export is the one way the app hands the server decrypted files, as you ask it to.
+
+Vault maintenance works as in Cryptomator, and with it:
+
+- **New vault:** new keys in the browser, the key file (`masterkey.cryptomator`, scrypt with
+  Cryptomator's settings), the configuration (`vault.cryptomator`) and the root directory with
+  its ID's backup; opened again from the server and unlocked before it is shown.
+- **Password:** the keys unwrapped with the old password and wrapped with the new one (a new salt);
+  the old key file kept beside as `masterkey.cryptomator.<hash>.bkup`, as Cryptomator keeps it.
+  The new file is read back and must give the same keys, else the old one is put back. The files
+  are not touched; Cryptomator on other devices needs the new password.
+- **Recovery key:** the 44 words Cryptomator's desktop app shows (its word list, the keys and a
+  check sum), so that a key made here works in Cryptomator and the other way round. A new password
+  set with it is refused unless the vault's configuration is signed with the key's keys; it also
+  makes a lost key file anew.
+- **Health check:** cryptofs' checks (directory IDs, shortened names, entry types), its findings
+  by its names and severities, and the repairs it offers, the rescue of orphaned entries into
+  `/LOST+FOUND` among them. The other findings are shown, left to Cryptomator or a backup.
 
 A sync client that finds a file changed on both sides keeps a copy beside it (e.g.
 `… (conflicted copy …).c9r`). The app resolves such copies as Cryptomator does when it lists the

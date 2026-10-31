@@ -247,4 +247,42 @@ async function makeConflicts(vault, root) {
 	}
 }
 
-module.exports = { FIXTURES, PART_SIZE, makeConflicts, copyVault, dirIdOf, editSamples, orphans, pieces, samples, sha, walk, writeSamples }
+/**
+ * Damages an unlocked, writable vault (a copy of a test vault) in every way
+ * cryptofs' health check repairs, through the files as a broken sync or an
+ * interrupted program would leave them. The kinds of finding it makes: DAMAGES.
+ */
+async function damage(vault, root) {
+	const at = (path) => require('node:path').join(root, path)
+	const entries = await vault.list('')
+	const docs = entries.find((entry) => entry.name === 'Docs & Stuff')
+	const longFolder = entries.find((entry) => entry.type === 'dir' && entry.name.startsWith('a-very-long-name'))
+	const longFile = entries.find((entry) => entry.type === 'file' && entry.name.startsWith('a-very-long-name'))
+	const rootFolder = await vault.dirPath('')
+	// A folder's entry lost, its contents (with its ID's backup, and the folder inner) left: an orphan.
+	fs.rmSync(at(docs.path), { recursive: true })
+	// An orphan without the backup: its entries get made-up names.
+	const lost = await vault.createDirectory('', 'Verlust ✓')
+	await vault.writeFile(lost.dirId, 'darin.txt', Buffer.from('verloren\n'))
+	fs.rmSync(at((await vault.findEntry('', 'Verlust ✓')).path), { recursive: true })
+	fs.rmSync(at(require('node:path').join(await vault.dirPath(lost.dirId), 'dirid.c9r')))
+	// A folder whose directory is gone.
+	const gone = await vault.createDirectory('', 'Leer ✓')
+	fs.rmSync(at(await vault.dirPath(gone.dirId)), { recursive: true })
+	// A directory without its ID's backup.
+	fs.rmSync(at(require('node:path').join(await vault.dirPath(longFolder.dirId), 'dirid.c9r')))
+	// A dir.c9r loose in a directory, an empty one in an entry, an entry of no type.
+	fs.writeFileSync(at(rootFolder + '/dir.c9r'), 'loose')
+	const empty = rootFolder + '/' + await vault.encryptedName('leere Ordnerdatei', '')
+	fs.mkdirSync(at(empty))
+	fs.writeFileSync(at(empty + '/dir.c9r'), '')
+	fs.mkdirSync(at(rootFolder + '/' + await vault.encryptedName('ohne Art', '')))
+	// A long name's file with bytes after its name, and a long folder under the wrong short name.
+	fs.appendFileSync(at(longFile.path.replace(/\/contents\.c9r$/, '') + '/name.c9s'), 'trailing')
+	const longPath = longFolder.path.replace(/\/dir\.c9r$/, '')
+	fs.renameSync(at(longPath), at(longPath.replace(/[^/]+\.c9s$/, 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=.c9s')))
+}
+const DAMAGES = ['EmptyDirFile', 'LongShortNamesMismatch', 'LooseDirFile', 'MissingContentDir', 'MissingDirIdBackup',
+	'OrphanContentDir', 'OrphanContentDir', 'TrailingBytesInNameFile', 'UnknownType']
+
+module.exports = { DAMAGES, damage, FIXTURES, PART_SIZE, makeConflicts, copyVault, dirIdOf, editSamples, orphans, pieces, samples, sha, walk, writeSamples }

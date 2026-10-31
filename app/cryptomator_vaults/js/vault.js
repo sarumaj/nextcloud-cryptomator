@@ -60,6 +60,15 @@
 		return padding ? text : text.replace(/=+$/, '')
 	}
 
+	/** Standard base64 with padding, as cryptolib writes the key file's bytes. */
+	function base64Encode(bytes) {
+		let binary = ''
+		for (let i = 0; i < bytes.length; i++) {
+			binary += String.fromCharCode(bytes[i])
+		}
+		return btoa(binary)
+	}
+
 	const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 
 	function base32Encode(bytes) {
@@ -349,6 +358,22 @@
 	const BASE64_PATTERN = /[a-zA-Z0-9\-_]{20}(?:[a-zA-Z0-9\-_]{4})*(?:[a-zA-Z0-9\-_]{4}|[a-zA-Z0-9\-_]{3}=|[a-zA-Z0-9\-_]{2}==)/g
 	// The longest a folder or a link entry's type file is compared (cryptofs' Constants).
 	const MAX_DIR_ID_LENGTH = 36
+	// cryptofs' limits and names for its health check (LongFileNameProvider, Constants).
+	const MAX_NAME_FILE_SIZE = 10 * 1024
+	const MIN_CIPHER_NAME_LENGTH = 28
+	const RECOVERY_DIR_NAME = 'LOST+FOUND'
+	const RECOVERY_DIR_ID = 'recovery'
+
+	/** Runs task(item) for every item, at most limit at a time. */
+	async function inTurn(items, limit, task) {
+		let next = 0
+		const worker = async () => {
+			while (next < items.length) {
+				await task(items[next++])
+			}
+		}
+		await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+	}
 	const MAX_SYMLINK_LENGTH = 32767
 
 	// ----- Helpers for writing -----
@@ -372,6 +397,173 @@
 
 	async function sha256(data) {
 		return new Uint8Array(await subtle.digest('SHA-256', data))
+	}
+
+	// ----- Keys: the key file, the vault's configuration, the recovery key -----
+	//
+	// As cryptolib (MasterkeyFileAccess) and cryptofs (VaultConfig) write them: the
+	// two 32-byte keys wrapped (AES-KW) with a key derived from the password by
+	// scrypt (8 bytes of salt, N = 2^15, r = 8), a version field from before vault
+	// format 8 with its HMAC; the configuration a JWT (HS256) signed with both keys.
+
+	const MASTERKEY_VERSION = 999
+	const SCRYPT_COST = 2 ** 15
+	const SCRYPT_BLOCK_SIZE = 8
+	const SHORTENING_THRESHOLD = 220
+	const KEY_FILE_PREFIX = 'masterkeyfile:'
+
+	async function deriveKek(password, salt, cost, blockSize, usages) {
+		const kek = await scrypt(encoder.encode(String(password).normalize('NFC')), salt, cost, blockSize, 1, 32)
+		try {
+			return await subtle.importKey('raw', kek, 'AES-KW', false, usages)
+		} finally {
+			kek.fill(0)
+		}
+	}
+
+	/** The raw keys {encRaw, macRaw} of a key file, or a VaultError 'wrong-password'. */
+	async function unwrapKeys(file, password) {
+		const kek = await deriveKek(password, base64Decode(file.scryptSalt), file.scryptCostParam, file.scryptBlockSize, ['unwrapKey'])
+		try {
+			const unwrap = async (wrapped) => new Uint8Array(await subtle.exportKey('raw',
+				await subtle.unwrapKey('raw', base64Decode(wrapped), kek, 'AES-KW', { name: 'HMAC', hash: 'SHA-256' }, true, ['sign'])))
+			return { encRaw: await unwrap(file.primaryMasterKey), macRaw: await unwrap(file.hmacMasterKey) }
+		} catch {
+			throw new VaultError('wrong-password')
+		}
+	}
+
+	/** A key file's contents for the keys and a password (with a new salt), as cryptolib's lock() makes them. */
+	async function lockKeys({ encRaw, macRaw }, password, cost = SCRYPT_COST) {
+		const salt = randomBytes(8)
+		const kek = await deriveKek(password, salt, cost, SCRYPT_BLOCK_SIZE, ['wrapKey'])
+		const wrap = async (raw) => new Uint8Array(await subtle.wrapKey('raw',
+			await subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, true, ['sign']), kek, 'AES-KW'))
+		const macKey = await subtle.importKey('raw', macRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+		const version = new Uint8Array(4)
+		new DataView(version.buffer).setInt32(0, MASTERKEY_VERSION)
+		const file = {
+			version: MASTERKEY_VERSION,
+			scryptSalt: base64Encode(salt),
+			scryptCostParam: cost,
+			scryptBlockSize: SCRYPT_BLOCK_SIZE,
+			primaryMasterKey: base64Encode(await wrap(encRaw)),
+			hmacMasterKey: base64Encode(await wrap(macRaw)),
+			versionMac: base64Encode(new Uint8Array(await subtle.sign('HMAC', macKey, version))),
+		}
+		return encoder.encode(JSON.stringify(file, null, 2))
+	}
+
+	/** A new vault's configuration (vault.cryptomator), signed with both keys. */
+	async function signConfig({ encRaw, macRaw }, keyId, cipherCombo) {
+		const part = (value) => base64UrlEncode(encoder.encode(JSON.stringify(value)), false)
+		const signed = part({ kid: keyId, typ: 'JWT', alg: 'HS256' }) + '.'
+			+ part({ jti: randomUuid(), format: 8, cipherCombo, shorteningThreshold: SHORTENING_THRESHOLD })
+		const key = await subtle.importKey('raw', concat(encRaw, macRaw), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+		return signed + '.' + base64UrlEncode(new Uint8Array(await subtle.sign('HMAC', key, encoder.encode(signed))), false)
+	}
+
+	/** Whether a configuration is signed with these keys (it belongs to them). */
+	async function signedWith(config, { encRaw, macRaw }) {
+		const key = await subtle.importKey('raw', concat(encRaw, macRaw), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
+		return subtle.verify('HMAC', key, config.signature, encoder.encode(config.signed))
+	}
+
+	const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+		let c = n
+		for (let k = 0; k < 8; k++) {
+			c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
+		}
+		return c >>> 0
+	})
+
+	function crc32(bytes) {
+		let crc = 0xFFFFFFFF
+		for (const byte of bytes) {
+			crc = CRC_TABLE[(crc ^ byte) & 0xFF] ^ (crc >>> 8)
+		}
+		return (crc ^ 0xFFFFFFFF) >>> 0
+	}
+
+	/**
+	 * The recovery key of raw keys (64 bytes: the encryption key, then the MAC key),
+	 * as Cryptomator's desktop app makes it (RecoveryKeyFactory, WordEncoder): the
+	 * keys and the two low bytes of their CRC32 (lowest first, as Guava writes it),
+	 * every 3 bytes two words of a list of 4096 (words: Cryptomator's list).
+	 */
+	function encodeRecoveryKey(raw, words) {
+		const crc = crc32(raw)
+		const padded = concat(raw, new Uint8Array([crc & 0xFF, (crc >>> 8) & 0xFF]))
+		const out = []
+		for (let i = 0; i < padded.length; i += 3) {
+			out.push(words[(padded[i] << 4) | (padded[i + 1] >> 4)], words[((padded[i + 1] & 0x0F) << 8) | padded[i + 2]])
+		}
+		padded.fill(0)
+		return out.join(' ')
+	}
+
+	/** The raw keys (64 bytes) in a recovery key; a VaultError 'invalid-recovery-key' if it is not one. */
+	function decodeRecoveryKey(text, words) {
+		const index = new Map(words.map((word, position) => [word, position]))
+		const given = String(text).trim().toLowerCase().split(/\s+/).filter(Boolean)
+		if (given.length !== 44) {
+			throw new VaultError('invalid-recovery-key', given.length + ' words, not 44')
+		}
+		const unknown = given.find((word) => !index.has(word))
+		if (unknown) {
+			throw new VaultError('invalid-recovery-key', '"' + unknown + '" is not a word of the list')
+		}
+		const padded = new Uint8Array(66)
+		for (let i = 0; i < given.length; i += 2) {
+			const first = index.get(given[i])
+			const second = index.get(given[i + 1])
+			padded.set([first >> 4, ((first & 0x0F) << 4) | (second >> 8), second & 0xFF], i / 2 * 3)
+		}
+		const raw = padded.slice(0, 64)
+		const crc = crc32(raw)
+		if (padded[64] !== (crc & 0xFF) || padded[65] !== ((crc >>> 8) & 0xFF)) {
+			throw new VaultError('invalid-recovery-key', 'its check sum does not match')
+		}
+		return raw
+	}
+
+	/** The backup name Cryptomator gives a key file it replaces (BackupHelper): .<4 bytes of its SHA-256>.bkup */
+	async function backupName(name, contents) {
+		const digest = await sha256(contents)
+		return name + '.' + [...digest.slice(0, 4)].map((byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join('') + '.bkup'
+	}
+
+	/** The parsed configuration of a vault's folder and the name of its key file. */
+	async function readConfig(storage) {
+		let config
+		try {
+			config = parseJwt(decoder.decode(await storage.read(VAULT_CONFIG)))
+		} catch (error) {
+			if (error instanceof VaultError) {
+				throw error
+			}
+			throw new VaultError('unsupported-format', 'vault.cryptomator unreadable: ' + error.message)
+		}
+		const { header, payload } = config
+		if (payload.format !== 8) {
+			throw new VaultError('unsupported-format', 'vault format ' + payload.format)
+		}
+		if (!(payload.cipherCombo in SCHEMES)) {
+			throw new VaultError('unsupported-format', 'cipher combination ' + payload.cipherCombo)
+		}
+		if (header.alg !== 'HS256') {
+			throw new VaultError('unsupported-format', 'signature ' + header.alg)
+		}
+		const kid = String(header.kid || '')
+		if (!kid.startsWith(KEY_FILE_PREFIX)) {
+			// Cryptomator Hub's vaults keep their key on the Hub, not in a file.
+			throw new VaultError('unsupported-key', kid)
+		}
+		const name = kid.slice(KEY_FILE_PREFIX.length)
+		if (!/^[^/\\]+$/.test(name)) {
+			throw new VaultError('unsupported-key', kid)
+		}
+		return { config, name }
 	}
 
 	/**
@@ -421,36 +613,11 @@
 
 		/** Reads the vault's configuration and key file; checks the format before any password. */
 		static async open(storage) {
-			let config
-			try {
-				config = parseJwt(decoder.decode(await storage.read(VAULT_CONFIG)))
-			} catch (error) {
-				if (error instanceof VaultError) {
-					throw error
-				}
-				throw new VaultError('unsupported-format', 'vault.cryptomator unreadable: ' + error.message)
-			}
-			const { header, payload } = config
-			if (payload.format !== 8) {
-				throw new VaultError('unsupported-format', 'vault format ' + payload.format)
-			}
-			if (!(payload.cipherCombo in SCHEMES)) {
-				throw new VaultError('unsupported-format', 'cipher combination ' + payload.cipherCombo)
-			}
-			if (header.alg !== 'HS256') {
-				throw new VaultError('unsupported-format', 'signature ' + header.alg)
-			}
-			const kid = String(header.kid || '')
-			if (!kid.startsWith('masterkeyfile:')) {
-				// Cryptomator Hub's vaults keep their key on the Hub, not in a file.
-				throw new VaultError('unsupported-key', kid)
-			}
-			const name = kid.slice('masterkeyfile:'.length)
-			if (!/^[^/\\]+$/.test(name)) {
-				throw new VaultError('unsupported-key', kid)
-			}
+			const { config, name } = await readConfig(storage)
 			const masterkeyFile = JSON.parse(decoder.decode(await storage.read(name)))
-			return new Vault(storage, config, masterkeyFile)
+			const vault = new Vault(storage, config, masterkeyFile)
+			vault.masterkeyName = name
+			return vault
 		}
 
 		get scheme() {
@@ -463,40 +630,170 @@
 
 		/** Derives the keys from the password; a VaultError 'wrong-password' if it is not the vault's. */
 		async unlock(password) {
-			const file = this.masterkeyFile
-			const kek = await scrypt(encoder.encode(String(password).normalize('NFC')), base64Decode(file.scryptSalt),
-				file.scryptCostParam, file.scryptBlockSize, 1, 32)
-			const wrapping = await subtle.importKey('raw', kek, 'AES-KW', false, ['unwrapKey'])
-			kek.fill(0)
-			let encRaw
-			let macRaw
+			const keys = await unwrapKeys(this.masterkeyFile, password)
 			try {
-				const unwrap = async (wrapped) => new Uint8Array(await subtle.exportKey('raw',
-					await subtle.unwrapKey('raw', base64Decode(wrapped), wrapping, 'AES-KW', { name: 'HMAC', hash: 'SHA-256' }, true, ['sign'])))
-				encRaw = await unwrap(file.primaryMasterKey)
-				macRaw = await unwrap(file.hmacMasterKey)
-			} catch (error) {
-				throw new VaultError('wrong-password')
-			}
-			try {
-				// The configuration is signed with both keys: a vault.cryptomator that
-				// does not belong to this key file is refused.
-				const jwtKey = await subtle.importKey('raw', concat(encRaw, macRaw), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
-				if (!(await subtle.verify('HMAC', jwtKey, this.config.signature, encoder.encode(this.config.signed)))) {
-					throw new VaultError('corrupt', 'vault.cryptomator is not signed with this key')
-				}
-				const importAes = (raw, name) => subtle.importKey('raw', raw, name, false, ['encrypt', 'decrypt'])
-				this.keys = {
-					gcm: await importAes(encRaw, 'AES-GCM'),
-					ctr: await importAes(encRaw, 'AES-CTR'),
-					mac: await subtle.importKey('raw', macRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']),
-				}
-				this.siv = new Siv(new Cmac(await importAes(macRaw, 'AES-CBC')), this.keys.ctr)
-				this.dirPaths = new Map()
+				await this.useKeys(keys)
 			} finally {
-				encRaw.fill(0)
-				macRaw.fill(0)
+				keys.encRaw.fill(0)
+				keys.macRaw.fill(0)
 			}
+		}
+
+		/** Takes raw keys into use (not kept raw); refused if the configuration is not signed with them. */
+		async useKeys({ encRaw, macRaw }) {
+			// The configuration is signed with both keys: a vault.cryptomator that
+			// does not belong to this key file is refused.
+			if (!(await signedWith(this.config, { encRaw, macRaw }))) {
+				throw new VaultError('corrupt', 'vault.cryptomator is not signed with this key')
+			}
+			const importAes = (raw, name) => subtle.importKey('raw', raw, name, false, ['encrypt', 'decrypt'])
+			this.keys = {
+				gcm: await importAes(encRaw, 'AES-GCM'),
+				ctr: await importAes(encRaw, 'AES-CTR'),
+				mac: await subtle.importKey('raw', macRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']),
+			}
+			this.siv = new Siv(new Cmac(await importAes(macRaw, 'AES-CBC')), this.keys.ctr)
+			this.dirPaths = new Map()
+		}
+
+		/**
+		 * Creates a vault in an empty folder of the storage, as Cryptomator's desktop
+		 * app and cryptofs do: new keys, the key file, the configuration, the root
+		 * directory with its ID's backup (dirid.c9r). Opened again from the storage
+		 * and unlocked with the password before it is returned, unlocked.
+		 */
+		static async create(storage, password, { cipherCombo = 'SIV_GCM' } = {}) {
+			if (typeof storage.write !== 'function') {
+				throw new VaultError('read-only')
+			}
+			if (!(cipherCombo in SCHEMES)) {
+				throw new VaultError('unsupported-format', 'cipher combination ' + cipherCombo)
+			}
+			const name = 'masterkey.cryptomator'
+			for (const taken of [VAULT_CONFIG, name, 'd']) {
+				if (await storage.stat(taken)) {
+					throw new VaultError('exists-other', taken)
+				}
+			}
+			const keys = { encRaw: randomBytes(32), macRaw: randomBytes(32) }
+			try {
+				await storage.write(name, await lockKeys(keys, password), { create: true })
+				await storage.write(VAULT_CONFIG, encoder.encode(await signConfig(keys, KEY_FILE_PREFIX + name, cipherCombo)), { create: true })
+				const vault = await Vault.open(storage)
+				await vault.useKeys(keys)
+				const root = await vault.dirPath('')
+				await storage.mkdir('d', { existsOk: true })
+				await storage.mkdir(root.split('/').slice(0, 2).join('/'), { existsOk: true })
+				await storage.mkdir(root, { existsOk: true })
+				await storage.write(joinPath(root, 'dirid.c9r'), await vault.encryptContents(new Uint8Array(0)), { create: true })
+			} finally {
+				keys.encRaw.fill(0)
+				keys.macRaw.fill(0)
+			}
+			const created = await Vault.open(storage)
+			await created.unlock(password)
+			return created
+		}
+
+		/**
+		 * Changes the password, as Cryptomator's desktop app does: the keys unwrapped
+		 * with the old one and wrapped with the new one (a new salt, the same scrypt
+		 * cost); the old key file kept beside as a backup (backupName). The new one
+		 * is read back and must give the same keys, else the old one is put back.
+		 * Nothing else changes: the files stay as they are encrypted.
+		 */
+		async changePassword(oldPassword, newPassword) {
+			if (typeof this.storage.write !== 'function') {
+				throw new VaultError('read-only')
+			}
+			const name = this.masterkeyName
+			const before = await this.storage.read(name)
+			const file = JSON.parse(decoder.decode(before))
+			const keys = await unwrapKeys(file, oldPassword)
+			try {
+				await this.replaceKeyFile(name, before, await lockKeys(keys, newPassword, file.scryptCostParam), keys, newPassword)
+			} finally {
+				keys.encRaw.fill(0)
+				keys.macRaw.fill(0)
+			}
+		}
+
+		/**
+		 * Puts a new key file in place of the old one (backed up beside it, if there
+		 * was one) and reads it back: it must give these keys with the password, else
+		 * the old file is put back (VaultError 'corrupt').
+		 */
+		async replaceKeyFile(name, before, after, keys, password) {
+			if (before) {
+				await this.storage.write(await backupName(name, before), before)
+			}
+			await this.storage.write(name, after, { create: !before })
+			const stored = JSON.parse(decoder.decode(await this.storage.read(name)))
+			let back = null
+			try {
+				back = await unwrapKeys(stored, password)
+			} catch {
+				// Checked below.
+			}
+			const same = back !== null && equalBytes(back.encRaw, keys.encRaw) && equalBytes(back.macRaw, keys.macRaw)
+			back?.encRaw.fill(0)
+			back?.macRaw.fill(0)
+			if (!same) {
+				if (before) {
+					await this.storage.write(name, before)
+				}
+				throw new VaultError('corrupt', 'the new key file does not read back')
+			}
+			this.masterkeyFile = stored
+		}
+
+		/** The vault's recovery key (encodeRecoveryKey), after its password. */
+		async recoveryKey(password, words) {
+			const keys = await unwrapKeys(JSON.parse(decoder.decode(await this.storage.read(this.masterkeyName))), password)
+			const raw = concat(keys.encRaw, keys.macRaw)
+			try {
+				return encodeRecoveryKey(raw, words)
+			} finally {
+				raw.fill(0)
+				keys.encRaw.fill(0)
+				keys.macRaw.fill(0)
+			}
+		}
+
+		/**
+		 * A new password with the recovery key, as Cryptomator's desktop app sets one:
+		 * the keys from the recovery key, checked against the vault's configuration
+		 * (signed with them), a new key file (the old one, if any, backed up). Also
+		 * where the key file is lost. Returns the vault, unlocked.
+		 */
+		static async resetPassword(storage, recoveryKey, newPassword, words) {
+			if (typeof storage.write !== 'function') {
+				throw new VaultError('read-only')
+			}
+			const { config, name } = await readConfig(storage)
+			const raw = decodeRecoveryKey(recoveryKey, words)
+			const keys = { encRaw: raw.slice(0, 32), macRaw: raw.slice(32) }
+			raw.fill(0)
+			try {
+				if (!(await signedWith(config, keys))) {
+					throw new VaultError('invalid-recovery-key', 'it is not this vault\'s')
+				}
+				const before = await storage.read(name).catch((error) => {
+					if (error?.code === 'not-found') {
+						return null
+					}
+					throw error
+				})
+				const vault = new Vault(storage, config, null)
+				vault.masterkeyName = name
+				await vault.replaceKeyFile(name, before, await lockKeys(keys, newPassword), keys, newPassword)
+			} finally {
+				keys.encRaw.fill(0)
+				keys.macRaw.fill(0)
+			}
+			const opened = await Vault.open(storage)
+			await opened.unlock(newPassword)
+			return opened
 		}
 
 		/** Forgets the keys; reading needs the password again. */
@@ -1405,7 +1702,273 @@
 			}
 			return { name: source.name, folders: owned.length }
 		}
+
+		// ----- Health check -----
+		//
+		// cryptofs' checks (DirIdCheck, ShortenedNamesCheck, CiphertextFileTypeCheck),
+		// their findings named as its kinds with its severities, and the repairs it
+		// offers (repair): the vault's folder d/ walked as they walk it.
+
+		/**
+		 * The vault's findings, the worst first: {kind, severity ('CRITICAL', 'WARN' or
+		 * 'INFO'), path (in the vault's folder), fixable, …}. onProgress(done, total)
+		 * counts the directories looked into.
+		 */
+		async checkHealth(onProgress) {
+			this.requireKeys()
+			const findings = []
+			const add = (kind, severity, path, extra = {}) => findings.push({ kind, severity, path, fixable: false, ...extra })
+			const listed = async (path) => {
+				try {
+					return await this.storage.list(path)
+				} catch (error) {
+					if (error?.code === 'not-found') {
+						return []
+					}
+					throw error
+				}
+			}
+			// Every dir.c9r's directory ID (the root's is ''), and every d/XX/YYY with whether it holds dirid.c9r.
+			const dirIds = new Map([['', null]])
+			const contentDirs = new Map()
+			const entryDirs = []
+			for (const first of (await listed('d')).filter((item) => item.isDir)) {
+				for (const second of (await listed('d/' + first.name)).filter((item) => item.isDir)) {
+					const folder = joinPath('d', first.name, second.name)
+					const inside = await listed(folder)
+					contentDirs.set(folder, inside.some((item) => !item.isDir && item.name === 'dirid.c9r'))
+					for (const item of inside) {
+						if (item.isDir) {
+							entryDirs.push(joinPath(folder, item.name))
+						} else if (item.name === 'dir.c9r') {
+							add('LooseDirFile', 'INFO', joinPath(folder, item.name), { fixable: true })
+						}
+					}
+				}
+			}
+			let done = 0
+			await inTurn(entryDirs, 8, async (path) => {
+				const name = path.split('/').pop()
+				const isC9r = name.endsWith('.c9r')
+				const isC9s = name.endsWith('.c9s')
+				const inside = await listed(path)
+				const file = (wanted) => inside.find((item) => !item.isDir && item.name === wanted)
+				const dirFile = file('dir.c9r')
+				if (dirFile) {
+					const at = joinPath(path, 'dir.c9r')
+					if (!isC9r && !isC9s) {
+						add('LooseDirFile', 'INFO', at, { fixable: true })
+					} else if (dirFile.size > MAX_DIR_ID_LENGTH) {
+						add('ObeseDirFile', 'CRITICAL', at)
+					} else if (dirFile.size === 0) {
+						add('EmptyDirFile', 'CRITICAL', at, { fixable: true })
+					} else {
+						const dirId = decoder.decode(await this.storage.read(at))
+						if (dirIds.has(dirId)) {
+							add('DirIdCollision', 'CRITICAL', at, { dirId, other: dirIds.get(dirId) })
+						} else {
+							dirIds.set(dirId, at)
+						}
+					}
+				}
+				if (isC9r || isC9s) {
+					const types = [dirFile && 'DIRECTORY', file('symlink.c9r') && 'SYMLINK', isC9s && file('contents.c9r') && 'FILE'].filter(Boolean)
+					if (types.length === 0) {
+						// cryptofs deletes such a directory only if it is empty.
+						add('UnknownType', 'CRITICAL', path, { fixable: inside.length === 0 })
+					} else if (types.length > 1) {
+						add('AmbiguousType', 'CRITICAL', path, { types })
+					}
+				}
+				if (isC9s) {
+					await this.checkShortened(path, file('name.c9s'), add)
+				}
+				onProgress?.(++done, entryDirs.length)
+			})
+			// Directory IDs and directories in pairs; what is left is missing or orphaned.
+			for (const [dirId, dirFile] of dirIds) {
+				const folder = await this.dirPath(dirId)
+				if (contentDirs.has(folder)) {
+					if (!contentDirs.get(folder)) {
+						add('MissingDirIdBackup', 'INFO', folder, { dirId, fixable: true })
+					}
+					contentDirs.delete(folder)
+				} else {
+					add('MissingContentDir', 'WARN', dirFile ?? folder, { dirId, fixable: true })
+				}
+			}
+			for (const folder of contentDirs.keys()) {
+				add('OrphanContentDir', 'WARN', folder, { fixable: true })
+			}
+			const rank = { CRITICAL: 0, WARN: 1, INFO: 2 }
+			return findings.sort((a, b) => rank[a.severity] - rank[b.severity] || a.kind.localeCompare(b.kind) || a.path.localeCompare(b.path))
+		}
+
+		/** cryptofs' ShortenedNamesCheck for one .c9s directory. */
+		async checkShortened(path, nameFile, add) {
+			const at = joinPath(path, 'name.c9s')
+			if (!nameFile) {
+				add('MissingLongName', 'CRITICAL', path)
+				return
+			}
+			if (nameFile.size > MAX_NAME_FILE_SIZE) {
+				add('ObeseNameFile', 'CRITICAL', at)
+				return
+			}
+			const longName = decoder.decode(await this.storage.read(at))
+			const end = longName.indexOf('.c9r')
+			if (end === -1 || !/^[A-Za-z0-9_-]*={0,2}$/.test(longName.slice(0, end)) || longName.slice(0, end).length % 4 !== 0) {
+				add('NotDecodableLongName', 'CRITICAL', at)
+				return
+			}
+			if (longName.length > end + 4) {
+				add('TrailingBytesInNameFile', 'WARN', at, { longName, fixable: true })
+				return
+			}
+			const expected = base64UrlEncode(new Uint8Array(await subtle.digest('SHA-1', encoder.encode(longName))), true) + '.c9s'
+			if (path.split('/').pop() !== expected) {
+				add('LongShortNamesMismatch', 'WARN', path, { expected, fixable: true })
+			}
+		}
+
+		/** Applies the repair cryptofs offers for a finding of checkHealth. */
+		async repair(finding) {
+			this.requireWritable()
+			const parent = (path) => path.split('/').slice(0, -1).join('/')
+			switch (finding.kind) {
+			case 'LooseDirFile':
+				await this.storage.remove(finding.path)
+				return
+			case 'EmptyDirFile': {
+				// The empty dir.c9r and its directory, if nothing else is in it (as cryptofs: Files.delete).
+				await this.storage.remove(finding.path)
+				if ((await this.storage.list(parent(finding.path))).length === 0) {
+					await this.storage.remove(parent(finding.path))
+				}
+				return
+			}
+			case 'MissingContentDir':
+			case 'MissingDirIdBackup': {
+				const folder = await this.dirPath(finding.dirId)
+				await this.storage.mkdir(parent(folder), { existsOk: true })
+				await this.storage.mkdir(folder, { existsOk: true })
+				await this.storage.write(joinPath(folder, 'dirid.c9r'), await this.encryptContents(encoder.encode(finding.dirId)), { create: true })
+				return
+			}
+			case 'LongShortNamesMismatch':
+				await this.storage.move(finding.path, joinPath(parent(finding.path), finding.expected))
+				return
+			case 'TrailingBytesInNameFile':
+				await this.storage.write(finding.path, encoder.encode(finding.longName.slice(0, finding.longName.indexOf('.c9r') + 4)))
+				return
+			case 'UnknownType':
+				await this.storage.remove(finding.path)
+				return
+			case 'OrphanContentDir':
+				await this.adoptOrphan(finding.path)
+				return
+			default:
+				throw new VaultError('not-repairable', finding.kind)
+			}
+		}
+
+		/**
+		 * The entries of a directory no folder points to, rescued as cryptofs rescues
+		 * them (OrphanContentDir): into /LOST+FOUND/<the directory's d/ path, XX and
+		 * YYY joined>/, by their names where the directory's ID backup decrypts them,
+		 * else as file1_…, directory1_…, symlink1_…; anything else in it moved along.
+		 */
+		async adoptOrphan(orphan) {
+			const rootFolder = await this.dirPath('')
+			const recoveryEntry = joinPath(rootFolder, await this.encryptedName(RECOVERY_DIR_NAME, ''))
+			const recoveryDirFile = joinPath(recoveryEntry, 'dir.c9r')
+			if (await this.storage.stat(recoveryDirFile)) {
+				if (decoder.decode(await this.storage.read(recoveryDirFile)) !== RECOVERY_DIR_ID) {
+					throw new VaultError('exists-other', '/' + RECOVERY_DIR_NAME)
+				}
+			} else {
+				await this.storage.mkdir(recoveryEntry, { existsOk: true })
+				await this.storage.write(recoveryDirFile, encoder.encode(RECOVERY_DIR_ID), { create: true })
+			}
+			const recoveryFolder = await this.ensureContentDir(RECOVERY_DIR_ID)
+			if (recoveryFolder === orphan) {
+				// The recovery folder was the orphan: recovered by giving it its entry.
+				return
+			}
+			// The step parent: a folder named after the orphan's place in d/.
+			const stepParentEntry = joinPath(recoveryFolder, await this.encryptedName(orphan.split('/').slice(1).join(''), RECOVERY_DIR_ID))
+			const stepParentDirFile = joinPath(stepParentEntry, 'dir.c9r')
+			let stepParentId
+			if (await this.storage.stat(stepParentDirFile)) {
+				stepParentId = decoder.decode(await this.storage.read(stepParentDirFile))
+			} else {
+				stepParentId = randomUuid()
+				await this.storage.mkdir(stepParentEntry, { existsOk: true })
+				await this.storage.write(stepParentDirFile, encoder.encode(stepParentId), { create: true })
+			}
+			const stepParent = await this.ensureContentDir(stepParentId)
+			let orphanId = null
+			try {
+				orphanId = decoder.decode(await this.decryptContents(await this.storage.read(joinPath(orphan, 'dirid.c9r'))))
+			} catch {
+				// No backup, or one that does not decrypt: the entries get made-up names.
+			}
+			const run = Math.floor(Math.random() * 0x10000).toString(32)
+			const counters = { file: 0, directory: 0, symlink: 0 }
+			const longSuffix = '_withVeryLongName'.repeat(((((SHORTENING_THRESHOLD - 4) / 4 | 0) * 3 - 16) % '_withVeryLongName'.length) + 1)
+			const contents = await this.storage.list(orphan)
+			for (const item of contents) {
+				if (item.name.length < MIN_CIPHER_NAME_LENGTH || !(item.name.endsWith('.c9r') || item.name.endsWith('.c9s'))) {
+					continue
+				}
+				const shortened = item.name.endsWith('.c9s')
+				const path = joinPath(orphan, item.name)
+				let name = null
+				if (orphanId !== null) {
+					try {
+						const stored = shortened ? decoder.decode(await this.storage.read(joinPath(path, 'name.c9s'))) : item.name
+						name = await this.decryptName(stored, orphanId)
+					} catch {
+						// Made up below.
+					}
+				}
+				if (name === null) {
+					const inside = item.isDir ? await this.storage.list(path) : []
+					const kind = inside.some((child) => child.name === 'dir.c9r') ? 'directory' : inside.some((child) => child.name === 'symlink.c9r') ? 'symlink' : 'file'
+					name = kind + (++counters[kind]) + '_' + run + (shortened ? longSuffix : '')
+				}
+				const cipherName = await this.encryptedName(name, stepParentId)
+				if (shortened) {
+					const short = base64UrlEncode(new Uint8Array(await subtle.digest('SHA-1', encoder.encode(cipherName))), true) + '.c9s'
+					await this.storage.move(path, joinPath(stepParent, short))
+					await this.storage.write(joinPath(stepParent, short, 'name.c9s'), encoder.encode(cipherName))
+				} else {
+					await this.storage.move(path, joinPath(stepParent, cipherName))
+				}
+			}
+			await this.storage.remove(joinPath(orphan, 'dirid.c9r'))
+			for (const item of await this.storage.list(orphan)) {
+				await this.storage.move(joinPath(orphan, item.name), joinPath(stepParent, item.name))
+			}
+			await this.storage.remove(orphan)
+		}
+
+		/** An entry's encrypted name (.c9r) in a directory, not shortened. */
+		async encryptedName(name, dirId) {
+			return base64UrlEncode(await this.siv.encrypt(encoder.encode(name), [encoder.encode(dirId)]), true) + '.c9r'
+		}
+
+		/** A directory's folder in d/, made with its ID's backup where missing. */
+		async ensureContentDir(dirId) {
+			const folder = await this.dirPath(dirId)
+			await this.storage.mkdir(folder.split('/').slice(0, 2).join('/'), { existsOk: true })
+			await this.storage.mkdir(folder, { existsOk: true })
+			if (!(await this.storage.stat(joinPath(folder, 'dirid.c9r')))) {
+				await this.storage.write(joinPath(folder, 'dirid.c9r'), await this.encryptContents(encoder.encode(dirId)), { create: true })
+			}
+			return folder
+		}
 	}
 
-	return { Vault, VaultError, cleartextSize, checkName, scrypt, Siv, Cmac, base32Encode, base64UrlEncode, base64Decode, VAULT_CONFIG, STAGING_PREFIX }
+	return { Vault, VaultError, cleartextSize, checkName, scrypt, Siv, Cmac, base32Encode, base64UrlEncode, base64Decode, encodeRecoveryKey, decodeRecoveryKey, VAULT_CONFIG, STAGING_PREFIX }
 })

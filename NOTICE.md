@@ -57,3 +57,8 @@ by `npm run notice`.
 The office previews use docx-preview and SheetJS (`xlsx`, from cdn.sheetjs.com). The vault
 format is Cryptomator's, implemented here anew; Cryptomator's own libraries (cryptofs, cryptolib,
 AGPL-3.0) are only used by the tests, which fetch them, and are not part of the app.
+
+The recovery keys' word list (`src/recovery-words.txt`, built into the scripts) is Cryptomator's
+own (`src/main/resources/i18n/4096words_en.txt` of cryptomator/cryptomator, GPL-3.0), so that a
+recovery key made here works in Cryptomator and back; the GPL-3.0 and the AGPL-3.0 allow their
+combination (section 13 of each).

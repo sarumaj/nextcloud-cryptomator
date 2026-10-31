@@ -3,12 +3,14 @@
 // Reads a vault with Cryptomator's own library (cryptofs), the judge of what the
 // app writes (tests/compat.test.js):
 //
-//   java Verify <vault folder> <password>
+//   java Verify <vault folder> <password> [--check | --repair]
 //
 // prints one JSON document: every entry as Cryptomator sees it (type, size,
 // SHA-256 or a link's target; each file read by its path, so that cryptofs looks
 // it up by name as Cryptomator does), and the findings of cryptofs' health
-// checks (those with a severity above GOOD, by check).
+// checks (those with a severity above GOOD, by check, with their kind). --check:
+// the findings alone (a damaged vault may not list); --repair: every repair the
+// checks offer applied first, as Cryptomator's health check applies them.
 
 import java.net.URI;
 import java.nio.file.FileSystem;
@@ -41,41 +43,63 @@ public class Verify {
 		String password = args[1];
 		SecureRandom random = SecureRandom.getInstanceStrong();
 		Masterkey masterkey = new MasterkeyFileAccess(new byte[0], random).load(vault.resolve("masterkey.cryptomator"), password);
-
-		Map<String, Object> entries = new TreeMap<>();
-		CryptoFileSystemProperties properties = CryptoFileSystemProperties.cryptoFileSystemProperties()
-				.withKeyLoader(uri -> masterkey.copy())
-				.build();
-		try (FileSystem fs = CryptoFileSystemProvider.newFileSystem(vault, properties)) {
-			Path root = fs.getPath("/");
-			try (Stream<Path> paths = Files.walk(root)) {
-				for (Path path : paths.toList()) {
-					if (path.equals(root)) {
-						continue;
+		String mode = args.length > 2 ? args[2] : "";
+		String token = Files.readString(vault.resolve("vault.cryptomator"));
+		VaultConfig config = VaultConfig.decode(token).verify(masterkey.getEncoded(), 8);
+		if (mode.equals("--repair")) {
+			try (Cryptor cryptor = CryptorProvider.forScheme(config.getCipherCombo()).provide(masterkey.copy(), random)) {
+				ExecutorService executor = Executors.newSingleThreadExecutor();
+				for (HealthCheck check : HealthCheck.allChecks()) {
+					List<DiagnosticResult> found;
+					try (Stream<DiagnosticResult> results = check.check(vault, config, masterkey, cryptor, executor)) {
+						found = results.toList();
 					}
-					String name = root.relativize(path).toString();
-					// Looked up again by its name, as Cryptomator opens a path.
-					Path byName = fs.getPath("/" + name);
-					Map<String, Object> entry = new TreeMap<>();
-					if (Files.isSymbolicLink(byName)) {
-						entry.put("type", "link");
-						entry.put("target", Files.readSymbolicLink(byName).toString());
-					} else if (Files.isDirectory(byName)) {
-						entry.put("type", "dir");
-					} else {
-						byte[] data = Files.readAllBytes(byName);
-						entry.put("type", "file");
-						entry.put("size", data.length);
-						entry.put("sha256", HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data)));
+					for (DiagnosticResult result : found) {
+						var fix = result.getFix(vault, config, masterkey, cryptor);
+						if (fix.isPresent()) {
+							fix.get().apply();
+						}
 					}
-					entries.put(name, entry);
 				}
+				executor.shutdown();
 			}
 		}
 
+		Map<String, Object> entries = new TreeMap<>();
+		if (!mode.equals("--check")) {
+			CryptoFileSystemProperties properties = CryptoFileSystemProperties.cryptoFileSystemProperties()
+					.withKeyLoader(uri -> masterkey.copy())
+					.build();
+			try (FileSystem fs = CryptoFileSystemProvider.newFileSystem(vault, properties)) {
+				Path root = fs.getPath("/");
+				try (Stream<Path> paths = Files.walk(root)) {
+					for (Path path : paths.toList()) {
+						if (path.equals(root)) {
+							continue;
+						}
+						String name = root.relativize(path).toString();
+						// Looked up again by its name, as Cryptomator opens a path.
+						Path byName = fs.getPath("/" + name);
+						Map<String, Object> entry = new TreeMap<>();
+						if (Files.isSymbolicLink(byName)) {
+							entry.put("type", "link");
+							entry.put("target", Files.readSymbolicLink(byName).toString());
+						} else if (Files.isDirectory(byName)) {
+							entry.put("type", "dir");
+						} else {
+							byte[] data = Files.readAllBytes(byName);
+							entry.put("type", "file");
+							entry.put("size", data.length);
+							entry.put("sha256", HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data)));
+						}
+						entries.put(name, entry);
+					}
+				}
+			}
+
+		}
+
 		List<Object> findings = new ArrayList<>();
-		String token = Files.readString(vault.resolve("vault.cryptomator"));
-		VaultConfig config = VaultConfig.decode(token).verify(masterkey.getEncoded(), 8);
 		try (Cryptor cryptor = CryptorProvider.forScheme(config.getCipherCombo()).provide(masterkey.copy(), random)) {
 			ExecutorService executor = Executors.newSingleThreadExecutor();
 			for (HealthCheck check : HealthCheck.allChecks()) {
@@ -83,6 +107,7 @@ public class Verify {
 					results.filter(result -> result.getSeverity() != DiagnosticResult.Severity.GOOD).forEach(result -> {
 						Map<String, Object> finding = new TreeMap<>();
 						finding.put("check", check.name());
+						finding.put("kind", result.getClass().getSimpleName());
 						finding.put("severity", result.getSeverity().name());
 						finding.put("result", result.toString());
 						findings.add(finding);

@@ -12,7 +12,9 @@
 // notice, its menu) and with the file picker, and locks. Throughout, no request
 // may carry what the server must not learn: the password, a decrypted name, a
 // file's type (/core/mimeicon) or an entry's address; but for the exports, which
-// put files decrypted into the person's files as asked.
+// put files decrypted into the person's files as asked. It also creates a vault,
+// changes its password, shows its recovery key and sets a new password with it
+// (the key never sent either), and repairs a damage with the health check.
 //
 //   NC_URL=http://localhost NC_USER=admin NC_PASSWORD=... [APP_REPO=<this repository>] node tests/e2e/check.mjs
 
@@ -104,6 +106,12 @@ const IMPORT_FILES = { 'x.txt': Buffer.from('imported x\n'), 'tief/y.txt': Buffe
 const COPIED = 'Kopie ✓.txt'
 const COPIED_DATA = Buffer.from('copied into the vault\n')
 const EXPORTS = 'Ausfuhr'
+// A vault made in the browser; its passwords and recovery key, which the server must not see.
+const NEW_VAULT = 'Neuer Tresor ✓'
+const NEW_PASSWORDS = ['erstes-' + randomBytes(6).toString('hex'), 'zweites-' + randomBytes(6).toString('hex'), 'drittes-' + randomBytes(6).toString('hex')]
+const recoveryKeys = []
+// The test vault's root directory (its keys are fixed), for a damage the health check repairs.
+const ROOT_DIR = 'Vault/d/GY/RUUGMH75F7XKVA6NBMB5JVN2VZV67Q'
 // The person's files over WebDAV, as the test's account.
 const auth = 'Basic ' + Buffer.from(process.env.NC_USER + ':' + process.env.NC_PASSWORD).toString('base64')
 const dav = (method, path, body, headers = {}) => fetch(base + '/remote.php/dav/files/' + encodeURIComponent(process.env.NC_USER) + '/'
@@ -474,6 +482,99 @@ for (const [name, data] of Object.entries(IMPORT_FILES)) {
 	assert.equal(Buffer.from(await response.arrayBuffer()).toString(), data.toString(), 'exported ' + name)
 }
 
+step('a new vault is created in the browser, opened, and its recovery key shown')
+await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
+await row('Vault').waitFor()
+await listAction(/New vault/)
+{
+	const picker = page.getByRole('dialog', { name: /Where should the new vault go/ })
+	await picker.getByRole('button', { name: 'Create the vault here' }).click()
+}
+const form = page.locator('.cryptomator-dialog form')
+await form.locator('input[name=name]').fill(NEW_VAULT)
+await form.locator('input[name=password]').fill(NEW_PASSWORDS[0])
+await form.locator('input[name=repeated]').fill(NEW_PASSWORDS[0] + 'x')
+await form.locator('button[type=submit]').click()
+await page.locator('.cryptomator-dialog .cryptomator-notice--error', { hasText: 'differ' }).waitFor()
+await form.locator('input[name=repeated]').fill(NEW_PASSWORDS[0])
+await form.locator('button[type=submit]').click()
+await page.locator('.cryptomator-recovery-key').waitFor({ timeout: 60000 })
+recoveryKeys.push((await page.locator('.cryptomator-recovery-key').textContent()).trim())
+assert.equal(recoveryKeys[0].split(' ').length, 44, 'a recovery key of 44 words')
+if (shots) await page.screenshot({ path: shots + '/recovery-key.png' })
+await page.locator('.cryptomator-dialog button', { hasText: 'Done' }).click()
+await page.locator('.cryptomator-banner--unlocked').waitFor()
+for (const name of ['masterkey.cryptomator', 'vault.cryptomator', 'd']) {
+	assert.equal((await dav('PROPFIND', NEW_VAULT + '/' + name, undefined, { Depth: '0' })).status, 207, 'the new vault has ' + name)
+}
+
+// The vault's menu in Vaults: its maintenance.
+async function maintain(action) {
+	await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
+	await row(NEW_VAULT).waitFor()
+	await rowActions(NEW_VAULT)
+	await page.locator('[data-cy-files-list-row-action="' + action + '"]:visible').click()
+	return page.locator('.cryptomator-dialog form')
+}
+
+step('its password is changed; the vault opens with the new one only')
+{
+	const change = await maintain('cryptomator-vaults-change-password')
+	await change.locator('input[name=old]').fill(NEW_PASSWORDS[0])
+	await change.locator('input[name=password]').fill(NEW_PASSWORDS[1])
+	await change.locator('input[name=repeated]').fill(NEW_PASSWORDS[1])
+	await change.locator('button[type=submit]').click()
+	await page.getByText('is changed', { exact: false }).first().waitFor({ timeout: 60000 })
+	assert.equal((await dav('PROPFIND', NEW_VAULT, undefined, { Depth: '1' }).then((response) => response.text())).match(/masterkey\.cryptomator\.[0-9A-F]{8}\.bkup/g)?.length > 0, true, 'the old key file kept as Cryptomator keeps it')
+	await rowActions(NEW_VAULT)
+	await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-lock"]:visible').click()
+	await openName(NEW_VAULT)
+	await page.locator('.cryptomator-dialog input[type=password]').fill(NEW_PASSWORDS[0])
+	await page.locator('.cryptomator-dialog button[type=submit]').click()
+	await page.locator('.cryptomator-dialog .cryptomator-notice--error', { hasText: 'Wrong password.' }).waitFor()
+	await page.locator('.cryptomator-dialog input[type=password]').fill(NEW_PASSWORDS[1])
+	await page.locator('.cryptomator-dialog button[type=submit]').click()
+	await page.locator('.cryptomator-banner--unlocked').waitFor()
+}
+
+step('its recovery key is shown again after the password, the same')
+{
+	const show = await maintain('cryptomator-vaults-recovery-key')
+	await show.locator('input[name=password]').fill(NEW_PASSWORDS[1])
+	await show.locator('button[type=submit]').click()
+	await page.locator('.cryptomator-recovery-key').waitFor({ timeout: 60000 })
+	assert.equal((await page.locator('.cryptomator-recovery-key').textContent()).trim(), recoveryKeys[0])
+	await page.locator('.cryptomator-dialog button', { hasText: 'Done' }).click()
+}
+
+step('the recovery key sets a new password; a wrong one is refused')
+{
+	const reset = await maintain('cryptomator-vaults-reset-password')
+	const words = recoveryKeys[0].split(' ')
+	await reset.locator('textarea[name=key]').fill([...words.slice(0, -1), words.at(-1) === 'ad' ? 'ah' : 'ad'].join(' '))
+	await reset.locator('input[name=password]').fill(NEW_PASSWORDS[2])
+	await reset.locator('input[name=repeated]').fill(NEW_PASSWORDS[2])
+	await reset.locator('button[type=submit]').click()
+	await page.locator('.cryptomator-dialog .cryptomator-notice--error', { hasText: 'recovery key' }).waitFor()
+	await reset.locator('textarea[name=key]').fill(recoveryKeys[0])
+	await reset.locator('button[type=submit]').click()
+	await page.getByText('has a new password').first().waitFor({ timeout: 60000 })
+}
+
+step('the health check finds a damage of the test vault and repairs it as Cryptomator would')
+assert.ok((await dav('DELETE', ROOT_DIR + '/dirid.c9r')).ok, 'the root directory\'s ID backup removed')
+await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
+await rowActions('Vault')
+await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-health"]:visible').click()
+await page.locator('.cryptomator-findings li').first().waitFor({ timeout: 60000 })
+assert.equal(await page.locator('.cryptomator-findings li').count(), 1)
+assert.match(await page.locator('.cryptomator-findings').textContent(), /spare copy of its ID/)
+if (shots) await page.screenshot({ path: shots + '/health.png' })
+await page.locator('.cryptomator-dialog button', { hasText: /^Repair 1$/ }).click()
+await page.getByText('The vault is healthy').waitFor({ timeout: 60000 })
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+assert.equal((await dav('PROPFIND', ROOT_DIR + '/dirid.c9r', undefined, { Depth: '0' })).status, 207, 'written again')
+
 // For the check with Cryptomator's own library afterwards (README.md, "Tests").
 if (process.env.EXPECTED_OUT) {
 	const expected = {}
@@ -542,7 +643,7 @@ await row('hello.txt').waitFor()
 
 step('"Open a vault folder …" chooses one with Nextcloud\'s file picker')
 await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
-await page.getByRole('button', { name: /Open a vault folder/ }).first().click()
+await listAction(/Open a vault folder/)
 const picker = page.getByRole('dialog', { name: /Choose a vault/ })
 await picker.getByText('Vault', { exact: true }).first().click()
 await picker.getByRole('button', { name: 'Open vault' }).click()
@@ -555,7 +656,8 @@ const leaks = sent.filter(({ url, body, exporting: asked }) => {
 		return false
 	}
 	const text = url + '\n' + body.toString('utf8')
-	return text.includes(PASSWORD) || text.includes('/core/mimeicon') || text.includes('/apps/cryptomator_vaults/cryptomator-vaults')
+	return text.includes(PASSWORD) || NEW_PASSWORDS.some((password) => text.includes(password)) || recoveryKeys.some((key) => text.includes(key) || text.includes(key.split(' ').slice(0, 4).join(' ')))
+		|| text.includes('/core/mimeicon') || text.includes('/apps/cryptomator_vaults/cryptomator-vaults')
 		|| NAMES.some((name) => text.includes(name)) || body.includes(MARKER)
 })
 assert.deepEqual(leaks.map(({ url }) => url), [], 'requests the server must not see')

@@ -40,7 +40,7 @@ import { DefaultType, File, FileType, Folder, Permission, View, getFileActions, 
 import { emit, subscribe } from '@nextcloud/event-bus'
 import { generateFilePath, imagePath } from '@nextcloud/router'
 import vaultLib from '../app/cryptomator_vaults/js/vault.js'
-import { LARGE_FILE, askName, askPassword, hasPreview, chooseFolder, closeDialog, confirmAction, download, el, humanSize, notice, revokeAll, showFile, showUploads } from './dialogs.js'
+import { LARGE_FILE, askForm, askName, askPassword, hasPreview, chooseFolder, closeDialog, confirmAction, download, el, humanSize, notice, revokeAll, showFile, showHealth, showRecoveryKey, showUploads } from './dialogs.js'
 import { davStorage, findVaults, purgeDeleted, userId, walkFiles } from './storage.js'
 import { t } from './l10n.js'
 
@@ -227,6 +227,8 @@ function message(error) {
 		return t('The vault is damaged: {detail}', { detail: error.message })
 	case 'locked':
 		return t('The vault is locked.')
+	case 'invalid-recovery-key':
+		return t('This is not the vault\'s recovery key: {detail}.', { detail: error.message })
 	case 'changed':
 		return t('“{name}” changed meanwhile: it was kept, and the vault may not hold its latest state.', { name: error.message.split('/').pop() })
 	case 'contains-vault':
@@ -476,7 +478,8 @@ function inVaults(view) {
 	return view?.id === VIEW_ID
 }
 const OWN_ACTIONS = new Set(['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock', 'cryptomator-vaults-open-vault',
-	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-export', 'cryptomator-vaults-delete'])
+	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-export', 'cryptomator-vaults-delete',
+	'cryptomator-vaults-change-password', 'cryptomator-vaults-recovery-key', 'cryptomator-vaults-reset-password', 'cryptomator-vaults-health'])
 const guarded = new WeakSet()
 let guardedCount = 0
 
@@ -1545,6 +1548,278 @@ function onDrop(event) {
 
 window.addEventListener('dragover', onDragOver, true)
 window.addEventListener('drop', onDrop, true)
+
+// ----- Vault maintenance: new vaults, passwords, the recovery key, the health check -----
+
+// Cryptomator's shortest password for a vault.
+const MIN_PASSWORD = 8
+const ICON_KEY = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm5.65-4A6 6 0 1 0 12.65 14H17v4h4v-4h2v-4H12.65z"/></svg>'
+const ICON_HEALTH = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5A5.5 5.5 0 0 1 7.5 3c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 3 5.5 5.5 0 0 1 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35zM11 7v3H8v2h3v3h2v-3h3v-2h-3V7h-2z"/></svg>'
+
+/** Cryptomator's word list for recovery keys, loaded when first needed. */
+function recoveryWords() {
+	return import('./recovery-words.txt?raw').then((module) => module.default.split('\n'))
+}
+
+/** A new password as typed twice: refused (an Error to show) if too short or not the same. */
+function checkNewPassword(password, repeated) {
+	if (password.length < MIN_PASSWORD) {
+		throw new Error(t('The password needs at least {count} characters.', { count: MIN_PASSWORD }))
+	}
+	if (password !== repeated) {
+		throw new Error(t('The two passwords differ.'))
+	}
+}
+
+/** What a finding of the health check means, for the person. */
+function describeFinding(finding) {
+	switch (finding.kind) {
+	case 'MissingDirIdBackup':
+		return t('A folder\'s spare copy of its ID is missing. Repairing writes it.')
+	case 'MissingContentDir':
+		return t('A folder\'s contents are missing; it cannot be opened. Repairing creates it anew, empty.')
+	case 'OrphanContentDir':
+		return t('Encrypted files that no folder leads to. Repairing moves them into the folder LOST+FOUND.')
+	case 'LooseDirFile':
+		return t('A stray folder file outside any folder. Repairing removes it.')
+	case 'EmptyDirFile':
+		return t('A folder whose file is empty; it cannot be opened. Repairing removes the broken entry.')
+	case 'UnknownType':
+		return finding.fixable ? t('An empty entry that is neither file, folder nor link. Repairing removes it.')
+			: t('An entry that is neither file, folder nor link, and not empty. Look at it in Cryptomator.')
+	case 'AmbiguousType':
+		return t('An entry that is several kinds at once. Look at it in Cryptomator.')
+	case 'LongShortNamesMismatch':
+		return t('An entry with a long name, stored under the wrong short name. Repairing renames it.')
+	case 'TrailingBytesInNameFile':
+		return t('A long name with stray bytes after it. Repairing removes them.')
+	case 'MissingLongName':
+	case 'NotDecodableLongName':
+	case 'ObeseNameFile':
+		return t('An entry whose long name is missing or damaged. Look at it in Cryptomator.')
+	case 'ObeseDirFile':
+	case 'DirIdCollision':
+		return t('A folder whose ID is damaged or used twice. Look at it in Cryptomator.')
+	default:
+		return finding.kind
+	}
+}
+
+/** Creates a vault in a folder of the person's choosing, opens it, and shows its recovery key. */
+async function newVault() {
+	let parent = null
+	try {
+		const { getFilePickerBuilder } = await dialogs()
+		await getFilePickerBuilder(t('Where should the new vault go?'))
+			.startAt('/')
+			.setMultiSelect(false)
+			.allowDirectories(true)
+			.setMimeTypeFilter(['httpd/unix-directory'])
+			.setFilter((node) => node.type === FileType.Folder && !insideVault(node.path))
+			.setButtonFactory((selected, path) => [{ label: t('Create the vault here'), variant: 'primary', callback: () => { parent = path } }])
+			.build()
+			.pick()
+	} catch {
+		// Also when no folder was selected: the folder shown is the place.
+	}
+	if (parent === null) {
+		return
+	}
+	if (insideVault(parent)) {
+		showError(t('A vault cannot be inside a vault.'))
+		return
+	}
+	const root = davStorage('')
+	const created = await askForm({
+		title: t('New vault'),
+		intro: [t('The vault is a folder of encrypted files, which Cryptomator opens too. Its password cannot be recovered without the recovery key shown next.')],
+		fields: [
+			{ name: 'place', label: t('In'), value: parent, readonly: true },
+			{ name: 'name', label: t('Name'), value: t('Vault') },
+			{ name: 'password', label: t('Password'), type: 'password', autocomplete: 'new-password' },
+			{ name: 'repeated', label: t('Password again'), type: 'password', autocomplete: 'new-password' },
+		],
+		action: t('Create'),
+		working: t('Creating the vault …'),
+		async run({ name, password, repeated }) {
+			const clean = name.trim()
+			if (!clean || clean === '.' || clean === '..' || /[/\\]/.test(clean)) {
+				throw new Error(t('“{name}” cannot be a folder\'s name.', { name: clean }))
+			}
+			checkNewPassword(password, repeated)
+			const folder = (parent.replace(/\/+$/, '') + '/' + clean).replace(/^\/*/, '/')
+			try {
+				await root.mkdir(folder.slice(1))
+			} catch (error) {
+				throw new Error(error?.code === 'exists' ? t('A folder “{name}” is there already.', { name: clean }) : message(error))
+			}
+			let vault
+			try {
+				vault = await Vault.create(davStorage(folder), password)
+			} catch (error) {
+				await root.remove(folder.slice(1)).catch(() => {})
+				throw new Error(message(error))
+			}
+			return { folder, vault, key: await vault.recoveryKey(password, await recoveryWords()) }
+		},
+	})
+	if (!created) {
+		return
+	}
+	addVaultFolder(created.folder)
+	seenVaults.add(created.folder)
+	await loadVaults()
+	const vault = await register(created.folder)
+	vault.vault = created.vault
+	startIdleTimer()
+	await showRecoveryKey(vault.name, created.key, { created: true })
+	goTo('/' + vault.seg)
+}
+
+/** The vault's object for keys: the open one, else read anew from its folder. */
+async function vaultObject(vault) {
+	return vault.vault ?? await Vault.open(davStorage(vault.folder))
+}
+
+async function changePassword(vault) {
+	const done = await askForm({
+		title: t('Change the password of {vault}', { vault: vault.name }),
+		intro: [t('The files stay as they are; only the vault\'s key file gets the new password. Cryptomator on your other devices then needs the new one, too.')],
+		fields: [
+			{ name: 'account', label: t('Vault'), value: vault.folder, readonly: true, account: true, autocomplete: 'username' },
+			{ name: 'old', label: t('Current password'), type: 'password', autocomplete: 'current-password' },
+			{ name: 'password', label: t('New password'), type: 'password', autocomplete: 'new-password' },
+			{ name: 'repeated', label: t('New password again'), type: 'password', autocomplete: 'new-password' },
+		],
+		action: t('Change password'),
+		working: t('Changing the password …'),
+		async run({ old, password, repeated }) {
+			checkNewPassword(password, repeated)
+			try {
+				const object = await vaultObject(vault)
+				await object.changePassword(old, password)
+				vault.vault = object
+			} catch (error) {
+				throw new Error(message(error))
+			}
+			return true
+		},
+	})
+	if (done) {
+		showInfo(t('The password of {vault} is changed.', { vault: vault.name }))
+	}
+}
+
+async function showVaultRecoveryKey(vault) {
+	const key = await askForm({
+		title: t('Recovery key of {vault}', { vault: vault.name }),
+		intro: [t('Enter the vault\'s password to see its recovery key.')],
+		fields: [
+			{ name: 'account', label: t('Vault'), value: vault.folder, readonly: true, account: true, autocomplete: 'username' },
+			{ name: 'password', label: t('Password'), type: 'password', autocomplete: 'current-password' },
+		],
+		action: t('Show'),
+		working: t('Unlocking …'),
+		async run({ password }) {
+			try {
+				return await (await vaultObject(vault)).recoveryKey(password, await recoveryWords())
+			} catch (error) {
+				throw new Error(message(error))
+			}
+		},
+	})
+	if (key) {
+		await showRecoveryKey(vault.name, key)
+	}
+}
+
+async function resetPassword(vault) {
+	const reset = await askForm({
+		title: t('Reset the password of {vault}', { vault: vault.name }),
+		intro: [t('With the vault\'s recovery key (the words from Cryptomator or from this app) it gets a new password. The files stay as they are.')],
+		fields: [
+			{ name: 'account', label: t('Vault'), value: vault.folder, readonly: true, account: true, autocomplete: 'username' },
+			{ name: 'key', label: t('Recovery key'), type: 'textarea' },
+			{ name: 'password', label: t('New password'), type: 'password', autocomplete: 'new-password' },
+			{ name: 'repeated', label: t('New password again'), type: 'password', autocomplete: 'new-password' },
+		],
+		action: t('Set the new password'),
+		working: t('Setting the new password …'),
+		async run({ key, password, repeated }) {
+			checkNewPassword(password, repeated)
+			try {
+				return await Vault.resetPassword(davStorage(vault.folder), key, password, await recoveryWords())
+			} catch (error) {
+				throw new Error(message(error))
+			}
+		},
+	})
+	if (reset) {
+		vault.vault = reset
+		startIdleTimer()
+		showInfo(t('{vault} has a new password and is unlocked.', { vault: vault.name }))
+	}
+}
+
+async function checkVaultHealth(vault) {
+	if (!vault.vault?.unlocked && !(await unlock(vault))) {
+		return
+	}
+	showHealth(vault.name, {
+		check: (onProgress) => vault.vault.checkHealth(onProgress),
+		describe: describeFinding,
+		async repair(findings) {
+			if (busy) {
+				throw new Error(t('Another change to the vault is still running.'))
+			}
+			busy = true
+			try {
+				for (const finding of findings) {
+					await vault.vault.repair(finding)
+				}
+			} catch (error) {
+				throw new Error(message(error))
+			} finally {
+				busy = false
+				refresh(vault.name)
+			}
+		},
+	})
+}
+
+// The vault's menu in Vaults: its maintenance.
+const vaultOf = (nodes) => vaults.get(nodes[0].attributes.cryptomatorVault)
+const vaultRow = ({ nodes, view }) => SECURE && inVaults(view) && nodes.length === 1 && nodes[0].attributes?.cryptomatorVaultRoot === true
+for (const [id, name, icon, task, order] of [
+	['cryptomator-vaults-change-password', () => t('Change password …'), ICON_KEY, changePassword, -790],
+	['cryptomator-vaults-recovery-key', () => t('Show recovery key …'), ICON_KEY, showVaultRecoveryKey, -780],
+	['cryptomator-vaults-reset-password', () => t('Reset password with recovery key …'), ICON_KEY, resetPassword, -770],
+	['cryptomator-vaults-health', () => t('Check health …'), ICON_HEALTH, checkVaultHealth, -760],
+]) {
+	registerFileAction({
+		id,
+		displayName: name,
+		iconSvgInline: () => icon,
+		enabled: vaultRow,
+		async exec({ nodes }) {
+			await task(vaultOf(nodes))
+			return null
+		},
+		order,
+	})
+}
+
+registerFileListAction({
+	id: 'cryptomator-vaults-new',
+	displayName: () => t('New vault …'),
+	iconSvgInline: () => ICON_NEW_FOLDER,
+	order: -0.5,
+	enabled: ({ view }) => SECURE && inVaults(view) && shown.kind === 'vaults',
+	exec: async () => {
+		await newVault()
+		return null
+	},
+})
 
 registerFileListAction({
 	id: 'cryptomator-vaults-add',

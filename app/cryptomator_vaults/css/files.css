@@ -257,3 +257,57 @@
 	background: #fff;
 	border-radius: var(--border-radius, 4px);
 }
+
+/* Forms of the vault's maintenance: one field under the other. */
+.cryptomator-form {
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.cryptomator-form__words,
+.cryptomator-recovery-key {
+	font-family: var(--font-face-monospace, monospace);
+}
+
+/* A recovery key, to be read and written down. */
+.cryptomator-recovery-key {
+	margin: 12px 0;
+	padding: 12px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-dark);
+	line-height: 1.8;
+	word-spacing: 0.4em;
+	user-select: all;
+}
+
+.cryptomator-findings {
+	margin: 8px 0;
+	padding: 0;
+	list-style: none;
+}
+
+.cryptomator-findings li {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 2px 8px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.cryptomator-findings li code {
+	grid-column: 2;
+	word-break: break-all;
+}
+
+.cryptomator-findings__severity {
+	font-weight: bold;
+}
+
+.cryptomator-findings__severity--critical {
+	color: var(--color-error-text, var(--color-error));
+}
+
+.cryptomator-findings__severity--warn {
+	color: var(--color-warning-text, var(--color-warning));
+}

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- **New vault …** in *Vaults* creates a Cryptomator vault (format 8) in a folder of your files,
+  opens it and shows its recovery key.
+- In a vault's menu: **Change password …** (the old key file kept as a backup, as Cryptomator
+  keeps it), **Show recovery key …** and **Reset password with recovery key …** (Cryptomator's
+  44 words, which work in both), and **Check health …**, which finds what cryptofs' health check
+  finds and repairs what it repairs (orphaned entries into `/LOST+FOUND`).
+- Tests: cryptofs opens the vaults made here, after a password change and a reset; its findings on
+  damaged vaults are the app's, and a vault the app repaired reads like one cryptofs repaired.
+
 ## 0.6.0
 
 - **Into a vault from your files:** **Add from your files …** copies or moves files and folders
