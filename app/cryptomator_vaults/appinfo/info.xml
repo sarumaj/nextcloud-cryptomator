@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>cryptomator_vaults</id>
+    <name>Cryptomator vaults</name>
+    <summary>Open your Cryptomator vaults in the browser; the password never leaves it</summary>
+    <description><![CDATA[Browse, preview and download the files of a Cryptomator vault stored in your Nextcloud, without installing Cryptomator.
+
+- **Unlocked in your browser:** the password and the vault's keys stay in the browser tab; the server only ever sends the encrypted files, as it does for Cryptomator itself
+- **Locks itself** after 15 minutes without use, when you choose Lock, or when you close the tab
+- **Finds your vaults** in your files, or opens one by its folder
+- **Read only:** nothing is written to the vault; use Cryptomator to change it
+- Vault format 8 (Cryptomator 1.6 and later), both cipher combinations
+
+Not affiliated with Skymatic GmbH, the makers of Cryptomator.]]></description>
+    <version>0.1.0</version>
+    <licence>agpl</licence>
+    <author>Dawid Ciepiela</author>
+    <namespace>CryptomatorVaults</namespace>
+    <category>security</category>
+    <category>files</category>
+    <website>https://git.ciepiela.org/dawid/nextcloud-cryptomator</website>
+    <bugs>https://git.ciepiela.org/dawid/nextcloud-cryptomator/issues</bugs>
+    <repository>https://git.ciepiela.org/dawid/nextcloud-cryptomator</repository>
+    <dependencies>
+        <php min-version="8.1"/>
+        <nextcloud min-version="32" max-version="36"/>
+    </dependencies>
+    <navigations>
+        <navigation>
+            <name>Vaults</name>
+            <route>cryptomator_vaults.page.index</route>
+            <icon>app.svg</icon>
+        </navigation>
+    </navigations>
+</info>

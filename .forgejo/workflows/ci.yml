@@ -1,0 +1,56 @@
+---
+# The app's PHP and JavaScript must parse, its info.xml must pass the app
+# store's schema, its translations must cover the page, and the tests (Node, no
+# Nextcloud and no network: tests/vault.test.js) must pass.
+name: CI
+# A failed job mails whoever started the run. Renovate's bot has no mailbox: when its
+# branch fails, Renovate opens a pull request, which mails the repository's watchers.
+enable-email-notifications: true
+"on":
+  push:
+    branches: [main, renovate/all-patch]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    runs-on: docker
+    container: docker.io/library/php:8.3-cli
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        run: &checkout |
+          git init -q . && git remote add origin "${{ github.server_url }}/${{ github.repository }}.git"
+          git fetch -q --depth 1 origin "${{ github.sha }}"
+          git checkout -q FETCH_HEAD
+
+      - name: Lint the PHP files
+        run: find app -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Check info.xml against the app store's schema
+        run: |
+          apt-get update -qq && apt-get install -qq -y --no-install-recommends libxml2-utils wget >/dev/null
+          wget -q -O /tmp/info.xsd https://apps.nextcloud.com/schema/apps/info.xsd
+          xmllint --noout --schema /tmp/info.xsd app/cryptomator_vaults/appinfo/info.xml
+
+  javascript:
+    runs-on: docker
+    container: docker.io/library/node:24-bookworm
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        run: *checkout
+
+      - name: Check the JavaScript parses
+        run: for f in app/cryptomator_vaults/js/*.js app/cryptomator_vaults/l10n/*.js; do node --check "$f"; done
+
+      - name: Check the translations are valid and complete
+        run: node tests/l10n.js
+
+      - name: Run the tests
+        run: node --test tests/vault.test.js
