@@ -16,6 +16,62 @@ const DOCUMENTS = /node_modules\/(docx-preview|xlsx)\//
 // JSZip and what it needs: every preview of a zipped format (and ZIP itself) uses it.
 const ZIP = /node_modules\/(jszip|pako|lie|immediate|setimmediate|readable-stream|core-util-is|inherits|isarray|process-nextick-args|safe-buffer|string_decoder|util-deprecate)\//
 
+// Characters that show as nothing: control characters (but tab and line ends)
+// and Unicode's invisible ones (spaces that do not break, joiners, direction
+// marks and overrides, the byte order mark). Libraries write them as escapes,
+// esbuild's minifier writes them as they are (JSZip's "PK\x03\x04"), which
+// Forgejo and editors flag as hidden text.
+const INVISIBLE = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\xa0\xad\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g
+
+/**
+ * The node without where it stands and how its literals were spelled: what the
+ * code means. A tagged template's raw text stays, since the tag function sees it.
+ */
+function meaning(node) {
+	const spelling = (item, tagged = false) => {
+		if (Array.isArray(item)) {
+			item.forEach((child) => spelling(child))
+		} else if (item && typeof item === 'object') {
+			if (item.type === 'TemplateLiteral' && !tagged) {
+				item.quasis.forEach((quasi) => delete quasi.value.raw)
+			}
+			for (const [key, child] of Object.entries(item)) {
+				spelling(child, item.type === 'TaggedTemplateExpression' && key === 'quasi')
+			}
+		}
+	}
+	spelling(node)
+	return JSON.stringify(node, function (key, value) {
+		if (key === 'start' || key === 'end' || (key === 'raw' && this.type === 'Literal')) {
+			return undefined
+		}
+		return typeof value === 'bigint' ? value.toString() + 'n' : value
+	})
+}
+
+/**
+ * Writes the invisible characters of the output as escapes. A minified chunk has
+ * them only in strings, template literals and regular expressions, where an
+ * escape means the same; the chunk is parsed before and after to be sure.
+ */
+function escapeInvisible() {
+	return {
+		name: 'escape-invisible',
+		generateBundle(options, bundle) {
+			for (const chunk of Object.values(bundle)) {
+				if (chunk.type !== 'chunk' || chunk.code.search(INVISIBLE) === -1) {
+					continue
+				}
+				const code = chunk.code.replace(INVISIBLE, (character) => '\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'))
+				if (meaning(this.parse(code)) !== meaning(this.parse(chunk.code))) {
+					this.error(`${chunk.fileName}: escaping its invisible characters would change the code`)
+				}
+				chunk.code = code
+			}
+		},
+	}
+}
+
 /** Whether the entry imports a module statically (directly or through others): it is needed at once. */
 function fromEntry(id, getModuleInfo, seen = new Map()) {
 	if (seen.has(id)) {
@@ -49,6 +105,7 @@ function onlyThrough(pattern, id, getModuleInfo, seen = new Map()) {
 }
 
 export default defineConfig({
+	plugins: [escapeInvisible()],
 	define: { 'process.env.NODE_ENV': JSON.stringify('production') },
 	build: {
 		outDir: 'app/cryptomator_vaults',

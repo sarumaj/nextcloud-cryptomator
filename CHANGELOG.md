@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The build writes invisible characters (control characters such as JSZip's `PK\x03\x04`,
+  non-breaking spaces, joiners) as escapes, so that Forgejo and editors no longer warn of hidden
+  text. The build checks, by parsing each chunk before and after, that the code means the same.
+
 ## 0.5.1
 
 - Unlocking a vault removes the staging files and folders older than a day that uploads which never

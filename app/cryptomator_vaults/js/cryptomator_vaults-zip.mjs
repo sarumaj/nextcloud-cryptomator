@@ -484,7 +484,7 @@ function Tt() {
           return l.checkSupport(b), b !== "string" || u.uint8array ? b === "nodebuffer" ? new g(p) : u.uint8array ? new y(l.transformTo("uint8array", p)) : new n(l.transformTo("array", p)) : new h(p);
         };
       }, { "../support": 30, "../utils": 32, "./ArrayReader": 17, "./NodeBufferReader": 19, "./StringReader": 20, "./Uint8ArrayReader": 21 }], 23: [function(_, N, w) {
-        w.LOCAL_FILE_HEADER = "PK", w.CENTRAL_FILE_HEADER = "PK", w.CENTRAL_DIRECTORY_END = "PK", w.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x07", w.ZIP64_CENTRAL_DIRECTORY_END = "PK", w.DATA_DESCRIPTOR = "PK\x07\b";
+        w.LOCAL_FILE_HEADER = "PK\u0003\u0004", w.CENTRAL_FILE_HEADER = "PK\u0001\u0002", w.CENTRAL_DIRECTORY_END = "PK\u0005\u0006", w.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\u0006\x07", w.ZIP64_CENTRAL_DIRECTORY_END = "PK\u0006\u0006", w.DATA_DESCRIPTOR = "PK\x07\b";
       }, {}], 24: [function(_, N, w) {
         var l = _("./GenericWorker"), u = _("../utils");
         function n(h) {

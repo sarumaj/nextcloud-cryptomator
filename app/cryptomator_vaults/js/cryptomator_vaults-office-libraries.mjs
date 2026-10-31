@@ -4787,7 +4787,7 @@ var bs = /* @__PURE__ */ (function() {
     v.FullPaths.length === 0 && (v.FullPaths[0] = w + "/", v.FileIndex[0] = { name: w, type: 5 }), E.CLSID && (v.FileIndex[0].clsid = E.CLSID), I(v);
   }
   function I(v) {
-    var F = "Sh33tJ5";
+    var F = "\u0001Sh33tJ5";
     if (!Re.find(v, "/" + F)) {
       var E = sr(4);
       E[0] = 55, E[1] = E[3] = 50, E[2] = 54, v.FileIndex.push({ name: F, type: 2, content: E, size: 4, L: 69, R: 69, C: 69 }), v.FullPaths.push(v.FullPaths[0] + F), N(v);
@@ -5302,7 +5302,7 @@ var bs = /* @__PURE__ */ (function() {
   function xc(v, F) {
     var E = F || {}, w = [], A = [], y = sr(1), W = E.compression ? 8 : 0, Y = 0, H = 0, V = 0, G = 0, Q = 0, te = v.FullPaths[0], he = te, ee = v.FileIndex[0], ne = [], Fe = 0;
     for (H = 1; H < v.FullPaths.length; ++H)
-      if (he = v.FullPaths[H].slice(te.length), ee = v.FileIndex[H], !(!ee.size || !ee.content || Array.isArray(ee.content) && ee.content.length == 0 || he == "Sh33tJ5")) {
+      if (he = v.FullPaths[H].slice(te.length), ee = v.FileIndex[H], !(!ee.size || !ee.content || Array.isArray(ee.content) && ee.content.length == 0 || he == "\u0001Sh33tJ5")) {
         var ze = G, Ke = sr(he.length);
         for (V = 0; V < he.length; ++V) Ke.write_shift(1, he.charCodeAt(V) & 127);
         Ke = Ke.slice(0, Ke.l), ne[Q] = typeof ee.content == "string" ? bs.bstr(ee.content, 0) : bs.buf(
@@ -5440,7 +5440,7 @@ var bs = /* @__PURE__ */ (function() {
       "",
       ""
     ], y = v.FullPaths[0], W = y, Y = v.FileIndex[0], H = 1; H < v.FullPaths.length; ++H)
-      if (W = v.FullPaths[H].slice(y.length), Y = v.FileIndex[H], !(!Y.size || !Y.content || W == "Sh33tJ5")) {
+      if (W = v.FullPaths[H].slice(y.length), Y = v.FileIndex[H], !(!Y.size || !Y.content || W == "\u0001Sh33tJ5")) {
         W = W.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7E-\xFF]/g, function(Fe) {
           return "_x" + Fe.charCodeAt(0).toString(16) + "_";
         }).replace(/[\u0080-\uFFFF]/g, function(Fe) {
