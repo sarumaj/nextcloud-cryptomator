@@ -4,7 +4,7 @@
 // in /Vault (README.md, "Tests"): the view "Vaults" in Files finds it, refuses a
 // wrong password, unlocks, browses in Files' own list, previews and downloads as
 // Cryptomator wrote the files, creates a folder and uploads files (one in chunks,
-// one replacing another), offers only its own actions on the vault's
+// one replacing another), renames, moves and deletes, offers only its own actions on the vault's
 // entries, opens a vault from the person's files (its notice, its menu) and with
 // the file picker, and locks. Throughout, no
 // request may carry what the server must not learn: the password, a decrypted
@@ -30,9 +30,12 @@ const UPLOADS = {
 const REPLACED = Buffer.from(MARKER + ' replaced\n')
 const NESTED = Buffer.from(MARKER + ' nested\n')
 // Every decrypted name in the vault: none may reach the server.
-const NAMES = [...new Set([...Object.keys(manifest.entries).flatMap((path) => path.split('/')), ...Object.keys(UPLOADS), 'Neuer Ordner ✓', 'inside new.txt'])]
+const RENAMED = 'großer Upload ✓.bin'
+const LONG_FOLDER = 'a-very-long-name-'.repeat(10) + 'end-folder'
+const NAMES = [...new Set([...Object.keys(manifest.entries).flatMap((path) => path.split('/')), ...Object.keys(UPLOADS), 'Neuer Ordner ✓', 'inside new.txt', RENAMED])]
 const sha = (data) => createHash('sha256').update(data).digest('hex')
-const OWN_ACTIONS = ['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock']
+const OWN_ACTIONS = ['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock',
+	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-delete']
 
 // Web Crypto needs a secure origin: HTTPS, or the test Nextcloud at http://localhost.
 const browser = await chromium.launch()
@@ -182,12 +185,58 @@ await upload({ 'inside new.txt': NESTED })
 await finished()
 await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
 await row('inside new.txt').waitFor()
+step('an entry is renamed (back in the browser to the vault\'s top, still in Vaults)')
+await page.goBack()
+await row('big upload.bin').waitFor()
+assert.match(page.url(), /\/apps\/files\/cryptomator-vaults(\/\d+)?\?dir=\/v[0-9a-f]+$/, `back stays in Vaults: ${page.url()}`)
+await rowActions('big upload.bin')
+await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-rename"]:visible').click()
+await page.locator('.cryptomator-dialog input[type=text]').fill(RENAMED)
+await page.locator('.cryptomator-dialog button[type=submit]').click()
+await row(RENAMED).waitFor()
+assert.equal(await row('big upload.bin').count(), 0)
+
+step('a folder is moved into another, the chooser offering neither it nor what is in it')
+await rowActions('Docs & Stuff')
+await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-move"]:visible').click()
+const chooser = page.locator('.cryptomator-dialog')
+assert.ok(await chooser.locator('button.cryptomator-folders__item', { hasText: 'Docs & Stuff' }).isDisabled(), 'the folder being moved cannot be the target')
+await chooser.locator('button.cryptomator-folders__item', { hasText: 'Neuer Ordner ✓' }).click()
+await chooser.locator('.cryptomator-crumbs [aria-current]', { hasText: 'Neuer Ordner ✓' }).waitFor()
+await chooser.getByRole('button', { name: 'Move here' }).click()
+await row('Docs & Stuff').waitFor({ state: 'detached' })
+await openName('Neuer Ordner ✓')
+await openName('Docs & Stuff')
+await openName('inner')
+await openName('deep.txt')
+assert.equal(await page.locator('.cryptomator-preview--text').textContent(), 'nested\n')
+await page.locator('.cryptomator-dialog__close').click()
+await page.goBack()
+await page.goBack()
+await page.goBack()
+await row(RENAMED).waitFor()
+
+step('a link and a folder with a file in it are deleted, after asking')
+for (const name of ['link-to-hello', LONG_FOLDER]) {
+	await rowActions(name)
+	await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-delete"]:visible').click()
+	await page.locator('.cryptomator-dialog button', { hasText: /^Delete$/ }).click()
+	await row(name).waitFor({ state: 'detached' })
+}
+
 // For the check with Cryptomator's own library afterwards (README.md, "Tests").
 if (process.env.EXPECTED_OUT) {
+	const expected = {}
+	for (const [path, value] of Object.entries(manifest.entries)) {
+		if (path === 'link-to-hello' || path.startsWith(LONG_FOLDER)) {
+			continue
+		}
+		expected[path.startsWith('Docs & Stuff') ? 'Neuer Ordner ✓/' + path : path] = value
+	}
 	writeFileSync(process.env.EXPECTED_OUT, JSON.stringify({
-		...manifest.entries,
+		...expected,
 		'Notiz über ✓ Uploads.txt': { sha256: sha(REPLACED), size: REPLACED.length, type: 'file' },
-		'big upload.bin': { sha256: sha(UPLOADS['big upload.bin']), size: UPLOADS['big upload.bin'].length, type: 'file' },
+		[RENAMED]: { sha256: sha(UPLOADS['big upload.bin']), size: UPLOADS['big upload.bin'].length, type: 'file' },
 		'Neuer Ordner ✓': { type: 'dir' },
 		'Neuer Ordner ✓/inside new.txt': { sha256: sha(NESTED), size: NESTED.length, type: 'file' },
 	}))

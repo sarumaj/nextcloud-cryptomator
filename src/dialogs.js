@@ -249,11 +249,12 @@ export async function showFile(name, size, read, message) {
 
 // ----- Writing -----
 
-/** Asks for a name (a new folder's); null if the dialog is closed. */
-export function askName(title, label, check) {
+/** Asks for a name (a new folder's, a new one for an entry); null if the dialog is closed. */
+export function askName(title, label, check, { initial = '', action = t('Create') } = {}) {
 	return new Promise((resolve) => {
 		let done = false
 		const input = el('input', { type: 'text', required: true, 'aria-label': label, autocomplete: 'off' })
+		input.value = initial
 		const status = el('div', { 'aria-live': 'polite' })
 		openDialog(title, [
 			el('h2', {}, title),
@@ -271,7 +272,7 @@ export function askName(title, label, check) {
 					closeDialog()
 					resolve(value)
 				},
-			}, [el('label', {}, [label, input]), el('button', { type: 'submit', class: 'primary' }, t('Create')),
+			}, [el('label', {}, [label, input]), el('button', { type: 'submit', class: 'primary' }, action),
 				el('button', { type: 'button', onclick: closeDialog }, t('Cancel'))]),
 			status,
 		], () => {
@@ -280,6 +281,78 @@ export function askName(title, label, check) {
 			}
 		})
 		input.focus()
+		// The name without its extension selected, as Files does.
+		const dot = initial.lastIndexOf('.')
+		input.setSelectionRange(0, dot > 0 ? dot : initial.length)
+	})
+}
+
+/** Asks to confirm something that cannot be taken back here; resolves true or false. */
+export function confirmAction(title, text, action) {
+	return new Promise((resolve) => {
+		let answer = false
+		openDialog(title, [
+			el('h2', {}, title),
+			notice(text),
+			el('div', { class: 'cryptomator-choices' }, [
+				el('button', { type: 'button', class: 'error primary', onclick: () => {
+					answer = true
+					closeDialog()
+				} }, action),
+				el('button', { type: 'button', onclick: closeDialog }, t('Cancel')),
+			]),
+		], () => resolve(answer))
+		document.querySelector('.cryptomator-dialog button:last-child')?.focus()
+	})
+}
+
+/**
+ * Chooses a folder of a vault (its folders are decrypted here, so Nextcloud's
+ * picker cannot show them): list(dirId) gives a folder's folders ({name, dirId});
+ * the folders in excluded (those being moved) cannot be chosen or entered.
+ * Resolves {dirId, ancestors (IDs from the top, '' first, ending with dirId)},
+ * or null.
+ */
+export function chooseFolder(title, rootName, list, excluded, action) {
+	return new Promise((resolve) => {
+		let result = null
+		let trail = [{ name: rootName, dirId: '' }]
+		const crumbs = el('ol', { class: 'cryptomator-crumbs' })
+		const folders = el('ul', { class: 'cryptomator-folders' })
+		const choose = el('button', { type: 'button', class: 'primary', onclick: () => {
+			result = { dirId: trail[trail.length - 1].dirId, ancestors: trail.map((item) => item.dirId) }
+			closeDialog()
+		} }, action)
+		const show = async () => {
+			crumbs.replaceChildren(...trail.map((item, index) => el('li', {}, index === trail.length - 1
+				? el('span', { 'aria-current': 'page' }, item.name)
+				: el('button', { type: 'button', onclick: () => {
+					trail = trail.slice(0, index + 1)
+					show()
+				} }, item.name))))
+			folders.replaceChildren(notice(t('Loading …')))
+			try {
+				const items = (await list(trail[trail.length - 1].dirId)).sort((a, b) => a.name.localeCompare(b.name))
+				folders.replaceChildren(...(items.length ? items.map((item) => el('li', {}, el('button', {
+					type: 'button',
+					class: 'cryptomator-folders__item',
+					disabled: excluded.has(item.dirId),
+					onclick: () => {
+						trail = [...trail, item]
+						show()
+					},
+				}, item.name))) : [notice(t('No folders in here.'))]))
+			} catch (error) {
+				folders.replaceChildren(notice(error.message, 'error'))
+			}
+		}
+		openDialog(title, [
+			el('h2', {}, title),
+			el('nav', {}, crumbs),
+			el('div', { class: 'cryptomator-dialog__body' }, folders),
+			el('div', { class: 'cryptomator-choices' }, [choose, el('button', { type: 'button', onclick: closeDialog }, t('Cancel'))]),
+		], () => resolve(result))
+		show()
 	})
 }
 

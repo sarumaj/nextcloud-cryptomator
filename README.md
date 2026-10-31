@@ -12,9 +12,9 @@ app: open their folders, preview, download and upload files, without installing 
   itself reads the vault.
 - **Locks itself** after 15 minutes without use, when you choose **Lock**, and when you leave the
   page.
-- **Upload and new folders:** files are encrypted in your browser and written exactly as
-  Cryptomator writes them, each checked before it enters the vault. Renaming, moving and deleting
-  are left to Cryptomator for now.
+- **Upload, new folders, rename, move, delete:** files are encrypted in your browser and written
+  exactly as Cryptomator writes them, each checked before it enters the vault; the vault stays
+  readable by Cryptomator at every step.
 
 Not affiliated with Skymatic GmbH, the makers of Cryptomator.
 
@@ -46,7 +46,8 @@ menu leads there.
    video up to 100 MB); its menu has **Download**.
 4. To add files, choose **Upload files …** at the top, or drop files on the list; **New
    folder …** creates a folder. If a file of that name exists, you're asked whether to replace
-   it. Folders can't be dropped yet.
+   it. Folders can't be dropped yet. An entry's menu has **Rename**, **Move …** (to a folder of
+   the vault) and **Delete**; select several to move or delete them together.
 5. Choose **Lock** in the vault's menu in *Vaults*, or **Lock all vaults** at the top.
 
 Large files are decrypted and encrypted in the browser's memory, which holds them encrypted and
@@ -96,6 +97,20 @@ staging folder and moved into place the same way. A new folder's own directory, 
 `dirid.c9r`, exists before the entry that points to it. Nothing is ever replaced by a folder, nor a
 folder by a file. Nextcloud keeps the replaced file's encrypted version (*Versions*), and Cryptomator
 can open such an old version.
+
+### Renaming, moving and deleting
+
+A file's contents are not bound to its name or folder, and a folder's entries live under its ID,
+not its name: renaming or moving changes the entry alone, whatever is in it.
+
+- Between two short names it is one move on the server, refused if the new name is taken.
+- Where a long name (`.c9s`) is involved on either side, the new entry is put together under a
+  staging name (the file's contents copied on the server and checked), moved into place, and only
+  then is the old one removed: a crash leaves both, never neither.
+- A folder cannot be moved into itself or a folder inside it (the folder chooser offers neither).
+- Deleting a folder removes its entry first, so that everything in it disappears at once, then the
+  directories of the folder and of every folder below it. Everything deleted goes to Nextcloud's
+  deleted files, encrypted.
 
 What this protects against, and what it doesn't:
 
@@ -148,20 +163,30 @@ store's schema.
   names, nested new folders), what is refused (a taken name, a folder in the way, unusable names),
   and a storage that changes a file on the way, which must never reach the vault, not even when
   replacing.
-- **Compatibility** (`tests/compat.sh`, needs Java 25 and Maven, or Docker): the same writes into
-  copies of the test vaults, then Cryptomator's own library (`Verify.java`) opens each vault, looks
-  up every file by its path as Cryptomator does, reads it, and runs cryptofs' health checks. Its
+- **Renaming, moving, deleting** (`tests/write.test.js`, `editSamples` in `tests/samples.js`):
+  every change between short and long names for files and folders, moves into other folders (also
+  below a moved folder, and with a new name), what is refused (a folder into itself, a taken name),
+  and deletions of files, a link and a folder with folders in it, leaving no directory that no
+  entry leads to.
+- **Compatibility** (`tests/compat.sh`, needs Java 25 and Maven, or Docker): the same writes,
+  renames, moves and deletions in copies of the test vaults, then Cryptomator's own library
+  (`Verify.java`) opens each vault, looks up every file by its path as Cryptomator does, reads it,
+  and runs cryptofs' health checks. Its
   entries must be exactly the expected ones, and the health checks must find nothing, also with the
   staging leftovers of a browser that died midway.
 - **The integration** in a real browser, `tests/e2e/check.mjs` (Playwright), against a Nextcloud
   with this app and `tests/fixtures/vault-gcm` uploaded as `/Vault`. It opens *Vaults*, refuses a
   wrong password, unlocks, browses in Files' list, previews, downloads, creates a folder, uploads
-  (a 25 MB file in chunks, a replacement after asking, a file into the new folder), checks that only
+  (a 25 MB file in chunks, a replacement after asking, a file into the new folder), renames, moves a
+  folder into another, deletes a link and a folder, stays in *Vaults* on the browser's Back, checks
+  that only
   the app's own actions are offered on the vault's entries, opens the vault from the notice and
   from its `vault.cryptomator`, and locks. It fails if any request carried the password, a
   decrypted name or content, a file type icon or an entry's address. With `EXPECTED_OUT` set, it
-  writes the entries it expects; copy the vault out of Nextcloud's data directory afterwards and
-  run `Verify.java` on it to check what Nextcloud stored. Run it against each new Nextcloud version: the integration
+  writes the entries it expects; copy the vault out of Nextcloud's data directory afterwards (or
+  download it over WebDAV) and run `Verify.java` on it to check what Nextcloud stored. Run it also
+  against a Nextcloud with object storage as primary storage and Redis, as servers usually are:
+  Nextcloud's chunked uploads take another path there (and answer a part with 200, not 201). Run it against each new Nextcloud version: the integration
   relies on how Files decides what to offer. Web Crypto needs HTTPS or `localhost`, so run the
   browser in the Nextcloud container's network:
 

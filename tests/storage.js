@@ -74,6 +74,12 @@ function folderStorage(root, { writable = false } = {}) {
 			}
 			await fs.promises.rename(at(from), at(to))
 		},
+		async copy(from, to) {
+			if (fs.existsSync(at(to))) {
+				throw new VaultError('exists', to)
+			}
+			await fs.promises.cp(at(from), at(to), { recursive: true })
+		},
 		async remove(relative) {
 			await fs.promises.rm(at(relative), { recursive: true, force: true })
 		},

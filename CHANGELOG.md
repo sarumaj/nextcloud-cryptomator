@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- Uploads of 20 MB and more failed with "HTTP 200" on Nextcloud with object storage and Redis:
+  Nextcloud answers a part of a chunked upload there with an empty 200 instead of 201. Writes now
+  succeed on any 2xx that no redirect led to (a redirect to a sign-in page still fails), and an
+  error names the request that failed.
+- **Rename**, **Move …** (with a chooser of the vault's folders) and **Delete** for a vault's
+  entries, several at once for moving and deleting. Between short names one move on the server;
+  where a long name is involved the new entry is put together and checked beside the old one,
+  which goes only after. A folder is deleted entry first, then the directories below it.
+- The browser's Back to a parent folder stayed in *Vaults* only by chance: entries had negative IDs,
+  which Files' router does not take in a URL, so it fell back to *All files*. Entries now have
+  positive IDs above 2^52, and other apps' actions are switched off for a vault's entries in any
+  view, not only in *Vaults*.
+
 ## 0.3.0
 
 - Writing: **Upload files …**, **New folder …** and files dropped on the list put files and

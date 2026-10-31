@@ -4,7 +4,8 @@
 // read by Cryptomator's own library. Into a copy of each test vault go the
 // write samples (tests/samples.js) and a replaced file; then cryptofs
 // (fixtures/generator/Verify.java) opens the vault, reads every file by its
-// path, and runs its health checks. Its entries must be exactly the expected
+// path, and runs its health checks; the same after renaming, moving and
+// deleting (tests/samples.js, editSamples). Its entries must be exactly the expected
 // ones, and its health checks must find nothing.
 //
 // VERIFY_COMMAND: the command that runs Verify (JSON array, the vault's folder
@@ -19,7 +20,7 @@ const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const { Vault, STAGING_PREFIX } = require('../app/cryptomator_vaults/js/vault.js')
 const { folderStorage } = require('./storage.js')
-const { FIXTURES, copyVault, sha, writeSamples } = require('./samples.js')
+const { FIXTURES, copyVault, editSamples, sha, writeSamples } = require('./samples.js')
 
 const command = process.env.VERIFY_COMMAND ? JSON.parse(process.env.VERIFY_COMMAND) : null
 
@@ -41,6 +42,7 @@ for (const name of ['vault-gcm', 'vault-ctrmac']) {
 		const replaced = Buffer.from('replaced by the app\n')
 		await vault.writeFile('', 'hello.txt', replaced, { replace: true })
 		written['hello.txt'] = { type: 'file', size: replaced.length, sha256: sha(replaced) }
+		const expected = await editSamples(vault, { ...manifest.entries, ...written })
 		assert.deepEqual(fs.readdirSync(root, { recursive: true }).filter((item) => path.basename(item).startsWith(STAGING_PREFIX)), [])
 		// What a browser that died midway leaves: a staging file and folder, which
 		// Cryptomator must pass by, its health checks too.
@@ -50,7 +52,7 @@ for (const name of ['vault-gcm', 'vault-ctrmac']) {
 
 		const seen = verify(root, manifest.password)
 		assert.deepEqual(seen.findings, [], 'cryptofs health checks')
-		assert.deepEqual(seen.entries, { ...manifest.entries, ...written })
+		assert.deepEqual(seen.entries, expected)
 		fs.rmSync(root, { recursive: true })
 	})
 }

@@ -14,7 +14,7 @@ const { randomBytes } = require('node:crypto')
 const { Vault, checkName, STAGING_PREFIX } = require('../app/cryptomator_vaults/js/vault.js')
 const { folderStorage } = require('./storage.js')
 
-const { FIXTURES, copyVault, sha, walk, writeSamples } = require('./samples.js')
+const { FIXTURES, copyVault, editSamples, orphans, sha, walk, writeSamples } = require('./samples.js')
 
 test('names are stored as Cryptomator stores them, unusable ones refused', () => {
 	assert.equal(checkName('Café'), 'Café')
@@ -33,6 +33,19 @@ for (const name of ['vault-gcm', 'vault-ctrmac']) {
 		const written = await writeSamples(vault)
 		assert.deepEqual(await walk(vault), { ...manifest.entries, ...written })
 		// No staging folder is left behind.
+		const leftovers = fs.readdirSync(root, { recursive: true }).filter((item) => path.basename(item).startsWith(STAGING_PREFIX))
+		assert.deepEqual(leftovers, [])
+		fs.rmSync(root, { recursive: true })
+	})
+
+	test(`${name}: renamed, moved and deleted entries read back, nothing left behind`, async () => {
+		const root = copyVault(name)
+		const vault = await Vault.open(folderStorage(root, { writable: true }))
+		await vault.unlock(manifest.password)
+		const written = await writeSamples(vault)
+		const expected = await editSamples(vault, { ...manifest.entries, ...written })
+		assert.deepEqual(await walk(vault), expected)
+		assert.deepEqual(await orphans(vault, root), [], 'directories no entry leads to')
 		const leftovers = fs.readdirSync(root, { recursive: true }).filter((item) => path.basename(item).startsWith(STAGING_PREFIX))
 		assert.deepEqual(leftovers, [])
 		fs.rmSync(root, { recursive: true })

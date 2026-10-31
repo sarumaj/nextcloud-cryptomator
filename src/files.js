@@ -18,14 +18,17 @@
  * - Every file shows the same icon (FILE_ICON) and has the type
  *   application/octet-stream: Files would fetch a type's icon from the server
  *   (/core/mimeicon?mime=…) and tell it each file's type.
- * - Every other app's file action is switched off in the view (guardActions):
- *   an action that does not know these entries could take one for a file of the
- *   server's (the sharing app offers its sidebar for any entry it takes for
- *   someone else's, as entries outside WebDAV have no owner).
+ * - Every other app's file action is switched off in the view, and for the
+ *   vault's entries in any view (guardActions): an action that does not know these
+ *   entries could take one for a file of the server's (the sharing app offers its
+ *   sidebar for any entry it takes for someone else's, as entries outside WebDAV
+ *   have no owner).
  * - Locking removes the vault's entries from Files' memory (files:node:deleted).
  * - Uploads and new folders are encrypted here and written as Cryptomator writes
  *   (js/vault.js, "Writing"); Files' own upload never sees them: the entries give
  *   it no permission to create, and a drop on the list is taken before it.
+ *   Renaming, moving and deleting are this integration's actions as well (js/vault.js,
+ *   "Renaming, moving, deleting"); Files' own are not offered for the entries.
  *
  * In the person's own files, a vault's folder is recognised as it is opened (a
  * vault.cryptomator among its contents, or found by the search) and offers to
@@ -37,7 +40,7 @@ import { DefaultType, File, FileType, Folder, Permission, View, getFileActions, 
 import { emit, subscribe } from '@nextcloud/event-bus'
 import { generateFilePath, imagePath } from '@nextcloud/router'
 import vaultLib from '../app/cryptomator_vaults/js/vault.js'
-import { LARGE_FILE, askName, askPassword, closeDialog, download, el, humanSize, notice, revokeAll, showFile, showUploads } from './dialogs.js'
+import { LARGE_FILE, askName, askPassword, chooseFolder, closeDialog, confirmAction, download, el, humanSize, notice, revokeAll, showFile, showUploads } from './dialogs.js'
 import { davStorage, findVaults, userId } from './storage.js'
 import { t } from './l10n.js'
 
@@ -77,6 +80,9 @@ const ICON_DOWNLOAD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
 const ICON_LOCK = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9V6zm9 14H6V10h12v10z"/></svg>'
 const ICON_UPLOAD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>'
 const ICON_NEW_FOLDER = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>'
+const ICON_RENAME = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>'
+const ICON_MOVE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg>'
+const ICON_DELETE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>'
 const ICON_ADD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2zm5 9h-2v2h-2v-2H9v-2h2V9h2v2h2v2z"/></svg>'
 
 // ----- Vaults and their opaque names -----
@@ -97,10 +103,13 @@ async function hash(text, length) {
 // The list of vaults' own segment (its path is /).
 const ROOT_SEGMENT = 'r000000000001'
 
-// A negative ID from the segment's hash: Files needs one for a folder, and no real
-// file has a negative one.
+// An ID from the segment's hash: Files needs one for a folder. Positive (its router
+// takes only digits in a URL, and going back to a parent folder puts the ID there:
+// a negative one sent Files to its default view), and above 2^52, far beyond any
+// real file's ID, yet exact as a JavaScript number.
+const ID_BASE = 2 ** 52
 function fakeId(segment) {
-	return -parseInt(segment.slice(1, 13), 16)
+	return ID_BASE + parseInt(segment.slice(1, 13), 16)
 }
 
 function readAdded() {
@@ -201,6 +210,8 @@ function message(error) {
 		return t('Your storage is full.')
 	case 'read-only':
 		return t('This vault cannot be written to.')
+	case 'invalid-move':
+		return t('A folder cannot be moved into itself or into a folder inside it.')
 	case 'wrong-password':
 		return t('Wrong password.')
 	case 'unsupported-format':
@@ -266,7 +277,7 @@ async function getContents(path) {
 	guardActions()
 	if (!SECURE) {
 		shown = { kind: 'insecure' }
-		return { folder: new Folder({ id: -1, source: BASE + '/', root: ROOT, owner: userId(), permissions: Permission.READ }), contents: [] }
+		return { folder: new Folder({ id: ID_BASE + 1, source: BASE + '/', root: ROOT, owner: userId(), permissions: Permission.READ }), contents: [] }
 	}
 	await loadVaults()
 	const parts = path.split('/').filter(Boolean)
@@ -355,11 +366,11 @@ function lock(vault) {
 	if (!vault.vault?.unlocked) {
 		return
 	}
-	// The keys stay while an upload writes: a file is never left half-written.
-	if (uploading && shown.vault === vault) {
-		showInfo(t('The vault locks when the upload has finished.'))
+	// The keys stay while a change is made: nothing is left half-done.
+	if (busy && shown.vault === vault) {
+		showInfo(t('The vault locks when the change being made has finished.'))
 		const wait = setInterval(() => {
-			if (!uploading) {
+			if (!busy) {
 				clearInterval(wait)
 				lock(vault)
 			}
@@ -448,13 +459,14 @@ async function pickVault() {
 function inVaults(view) {
 	return view?.id === VIEW_ID
 }
-const OWN_ACTIONS = new Set(['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock', 'cryptomator-vaults-open-vault'])
+const OWN_ACTIONS = new Set(['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock', 'cryptomator-vaults-open-vault',
+	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-delete'])
 const guarded = new WeakSet()
 let guardedCount = 0
 
 /**
- * Switches every other file action off in the view: its own check stays as it is
- * elsewhere. Changed in place, as Files keeps the actions it read. Run at the
+ * Switches every other file action off in the view and for the vault's entries
+ * anywhere: its own check stays as it is elsewhere. Changed in place, as Files keeps the actions it read. Run at the
  * start, for every folder and from this integration's own check (which Files
  * asks for every entry), so that an app registering later is caught too.
  */
@@ -474,7 +486,8 @@ function guardActions() {
 				configurable: true,
 				enumerable: true,
 				writable: true,
-				value: (context) => !inVaults(context?.view) && (original ? original.call(action, context) : true),
+				value: (context) => !inVaults(context?.view) && !(context?.nodes ?? []).some((node) => node?.root === ROOT)
+					&& (original ? original.call(action, context) : true),
 			})
 			guarded.add(action)
 		} catch {
@@ -642,7 +655,8 @@ function writableHere() {
 	return here?.vault?.vault?.unlocked && currentDir() === here.path ? here : null
 }
 
-let uploading = false
+// One change to a vault at a time (an upload, a rename, …); the keys stay meanwhile.
+let busy = false
 
 /**
  * Encrypts and writes files into the folder the list shows, one after the other:
@@ -654,15 +668,15 @@ async function uploadFiles(files) {
 	if (!here || files.length === 0) {
 		return
 	}
-	if (uploading) {
-		showError(t('An upload is still running.'))
+	if (busy) {
+		showError(t('Another change to the vault is still running.'))
 		return
 	}
 	const large = files.filter((file) => file.size > LARGE_FILE)
 	if (large.length > 0 && !window.confirm(t('{count} of the files are larger than {size}. Your browser holds each twice while encrypting. Continue?', { count: large.length, size: humanSize(LARGE_FILE) }))) {
 		return
 	}
-	uploading = true
+	busy = true
 	const { vault } = here.vault
 	const dialog = showUploads(t('Uploading to {vault}', { vault: here.vault.name }))
 	let decision = null
@@ -723,7 +737,7 @@ async function uploadFiles(files) {
 			dialog.progress((index + 1) / files.length)
 		}
 	} finally {
-		uploading = false
+		busy = false
 		dialog.finish(failed.length
 			? t('{written} uploaded, {failed} failed. The vault is unchanged where an upload failed.', { written, failed: failed.length })
 			: t('{written} uploaded and checked.', { written }), failed.length > 0)
@@ -765,6 +779,151 @@ async function newFolder() {
 		showError(message(error))
 	}
 }
+
+/** Runs a change to the vault the list shows, one at a time; the list is fetched again after. */
+async function change(here, task) {
+	if (busy) {
+		showError(t('Another change to the vault is still running.'))
+		return
+	}
+	busy = true
+	try {
+		await task()
+	} finally {
+		busy = false
+		refresh(here.vault.name)
+	}
+}
+
+function entryMessage(error, name) {
+	return error?.code === 'not-found' ? t('“{name}” is no longer there.', { name }) : message(error)
+}
+
+// The vault's own entries in the folder the list shows (not the vaults' list).
+function editable(nodes, view) {
+	const here = inVaults(view) ? writableHere() : null
+	return here !== null && nodes.length > 0 && nodes.every((node) => node.attributes?.cryptomatorVault === here.vault.seg)
+}
+
+async function renameNode(node) {
+	const here = writableHere()
+	const name = node.displayname
+	const newName = await askName(t('Rename'), t('New name'), (value) => {
+		try {
+			checkName(value)
+			return null
+		} catch (error) {
+			return message(error)
+		}
+	}, { initial: name, action: t('Rename') })
+	if (newName === null || newName.normalize('NFC') === name) {
+		return
+	}
+	await change(here, async () => {
+		try {
+			await here.vault.vault.moveEntry(here.dirId, name, here.dirId, newName)
+		} catch (error) {
+			showError(entryMessage(error, name))
+		}
+	})
+}
+
+async function moveNodes(nodes) {
+	const here = writableHere()
+	const { vault } = here.vault
+	// Folders being moved cannot be the target, nor anything inside them.
+	const excluded = new Set(nodes.filter((node) => node.type === FileType.Folder)
+		.map((node) => here.vault.dirs.get(node.basename)?.dirId).filter(Boolean))
+	const target = await chooseFolder(nodes.length === 1 ? t('Move “{name}” to …', { name: nodes[0].displayname }) : t('Move {count} items to …', { count: nodes.length }),
+		here.vault.name,
+		async (dirId) => (await vault.list(dirId)).filter((entry) => entry.type === 'dir').map((entry) => ({ name: entry.name, dirId: entry.dirId })),
+		excluded, t('Move here'))
+	if (target === null || target.dirId === here.dirId) {
+		return
+	}
+	await change(here, async () => {
+		const failed = []
+		for (const node of nodes) {
+			try {
+				await vault.moveEntry(here.dirId, node.displayname, target.dirId, undefined, { ancestors: target.ancestors })
+			} catch (error) {
+				failed.push(node.displayname + ': ' + entryMessage(error, node.displayname))
+			}
+		}
+		if (failed.length) {
+			showError(failed.join('\n'))
+		}
+	})
+}
+
+async function deleteNodes(nodes) {
+	const here = writableHere()
+	const folders = nodes.filter((node) => node.type === FileType.Folder).length
+	const title = nodes.length === 1 ? t('Delete “{name}”?', { name: nodes[0].displayname }) : t('Delete {count} items?', { count: nodes.length })
+	const text = (folders ? t('Folders are deleted with everything in them.') + ' ' : '')
+		+ t('The encrypted files go to Nextcloud\'s deleted files.')
+	if (!await confirmAction(title, text, t('Delete'))) {
+		return
+	}
+	await change(here, async () => {
+		const failed = []
+		for (const node of nodes) {
+			try {
+				await here.vault.vault.removeEntry(here.dirId, node.displayname)
+			} catch (error) {
+				failed.push(node.displayname + ': ' + entryMessage(error, node.displayname))
+			}
+		}
+		if (failed.length) {
+			showError(failed.join('\n'))
+		}
+	})
+}
+
+registerFileAction({
+	id: 'cryptomator-vaults-rename',
+	displayName: () => t('Rename'),
+	iconSvgInline: () => ICON_RENAME,
+	enabled: ({ nodes, view }) => editable(nodes, view) && nodes.length === 1,
+	async exec({ nodes }) {
+		await renameNode(nodes[0])
+		return null
+	},
+	order: -700,
+})
+
+registerFileAction({
+	id: 'cryptomator-vaults-move',
+	displayName: () => t('Move …'),
+	iconSvgInline: () => ICON_MOVE,
+	enabled: ({ nodes, view }) => editable(nodes, view),
+	async exec({ nodes }) {
+		await moveNodes(nodes)
+		return null
+	},
+	async execBatch({ nodes }) {
+		await moveNodes(nodes)
+		return nodes.map(() => null)
+	},
+	order: -690,
+})
+
+registerFileAction({
+	id: 'cryptomator-vaults-delete',
+	displayName: () => t('Delete'),
+	iconSvgInline: () => ICON_DELETE,
+	enabled: ({ nodes, view }) => editable(nodes, view),
+	async exec({ nodes }) {
+		await deleteNodes(nodes)
+		return null
+	},
+	async execBatch({ nodes }) {
+		await deleteNodes(nodes)
+		return nodes.map(() => null)
+	},
+	destructive: true,
+	order: 100,
+})
 
 registerFileListAction({
 	id: 'cryptomator-vaults-upload',

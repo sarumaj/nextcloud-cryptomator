@@ -5,6 +5,12 @@
  * vault's folder as the storage js/vault.js uses (encrypted files only), and the
  * search for folders that hold a vault.
  *
+ * A write succeeds on any 2xx that no redirect led to (a redirect could end on a
+ * sign-in page with 200): Nextcloud answers a part of a chunked upload to object
+ * storage with an empty 200, not the 201 it means (its plugin stops WebDAV before
+ * the response is sent). What a write stored is read back and compared anyway
+ * (js/vault.js).
+ *
  * Writing never overwrites by accident: a new file is put with If-None-Match: *
  * and moved with Overwrite: F, so the server refuses (412, VaultError 'exists')
  * where something of that name appeared meanwhile. A file is complete or absent:
@@ -64,7 +70,11 @@ function lastSegment(href) {
 	return decodeURIComponent(parts[parts.length - 1])
 }
 
-function davError(status, relative) {
+// The request's method in the message: which step failed (the paths are opaque).
+function davError(status, relative, method) {
+	if (status === 0) {
+		return new VaultError('network', (method ? method + ': ' : '') + 'redirected (signed out?)')
+	}
 	if (status === 404) {
 		return new VaultError('not-found', relative)
 	}
@@ -74,10 +84,15 @@ function davError(status, relative) {
 	if (status === 507) {
 		return new VaultError('quota', relative)
 	}
-	return new VaultError('network', 'HTTP ' + status)
+	return new VaultError('network', (method ? method + ': ' : '') + 'HTTP ' + status)
 }
 
-/** A request with the upload's progress (fetch reports none): resolves with the status. */
+/** Success of a write: a 2xx status, not reached through a redirect. */
+function succeeded(status, redirected) {
+	return status >= 200 && status < 300 && !redirected
+}
+
+/** A request with the upload's progress (fetch reports none): resolves with its status, 0 after a redirect. */
 function send(method, url, headers, body, onProgress) {
 	return new Promise((resolve, reject) => {
 		const request = new XMLHttpRequest()
@@ -88,17 +103,19 @@ function send(method, url, headers, body, onProgress) {
 		if (onProgress) {
 			request.upload.addEventListener('progress', (event) => onProgress(event.loaded, event.total))
 		}
-		request.addEventListener('load', () => resolve(request.status))
+		// A redirect followed (e.g. to a sign-in page) counts as no success.
+		request.addEventListener('load', () => resolve(new URL(request.responseURL, url).href === new URL(url, window.location.href).href ? request.status : 0))
 		request.addEventListener('error', () => reject(new VaultError('network', method + ' failed')))
 		request.addEventListener('abort', () => reject(new VaultError('network', method + ' aborted')))
 		request.send(body ?? null)
 	})
 }
 
-async function davRequest(method, url, headers, relative, accept) {
+/** A write with fetch: succeeds on a 2xx without redirect, or on one of the statuses in also. */
+async function davRequest(method, url, headers, relative, also = []) {
 	const response = await fetch(url, { method, headers: davHeaders(headers), credentials: 'same-origin' })
-	if (!accept.includes(response.status)) {
-		throw davError(response.status, relative)
+	if (!succeeded(response.status, response.redirected) && !also.includes(response.status)) {
+		throw davError(response.redirected ? 0 : response.status, relative, method)
 	}
 	return response
 }
@@ -114,14 +131,14 @@ export function davStorage(folder) {
 			+ 'cryptomator-vaults-' + crypto.randomUUID()
 		const target = new URL(url(relative), window.location.href).href
 		const common = { Destination: target, 'OC-Total-Length': String(data.length) }
-		await davRequest('MKCOL', uploads, { Destination: target }, relative, [201])
+		await davRequest('MKCOL', uploads, { Destination: target }, relative)
 		try {
 			for (let offset = 0, part = 1; offset < data.length; offset += CHUNK_SIZE, part++) {
 				const chunk = data.subarray(offset, Math.min(offset + CHUNK_SIZE, data.length))
 				const status = await send('PUT', uploads + '/' + String(part).padStart(5, '0'), common, chunk,
 					(done) => onProgress?.(offset + done, data.length))
-				if (status !== 201 && status !== 204) {
-					throw davError(status, relative)
+				if (!succeeded(status, false)) {
+					throw davError(status, relative, 'PUT (part ' + part + ')')
 				}
 			}
 			const response = await fetch(uploads + '/.file', {
@@ -129,8 +146,8 @@ export function davStorage(folder) {
 				headers: davHeaders({ ...common, Overwrite: create ? 'F' : 'T' }),
 				credentials: 'same-origin',
 			})
-			if (![201, 204].includes(response.status)) {
-				throw davError(response.status, relative)
+			if (!succeeded(response.status, response.redirected)) {
+				throw davError(response.redirected ? 0 : response.status, relative, 'MOVE (assembling the parts)')
 			}
 		} catch (error) {
 			await fetch(uploads, { method: 'DELETE', headers: davHeaders(), credentials: 'same-origin' }).catch(() => {})
@@ -145,7 +162,7 @@ export function davStorage(folder) {
 				throw new VaultError('not-found', relative)
 			}
 			if (!response.ok) {
-				throw new VaultError('network', 'HTTP ' + response.status)
+				throw new VaultError('network', 'GET: HTTP ' + response.status)
 			}
 			const total = Number(response.headers.get('Content-Length')) || 0
 			if (!onProgress || !response.body || total === 0) {
@@ -176,7 +193,7 @@ export function davStorage(folder) {
 				return null
 			}
 			if (response.status !== 207) {
-				throw davError(response.status, relative)
+				throw davError(response.status, relative, 'PROPFIND')
 			}
 			const [entry] = parseMultistatus(await response.text())
 			return { isDir: entry.isDir, size: entry.size }
@@ -187,23 +204,27 @@ export function davStorage(folder) {
 				return writeChunked(relative, data, create, onProgress)
 			}
 			const status = await send('PUT', url(relative), create ? { 'If-None-Match': '*' } : {}, data, onProgress)
-			if (status !== 201 && status !== 204) {
-				throw davError(status, relative)
+			if (!succeeded(status, false)) {
+				throw davError(status, relative, 'PUT')
 			}
 		},
 		async mkdir(relative, { existsOk = false } = {}) {
 			const response = await fetch(url(relative), { method: 'MKCOL', headers: davHeaders(), credentials: 'same-origin' })
-			if (response.status === 201 || (response.status === 405 && existsOk)) {
+			if (succeeded(response.status, response.redirected) || (response.status === 405 && existsOk)) {
 				return
 			}
-			throw davError(response.status, relative)
+			throw davError(response.status, relative, 'MKCOL')
 		},
 		/** Moves in one step; refused (VaultError 'exists') if the target is taken, unless overwrite. */
 		async move(from, to, { overwrite = false } = {}) {
-			await davRequest('MOVE', url(from), { Destination: new URL(url(to), window.location.href).href, Overwrite: overwrite ? 'T' : 'F' }, to, [201, 204])
+			await davRequest('MOVE', url(from), { Destination: new URL(url(to), window.location.href).href, Overwrite: overwrite ? 'T' : 'F' }, to)
+		},
+		/** Copies on the server; refused (VaultError 'exists') if the target is taken. */
+		async copy(from, to) {
+			await davRequest('COPY', url(from), { Destination: new URL(url(to), window.location.href).href, Overwrite: 'F' }, to)
 		},
 		async remove(relative) {
-			await davRequest('DELETE', url(relative), {}, relative, [204, 404])
+			await davRequest('DELETE', url(relative), {}, relative, [404])
 		},
 		async list(relative) {
 			const response = await fetch(base + (relative ? encodePath(relative) + '/' : ''), {
@@ -217,7 +238,7 @@ export function davStorage(folder) {
 				throw new VaultError('not-found', relative)
 			}
 			if (!response.ok) {
-				throw new VaultError('network', 'HTTP ' + response.status)
+				throw new VaultError('network', 'PROPFIND: HTTP ' + response.status)
 			}
 			// The first response is the folder itself.
 			return parseMultistatus(await response.text()).slice(1)

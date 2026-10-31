@@ -11,8 +11,9 @@
  * that unwraps the vault's two keys from the password, and AES-SIV (RFC 5297),
  * which encrypts the names, built on AES-CBC (for CMAC) and AES-CTR.
  *
- * Writing (Vault.writeFile, Vault.createDirectory) follows Cryptomator's format
- * and keeps the vault readable at every step; see "Writing" below.
+ * Writing (Vault.writeFile, Vault.createDirectory, Vault.moveEntry,
+ * Vault.removeEntry) follows Cryptomator's format and keeps the vault readable at
+ * every step; see "Writing" and "Renaming, moving, deleting" below.
  */
 (function (root, factory) {
 	'use strict'
@@ -889,6 +890,147 @@
 				throw new VaultError('corrupt', 'the new folder does not read back')
 			}
 			return { name, dirId: newId }
+		}
+
+		// ----- Renaming, moving, deleting -----
+		//
+		// A file's contents are not bound to its name or place, and a folder's entries
+		// live under its ID, not its name: renaming or moving changes an entry alone.
+		// Between two short names that is one move on the server. Where a long name
+		// (.c9s) is involved, the new entry is put together under a staging name (the
+		// contents copied on the server and checked), moved into place, and only then
+		// is the old one removed: a crash leaves both, never neither. Deleting a folder
+		// removes its entry first (all of it disappears at once), then the directories
+		// of everything that was in it.
+
+		/** An entry by name: {name, kind ('file', 'dir', 'link'), path, long, fullName, folder}, or null. */
+		async findEntry(dirId, rawName) {
+			const name = checkName(rawName)
+			const entry = await this.entryPath(dirId, name)
+			const kind = await this.existing(entry)
+			if (kind === null) {
+				return null
+			}
+			if (kind === 'unknown') {
+				throw new VaultError('corrupt', 'the entry of ' + name + ' is neither file, folder nor link')
+			}
+			return { ...entry, name, kind }
+		}
+
+		async entryDirId(entry) {
+			return decoder.decode(await this.storage.read(joinPath(entry.path, 'dir.c9r'))).trim()
+		}
+
+		/**
+		 * Renames and/or moves an entry: from a directory to another (or the same)
+		 * under a new (or the same) name. Refused where the new name is taken. A
+		 * folder moved to another directory needs options.ancestors, the IDs of the
+		 * target's directories from the vault's top ('' first): a folder cannot go into
+		 * itself or below itself. Returns {name}.
+		 */
+		async moveEntry(fromDirId, rawName, toDirId, rawNewName, options = {}) {
+			this.requireWritable()
+			const source = await this.findEntry(fromDirId, rawName)
+			if (source === null) {
+				throw new VaultError('not-found', String(rawName))
+			}
+			const name = checkName(rawNewName ?? source.name)
+			if (fromDirId === toDirId && name === source.name) {
+				return { name }
+			}
+			if (source.kind === 'dir' && fromDirId !== toDirId) {
+				const ancestors = options.ancestors
+				if (!Array.isArray(ancestors) || ancestors[ancestors.length - 1] !== toDirId) {
+					throw new VaultError('invalid-move', 'the target\'s ancestors are not known')
+				}
+				const own = await this.entryDirId(source)
+				if (ancestors.includes(own)) {
+					throw new VaultError('invalid-move', source.name)
+				}
+			}
+			const target = await this.entryPath(toDirId, name)
+			if (await this.existing(target) !== null) {
+				throw new VaultError('exists-other', name)
+			}
+			if (!source.long && !target.long) {
+				// A file, or the folder of a folder's or link's entry: one move.
+				await this.storage.move(source.path, target.path)
+				return { name }
+			}
+			await this.rebuildEntry(source, target)
+			await this.storage.remove(source.path)
+			return { name }
+		}
+
+		/**
+		 * Puts an entry together anew at another place (for a change between short
+		 * and long names): its files copied on the server into a staging name, a
+		 * file's contents checked (they decrypt and authenticate), then moved into
+		 * place in one step. The old entry stays.
+		 */
+		async rebuildEntry(source, target) {
+			const staging = this.stagingPath()
+			const marker = { file: 'contents.c9r', dir: 'dir.c9r', link: 'symlink.c9r' }[source.kind]
+			const from = source.long || source.kind !== 'file' ? joinPath(source.path, marker) : source.path
+			const stagedFile = target.long || source.kind !== 'file' ? joinPath(staging, marker) : staging
+			try {
+				if (stagedFile !== staging) {
+					await this.storage.mkdir(staging)
+				}
+				await this.storage.copy(from, stagedFile)
+				if (target.long) {
+					await this.storage.write(joinPath(staging, 'name.c9s'), encoder.encode(target.fullName), { create: true })
+				}
+				if (source.kind !== 'dir') {
+					await this.decryptContents(await this.storage.read(stagedFile))
+				} else if (decoder.decode(await this.storage.read(stagedFile)).trim() !== await this.entryDirId(source)) {
+					throw new VaultError('corrupt', 'the copied folder entry differs')
+				}
+				await this.storage.move(staging, target.path)
+			} catch (error) {
+				await this.storage.remove(staging).catch(() => {})
+				throw error
+			}
+		}
+
+		/** The IDs of a folder and of every folder below it. */
+		async subtree(dirId) {
+			const ids = [dirId]
+			for (const entry of await this.list(dirId)) {
+				if (entry.type === 'dir') {
+					ids.push(...await this.subtree(entry.dirId))
+				} else if (entry.type === 'broken' && entry.path.endsWith('.c9r')) {
+					// An entry that does not decrypt may still be a folder: its directory goes too.
+					const id = await this.storage.read(joinPath(entry.path, 'dir.c9r')).then((data) => decoder.decode(data).trim(), () => null)
+					if (id !== null) {
+						ids.push(...await this.subtree(id))
+					}
+				}
+			}
+			return ids
+		}
+
+		/**
+		 * Deletes an entry: a file or link, or a folder with everything in it (its
+		 * entry first, so that all of it disappears at once; then the directories of
+		 * the folder and of every folder below it). Returns {name, folders}.
+		 */
+		async removeEntry(dirId, rawName) {
+			this.requireWritable()
+			const source = await this.findEntry(dirId, rawName)
+			if (source === null) {
+				throw new VaultError('not-found', String(rawName))
+			}
+			if (source.kind !== 'dir') {
+				await this.storage.remove(source.path)
+				return { name: source.name, folders: 0 }
+			}
+			const owned = await this.subtree(await this.entryDirId(source))
+			await this.storage.remove(source.path)
+			for (const id of owned) {
+				await this.storage.remove(await this.dirPath(id))
+			}
+			return { name: source.name, folders: owned.length }
 		}
 	}
 

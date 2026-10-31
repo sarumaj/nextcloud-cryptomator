@@ -184,3 +184,58 @@
 	margin: 0 0 4px;
 	overflow-wrap: anywhere;
 }
+
+.cryptomator-crumbs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	list-style: none;
+	margin: 0 0 8px;
+	padding: 0;
+}
+
+.cryptomator-crumbs li + li::before {
+	content: '›';
+	margin: 0 6px;
+	color: var(--color-text-maxcontrast);
+}
+
+.cryptomator-crumbs button {
+	margin: 0;
+	padding: 2px 6px;
+	border: none;
+	background: transparent;
+}
+
+.cryptomator-crumbs [aria-current] {
+	font-weight: bold;
+	overflow-wrap: anywhere;
+}
+
+.cryptomator-folders {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	min-height: 120px;
+}
+
+.cryptomator-dialog button.cryptomator-folders__item {
+	display: block;
+	width: 100%;
+	margin: 0;
+	padding: 8px 12px;
+	border: none;
+	border-radius: var(--border-radius-large, 10px);
+	background-color: transparent;
+	text-align: start;
+	font-weight: normal;
+	overflow-wrap: anywhere;
+}
+
+.cryptomator-dialog button.cryptomator-folders__item::before {
+	content: '📁 ';
+}
+
+.cryptomator-dialog button.cryptomator-folders__item:hover:not(:disabled) {
+	background-color: var(--color-background-hover);
+}
