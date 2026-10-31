@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The page in a real browser against a real Nextcloud with the test vault in
-// /Vault (README.md, "Tests"): finds it, refuses a wrong password, unlocks,
-// browses, previews and downloads as Cryptomator wrote the files, locks, and
-// never sends the password to the server.
+// The integration in a real browser against a real Nextcloud with the test vault
+// in /Vault (README.md, "Tests"): the view "Vaults" in Files finds it, refuses a
+// wrong password, unlocks, browses in Files' own list, previews and downloads as
+// Cryptomator wrote the files, offers only its own actions on the vault's
+// entries, opens a vault from the person's files (its notice, its menu) and with
+// the file picker, and locks. Throughout, no
+// request may carry what the server must not learn: the password, a decrypted
+// name, a file's type (/core/mimeicon) or an entry's address.
 //
 //   NC_URL=http://localhost NC_USER=admin NC_PASSWORD=... node tests/e2e/check.mjs
 
@@ -16,30 +20,46 @@ const base = process.env.NC_URL
 const manifest = JSON.parse(readFileSync(new URL('../fixtures/vault-gcm.json', import.meta.url)))
 const PASSWORD = manifest.password
 const shots = process.env.SCREENSHOTS || ''
+// Every decrypted name in the vault: none may reach the server.
+const NAMES = [...new Set(Object.keys(manifest.entries).flatMap((path) => path.split('/')))]
+const OWN_ACTIONS = ['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock']
 
 // Web Crypto needs a secure origin: HTTPS, or the test Nextcloud at http://localhost.
 const browser = await chromium.launch()
-const page = await browser.newPage({ acceptDownloads: true, viewport: { width: 1100, height: 800 } })
+const page = await browser.newPage({ acceptDownloads: true, viewport: { width: 1280, height: 800 } })
 const problems = []
 const sent = []
-// A link's folder has no dir.c9r: the page asks for it (one request per folder, not two)
-// and the browser logs the 404.
-page.on('console', (message) => {
-	if (message.type() === 'error' && !/dir\.c9r/.test(message.location().url)) problems.push('console: ' + message.text())
-})
+const consoleLines = []
 page.on('pageerror', (error) => problems.push('page error: ' + error.message))
-page.on('request', (request) => sent.push(request.url() + '\n' + (request.postData() || '')))
+page.on('console', (message) => consoleLines.push(message.type() + ': ' + message.text()))
+page.on('request', (request) => sent.push({ url: decodeURIComponent(request.url()), body: request.postData() || '' }))
 
 const step = (text) => console.log('·', text)
-// An entry by its exact name (a link's line also shows its target's name).
-const entry = (name) => page.locator('.cryptomator-entry').filter({
-	has: page.locator('.cryptomator-entry__name', { hasText: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$') }),
-})
 process.on('uncaughtException', async (error) => {
-	console.error(error.message.split('\n')[0], '\nproblems:', problems)
+	console.error(error.message.split('\n')[0], '\nproblems:', problems, '\nconsole:', consoleLines.filter((line) => /^(error|warning)/.test(line)).slice(-10))
 	if (shots) await page.screenshot({ path: shots + '/failure.png', fullPage: true }).catch(() => {})
 	process.exit(1)
 })
+// Files shows a name's extension in an element of its own, whitespace between.
+const exact = (name) => {
+	const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+	const dot = name.lastIndexOf('.')
+	const pattern = dot > 0 ? escape(name.slice(0, dot)) + '\\s*' + escape(name.slice(dot)) : escape(name)
+	return new RegExp('^\\s*' + pattern + '\\s*$')
+}
+const row = (name) => page.locator('tr[data-cy-files-list-row]').filter({
+	has: page.locator('.files-list__row-name-text', { hasText: exact(name) }),
+})
+const openName = (name) => row(name).locator('[data-cy-files-list-row-name-link]').click()
+// The actions offered on an entry: those shown in its row and those of its menu.
+async function rowActions(name) {
+	const inline = await row(name).locator('[data-cy-files-list-row-action]:visible')
+		.evaluateAll((items) => items.map((item) => item.getAttribute('data-cy-files-list-row-action')))
+	await row(name).locator('[data-cy-files-list-row-actions] button[aria-haspopup]').last().click()
+	const menu = page.locator('[role="menu"]:visible [data-cy-files-list-row-action]')
+	await menu.first().waitFor()
+	return [...inline, ...await menu.evaluateAll((items) => items.map((item) => item.getAttribute('data-cy-files-list-row-action')))]
+}
 
 step('sign in')
 await page.goto(base + '/login')
@@ -48,60 +68,115 @@ await page.fill('#password', process.env.NC_PASSWORD)
 await page.click('button[type=submit]')
 await page.waitForURL(/apps/)
 sent.length = 0
-problems.length = 0
 
-step('the vault is found in the files')
+step('"Vaults" in the app menu leads to the view in Files, which lists the vault')
 await page.goto(base + '/index.php/apps/cryptomator_vaults/')
-await page.locator('.cryptomator-vault', { hasText: '/Vault' }).first().click()
+await page.waitForURL(/apps\/files\/cryptomator-vaults/)
+await row('Vault').waitFor()
+if (shots) await page.screenshot({ path: shots + '/vaults.png' })
 
-step('a wrong password is refused')
-await page.fill('.cryptomator-unlock input[type=password]', 'not the password')
-await page.click('.cryptomator-unlock button[type=submit]')
-await page.getByText('Wrong password.').waitFor()
+step('opening it asks for the password; a wrong one is refused')
+await openName('Vault')
+await page.locator('.cryptomator-dialog input[type=password]').fill('not the password')
+await page.locator('.cryptomator-dialog button[type=submit]').click()
+await page.locator('.cryptomator-dialog .cryptomator-notice--error', { hasText: 'Wrong password.' }).waitFor()
 
-step('the right one unlocks')
-await page.fill('.cryptomator-unlock input[type=password]', PASSWORD)
-await page.click('.cryptomator-unlock button[type=submit]')
-await page.locator('.cryptomator-entries').waitFor()
-const names = await page.locator('.cryptomator-entry__name').allTextContents()
+step('the right one shows the vault in Files\' list')
+await page.locator('.cryptomator-dialog input[type=password]').fill(PASSWORD)
+await page.locator('.cryptomator-dialog button[type=submit]').click()
+await row('hello.txt').waitFor()
+const names = (await page.locator('.files-list__row-name-text').allTextContents()).map((name) => name.trim().replace(/\s+(\.[^.\s]+)$/, '$1'))
 for (const name of Object.keys(manifest.entries).filter((path) => !path.includes('/'))) {
-	assert.ok(names.includes(name), `root lists ${name}: ${names.join(', ')}`)
+	assert.ok(names.includes(name), `lists ${name}: ${names.join(', ')}`)
 }
-if (shots) await page.screenshot({ path: shots + '/folder.png', fullPage: true })
+if (shots) await page.screenshot({ path: shots + '/folder.png' })
+
+step('only the vault\'s own actions are offered on its entries')
+const fileActions = await rowActions('hello.txt')
+await page.keyboard.press('Escape')
+assert.deepEqual(fileActions.filter((id) => !OWN_ACTIONS.includes(id)), [], `actions on a file: ${fileActions}`)
+assert.ok(fileActions.includes('cryptomator-vaults-download'), `download offered: ${fileActions}`)
 
 step('a text file is previewed')
-await entry('hello.txt').click()
+await openName('hello.txt')
 assert.equal(await page.locator('.cryptomator-preview--text').textContent(), 'Hello, vault!\n')
 if (shots) await page.screenshot({ path: shots + '/preview.png' })
-await page.click('.cryptomator-viewer__close')
+await page.locator('.cryptomator-dialog__close').click()
 
-step('folders open, and the trail leads back')
-await entry('Docs & Stuff').click()
-await entry('inner').click()
-await entry('deep.txt').click()
+step('folders open in Files, the breadcrumbs show their names, the address none')
+await openName('Docs & Stuff')
+await openName('inner')
+await row('deep.txt').waitFor()
+const crumbs = await page.locator('[data-cy-files-content-breadcrumbs]').textContent()
+assert.ok(crumbs.includes('Docs & Stuff') && crumbs.includes('inner'), `breadcrumbs: ${crumbs}`)
+const address = decodeURIComponent(page.url())
+assert.ok(!NAMES.some((name) => address.includes(name)), `the address names nothing: ${address}`)
+if (shots) await page.screenshot({ path: shots + '/nested.png' })
+await openName('deep.txt')
 assert.equal(await page.locator('.cryptomator-preview--text').textContent(), 'nested\n')
-await page.click('.cryptomator-viewer__close')
-await page.locator('.cryptomator-crumbs button').first().click()
-await entry('chunks.bin').waitFor()
+await page.locator('.cryptomator-dialog__close').click()
 
 step('a download is the file Cryptomator wrote')
-await entry('chunks.bin').click()
-const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.cryptomator-viewer button', { hasText: 'Download' }).click()])
+await page.goBack()
+await page.goBack()
+await row('chunks.bin').waitFor()
+await rowActions('chunks.bin')
+const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-cy-files-list-row-action="cryptomator-vaults-download"]:visible').click()])
 const chunks = []
 for await (const chunk of await download.createReadStream()) chunks.push(chunk)
 assert.equal(createHash('sha256').update(Buffer.concat(chunks)).digest('hex'), manifest.entries['chunks.bin'].sha256)
-await page.click('.cryptomator-viewer__close')
 
-step('Lock forgets the vault')
-await page.click('.cryptomator-lock')
-await page.getByText('The vault is locked.').waitFor()
-assert.equal(await page.locator('.cryptomator-entries').count(), 0)
+step('Lock forgets the vault: opening it asks again')
+await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
+await row('Vault').waitFor()
+const vaultActions = await rowActions('Vault')
+assert.ok(vaultActions.includes('cryptomator-vaults-lock'), `lock offered: ${vaultActions}`)
+await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-lock"]:visible').click()
+await openName('Vault')
+await page.locator('.cryptomator-dialog input[type=password]').waitFor()
+await page.locator('.cryptomator-dialog button', { hasText: 'Cancel' }).click()
+await page.getByText('Vault is locked').waitFor()
+assert.equal(await row('hello.txt').count(), 0, 'no decrypted names after the lock')
 
-step('the password never left the browser')
-const leaks = sent.filter((entry) => entry.includes(PASSWORD) || entry.includes(encodeURIComponent(PASSWORD)))
-assert.deepEqual(leaks, [], 'requests with the password')
-assert.ok(sent.some((entry) => entry.includes('/remote.php/dav/')), 'the files came over WebDAV')
+step('the vault\'s folder in the person\'s files is recognised: a notice offers to open it')
+await page.goto(base + '/index.php/apps/files/files?dir=/Vault')
+await row('vault.cryptomator').waitFor()
+await page.locator('.cryptomator-banner').waitFor()
+if (shots) await page.screenshot({ path: shots + '/banner.png' })
+await page.goto(base + '/index.php/apps/files/files?dir=/Vault/d')
+await page.locator('tr[data-cy-files-list-row]').first().waitFor()
+assert.equal(await page.locator('.cryptomator-banner').count(), 0, 'no notice outside a vault\'s folder')
+await page.goBack()
+await page.locator('.cryptomator-banner button').click()
+await page.locator('.cryptomator-dialog input[type=password]').waitFor()
+await page.locator('.cryptomator-dialog button', { hasText: 'Cancel' }).click()
 
+step('"Open vault" on its vault.cryptomator in the person\'s files')
+await page.goto(base + '/index.php/apps/files/files?dir=/Vault')
+await row('vault.cryptomator').waitFor()
+const plainActions = await rowActions('vault.cryptomator')
+assert.ok(plainActions.includes('cryptomator-vaults-open-vault'), `open vault offered: ${plainActions}`)
+await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-open-vault"]:visible').click()
+await page.locator('.cryptomator-dialog input[type=password]').fill(PASSWORD)
+await page.locator('.cryptomator-dialog button[type=submit]').click()
+await row('hello.txt').waitFor()
+
+step('"Open a vault folder …" chooses one with Nextcloud\'s file picker')
+await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
+await page.getByRole('button', { name: /Open a vault folder/ }).first().click()
+const picker = page.getByRole('dialog', { name: /Choose a vault/ })
+await picker.getByText('Vault', { exact: true }).first().click()
+await picker.getByRole('button', { name: 'Open vault' }).click()
+await row('hello.txt').waitFor()
+
+step('nothing the server must not learn left the browser')
 await browser.close()
+const leaks = sent.filter(({ url, body }) => {
+	const text = url + '\n' + body
+	return text.includes(PASSWORD) || text.includes('/core/mimeicon') || text.includes('/apps/cryptomator_vaults/cryptomator-vaults')
+		|| NAMES.some((name) => text.includes(name))
+})
+assert.deepEqual(leaks.map(({ url }) => url), [], 'requests the server must not see')
+assert.ok(sent.some(({ url }) => url.includes('/remote.php/dav/files/')), 'the files came over WebDAV')
 assert.deepEqual(problems, [], 'errors in the page')
-console.log(`ok: ${sent.length} requests, none with the password`)
+console.log(`ok: ${sent.length} requests, none with the password, a decrypted name, a file type or an entry's address`)

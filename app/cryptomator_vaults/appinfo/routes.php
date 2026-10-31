@@ -6,7 +6,7 @@ declare(strict_types=1);
 
 return [
 	'routes' => [
-		// The only page: everything else happens in the browser, over WebDAV.
+		// "Vaults" in the app menu: a redirect to the vaults' view in the Files app.
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 	],
 ];

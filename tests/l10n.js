@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// node tests/l10n.js: every string the page translates (t('…') in js/main.js) is
-// in every translation, and the .js and .json of a language agree.
+// node tests/l10n.js: every string the integration translates (t('…') in src/)
+// and the app menu's entry are in every translation, and the .js and .json of a
+// language agree.
 
 'use strict'
 
@@ -9,8 +10,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const app = path.join(__dirname, '..', 'app', 'cryptomator_vaults')
-const source = fs.readFileSync(path.join(app, 'js', 'main.js'), 'utf8')
-const wanted = new Set()
+const src = path.join(__dirname, '..', 'src')
+const source = fs.readdirSync(src).filter((name) => name.endsWith('.js'))
+	.map((name) => fs.readFileSync(path.join(src, name), 'utf8')).join('\n')
+// The app menu's entry (appinfo/info.xml) is translated with the app's strings.
+const wanted = new Set(['Vaults'])
 for (const match of source.matchAll(/\bt\('((?:[^'\\]|\\.)*)'/g)) {
 	wanted.add(match[1].replace(/\\'/g, "'"))
 }

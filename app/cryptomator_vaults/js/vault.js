@@ -360,7 +360,8 @@
 	/**
 	 * A vault in a storage: storage.read(path) gives a file's bytes (a VaultError
 	 * 'not-found' if it is missing) and storage.list(path) a folder's entries
-	 * ({name, isDir, size}); paths are relative to the vault's folder.
+	 * ({name, isDir, size, mtime (a Date, if known)}); paths are relative to the
+	 * vault's folder.
 	 */
 	class Vault {
 		constructor(storage, config, masterkeyFile) {
@@ -486,7 +487,8 @@
 		/**
 		 * The entries of a directory (the root's ID is ''): {name, type ('file',
 		 * 'dir', 'link'), size (of a file, decrypted), dirId (of a directory), path
-		 * (in the storage)}. An entry that does not decrypt is listed as type 'broken'.
+		 * (in the storage), mtime (the storage's, if known)}. An entry that does not
+		 * decrypt is listed as type 'broken'.
 		 */
 		async list(dirId) {
 			const folder = await this.dirPath(dirId)
@@ -499,6 +501,14 @@
 
 		async describe(folder, entry, dirId) {
 			const path = joinPath(folder, entry.name)
+			const described = await this.describeEntry(folder, entry, dirId, path)
+			if (described !== null && entry.mtime && !described.mtime) {
+				described.mtime = entry.mtime
+			}
+			return described
+		}
+
+		async describeEntry(folder, entry, dirId, path) {
 			try {
 				if (entry.name.endsWith('.c9s') && entry.isDir) {
 					// A long name: the encrypted name in name.c9s, the item beside it.
@@ -506,7 +516,7 @@
 					const inside = await this.storage.list(path)
 					const contents = inside.find((item) => item.name === 'contents.c9r')
 					if (contents) {
-						return { name, type: 'file', size: cleartextSize(this.scheme, contents.size), path: joinPath(path, 'contents.c9r') }
+						return { name, type: 'file', size: cleartextSize(this.scheme, contents.size), path: joinPath(path, 'contents.c9r'), mtime: contents.mtime }
 					}
 					return this.describeNode(name, path, inside.map((item) => item.name))
 				}

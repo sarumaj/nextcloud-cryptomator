@@ -1,0 +1,144 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The integration's dialogs (password, preview) and the empty view; Files draws the list. */
+
+.cryptomator-dialog {
+	position: fixed;
+	inset: 0;
+	z-index: 10000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	background: rgba(0, 0, 0, 0.6);
+	box-sizing: border-box;
+}
+
+.cryptomator-dialog__panel {
+	display: flex;
+	flex-direction: column;
+	width: min(1000px, 100%);
+	max-height: 100%;
+	padding: 16px;
+	border-radius: var(--border-radius-large, 10px);
+	background: var(--color-main-background);
+	box-sizing: border-box;
+}
+
+.cryptomator-dialog__panel h2 {
+	margin: 0 0 8px;
+	font-size: 1.3em;
+	overflow-wrap: anywhere;
+}
+
+.cryptomator-dialog__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.cryptomator-dialog__head h2 {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+}
+
+.cryptomator-dialog__meta {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9em;
+}
+
+.cryptomator-dialog__body {
+	flex: 1;
+	min-height: 0;
+	margin-top: 8px;
+	overflow: auto;
+}
+
+.cryptomator-dialog__body progress {
+	width: 100%;
+}
+
+.cryptomator-notice {
+	margin: 8px 0;
+	color: var(--color-text-maxcontrast);
+}
+
+.cryptomator-notice--error {
+	color: var(--color-error-text, var(--color-error));
+}
+
+.cryptomator-unlock {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 8px;
+	margin: 8px 0;
+}
+
+.cryptomator-unlock label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.cryptomator-preview {
+	display: block;
+	max-width: 100%;
+	max-height: 75vh;
+	margin: 0 auto;
+}
+
+.cryptomator-preview--frame {
+	width: 100%;
+	height: 75vh;
+	border: none;
+}
+
+.cryptomator-preview--text {
+	margin: 0;
+	padding: 8px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	text-align: start;
+	background: var(--color-background-dark);
+	border-radius: var(--border-radius, 4px);
+}
+
+.cryptomator-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 32px 16px;
+	text-align: center;
+}
+
+.cryptomator-empty h2 {
+	margin: 0;
+}
+
+/* The notice above a vault's folder in the person's files. */
+.cryptomator-banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+	margin: 8px 12px;
+	padding: 10px 14px;
+	border-radius: var(--border-radius-large, 10px);
+	background: var(--color-primary-element-light, var(--color-background-hover));
+	color: var(--color-primary-element-light-text, var(--color-main-text));
+}
+
+.cryptomator-banner__icon svg {
+	display: block;
+	width: 24px;
+	height: 24px;
+	fill: currentColor;
+}
+
+.cryptomator-banner__text {
+	flex: 1;
+	min-width: 200px;
+}

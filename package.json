@@ -1,0 +1,19 @@
+{
+  "name": "nextcloud-cryptomator",
+  "private": true,
+  "description": "Build of the Nextcloud app cryptomator_vaults (app/cryptomator_vaults)",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "build": "vite build",
+    "test": "node --test tests/vault.test.js && node tests/l10n.js"
+  },
+  "devDependencies": {
+    "@nextcloud/auth": "^2.6.0",
+    "@nextcloud/dialogs": "^8.0.0",
+    "@nextcloud/event-bus": "^3.3.3",
+    "@nextcloud/files": "^4.1.1",
+    "@nextcloud/l10n": "^3.4.1",
+    "@nextcloud/router": "^3.2.0",
+    "vite": "^7.3.7"
+  }
+}
