@@ -81,7 +81,7 @@ jobs:
   # from its release.
   compat:
     runs-on: docker
-    container: docker.io/library/maven:3.9.11-eclipse-temurin-25
+    container: docker.io/library/maven:3.10.0-eclipse-temurin-25
     timeout-minutes: 15
     env:
       NODE_VERSION: v24.22.2
