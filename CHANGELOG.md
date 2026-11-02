@@ -27,6 +27,7 @@
   shapes, groups, rounded and round shapes, bullets, and PowerPoint's default table style. Still
   left out: animations, charts, SmartArt and effects such as shadows.
 - The vault picker (**Open a vault folder …**) starts at the top of your files.
+- Markdown previews use marked 18.1.2 (was 18.1.1).
 
 ## 0.5.2
 
@@ -115,3 +116,4 @@
 - First version: finds the vaults in your files, unlocks one in the browser (vault format 8,
   `SIV_GCM` and `SIV_CTRMAC`), browses its folders, previews and downloads its files, and locks
   after 15 minutes without use. Read only.
+- German and Polish translations.
