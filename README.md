@@ -248,9 +248,10 @@ store's schema.
   writes the entries it expects; copy the vault out of Nextcloud's data directory afterwards (or
   download it over WebDAV) and run `Verify.java` on it to check what Nextcloud stored. Run it also
   against a Nextcloud with object storage as primary storage and Redis, as servers usually are:
-  Nextcloud's chunked uploads take another path there (and answer a part with 200, not 201). Run it against each new Nextcloud version: the integration
-  relies on how Files decides what to offer. Web Crypto needs HTTPS or `localhost`, so run the
-  browser in the Nextcloud container's network:
+  Nextcloud's chunked uploads take another path there (and answer a part with 200, not 201). Run
+  it against each new Nextcloud version: the integration relies on how Files decides what to
+  offer. Web Crypto needs HTTPS or `localhost`, so run the browser in the Nextcloud container's
+  network:
 
   ```bash
   docker run --rm --network container:<nextcloud> -v "$PWD:/repo" -w /repo \
