@@ -115,7 +115,7 @@ A sync client that finds a file changed on both sides keeps a copy beside it (e.
 folder: it gives a copy its proper name if that is free, deletes a duplicate of a folder or link,
 and otherwise renames the copy so that both files show.
 
-## How it works, and what it protects
+## How it works
 
 The server only serves the app's scripts. Everything else runs in the browser:
 
@@ -208,69 +208,27 @@ CI checks that it is what `src/` builds. The integration uses `@nextcloud/files`
 actions) and loads `@nextcloud/dialogs` (toasts, the file picker, with Vue) only when first needed,
 so that Files loads about 50 KB more (gzipped), not 350 KB.
 
-CI (`.forgejo/workflows/ci.yml`) also lints the PHP and checks `appinfo/info.xml` against the app
-store's schema.
+CI (`.forgejo/workflows/ci.yml`) also lints the PHP, checks it with php-cs-fixer and Psalm,
+checks `appinfo/info.xml` against the app store's schema and the Markdown with markdownlint.
 
-### Tests
+The PHP follows Nextcloud's coding standard and is checked by Psalm against Nextcloud's public
+API (`nextcloud/ocp`); composer holds only these tools, the app needs none:
 
-- **The primitives** against their RFCs' test vectors: scrypt (RFC 7914) and AES-SIV (RFC 5297).
-- **The vaults** in `tests/fixtures/` were written by Cryptomator's own library (cryptofs), one
-  per cipher combination, with names that need shortening, a link, nested and empty folders and
-  files across chunk boundaries. `vault-*.json` lists every entry with its size and SHA-256, and
-  the test compares everything it decrypts against it. To write them again (needs Docker; the
-  new vaults have new keys):
+```bash
+composer install
+composer cs:check                 # composer cs:fix to reformat
+composer psalm
+npx --yes markdownlint-cli2 "*.md" "docs/**/*.md"
+```
 
-  ```bash
-  docker run --rm -v "$PWD/tests/fixtures:/f" -w /f/generator maven:3.9.11-eclipse-temurin-25 \
-    sh -c 'mvn -q dependency:copy-dependencies -DoutputDirectory=/tmp/l &&
-      javac -encoding UTF-8 -cp "/tmp/l/*" -d /tmp/c src/main/java/Generate.java &&
-      java -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -cp "/tmp/c:/tmp/l/*" Generate /f'
-  ```
+What the tests cover, and how to release: [developer's guide](docs/developer.md).
 
-- **Writing** (`tests/write.test.js`): the format's edges (names of exactly 220 and 224 encrypted
-  characters around the shortening threshold, decomposed Unicode, empty files, a full chunk, long
-  names, nested new folders), what is refused (a taken name, a folder in the way, unusable names),
-  and a storage that changes a file on the way, which must never reach the vault, not even when
-  replacing.
-- **Renaming, moving, deleting** (`tests/write.test.js`, `editSamples` in `tests/samples.js`):
-  every change between short and long names for files and folders, moves into other folders (also
-  below a moved folder, and with a new name), what is refused (a folder into itself, a taken name),
-  and deletions of files, a link and a folder with folders in it, leaving no directory that no
-  entry leads to.
-- **Compatibility** (`tests/compat.sh`, needs Java 25 and Maven, or Docker): the same writes,
-  renames, moves and deletions in copies of the test vaults, then Cryptomator's own library
-  (`Verify.java`) opens each vault, looks up every file by its path as Cryptomator does, reads it,
-  and runs cryptofs' health checks. Its
-  entries must be exactly the expected ones, and the health checks must find nothing, also with the
-  staging leftovers of a browser that died midway.
-- **The integration** in a real browser, `tests/e2e/check.mjs` (Playwright), against a Nextcloud
-  with this app and `tests/fixtures/vault-gcm` uploaded as `/Vault`. It opens *Vaults*, refuses a
-  wrong password, unlocks, browses in Files' list, previews, downloads, creates a folder, uploads
-  (a 25 MB file in chunks, a replacement after asking, a file into the new folder), renames, moves a
-  folder into another, deletes a link and a folder, stays in *Vaults* on the browser's Back, checks
-  that only
-  the app's own actions are offered on the vault's entries, opens the vault from the notice and
-  from its `vault.cryptomator`, and locks. It fails if any request carried the password, a
-  decrypted name or content, a file type icon or an entry's address. With `EXPECTED_OUT` set, it
-  writes the entries it expects; copy the vault out of Nextcloud's data directory afterwards (or
-  download it over WebDAV) and run `Verify.java` on it to check what Nextcloud stored. Run it also
-  against a Nextcloud with object storage as primary storage and Redis, as servers usually are:
-  Nextcloud's chunked uploads take another path there (and answer a part with 200, not 201). Run
-  it against each new Nextcloud version: the integration relies on how Files decides what to
-  offer. Web Crypto needs HTTPS or `localhost`, so run the browser in the Nextcloud container's
-  network:
+## Reporting problems
 
-  ```bash
-  docker run --rm --network container:<nextcloud> -v "$PWD:/repo" -w /repo \
-    -e NC_URL=http://localhost -e NC_USER=admin -e NC_PASSWORD=... \
-    mcr.microsoft.com/playwright:v1.49.1-noble \
-    sh -c 'npm i --no-save playwright@1.49.1 && node tests/e2e/check.mjs'
-  ```
-
-To release, tag `vX.Y.Z` with the version in `appinfo/info.xml`. The release workflow
-(`.forgejo/workflows/release.yml`) builds `cryptomator_vaults-X.Y.Z.tar.gz` and attaches it to the
-release; with the secrets `APP_SIGNING_KEY` and `APPSTORE_TOKEN` it also signs it and publishes it
-on the app store.
+Open an issue on Forgejo,
+[dawid/nextcloud-cryptomator](https://git.ciepiela.org/dawid/nextcloud-cryptomator/issues), or on
+its GitHub mirror, [sarumaj/nextcloud-cryptomator](https://github.com/sarumaj/nextcloud-cryptomator/issues).
+Security problems privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Licence
 

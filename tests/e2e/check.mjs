@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // The integration in a real browser against a real Nextcloud with the test vault
-// in /Vault (README.md, "Tests"): the view "Vaults" in Files finds it, refuses a
+// in /Vault (docs/developer.md, "Tests"): the view "Vaults" in Files finds it, refuses a
 // wrong password, unlocks, browses in Files' own list, previews and downloads as
 // Cryptomator wrote the files, creates a folder and uploads files (one in chunks,
 // one replacing another, a folder with a folder in it), previews office documents
@@ -575,7 +575,7 @@ await page.getByText('The vault is healthy').waitFor({ timeout: 60000 })
 await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
 assert.equal((await dav('PROPFIND', ROOT_DIR + '/dirid.c9r', undefined, { Depth: '0' })).status, 207, 'written again')
 
-// For the check with Cryptomator's own library afterwards (README.md, "Tests").
+// For the check with Cryptomator's own library afterwards (docs/developer.md, "Tests").
 if (process.env.EXPECTED_OUT) {
 	const expected = {}
 	for (const [path, value] of Object.entries(manifest.entries)) {
