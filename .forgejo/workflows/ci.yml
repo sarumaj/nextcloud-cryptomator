@@ -1,17 +1,18 @@
 ---
 # The app's PHP and JavaScript must parse, the PHP must follow Nextcloud's coding
 # standard (php-cs-fixer) and pass Psalm, its info.xml must pass the app store's
-# schema, the committed build (js/cryptomator_vaults-*.mjs) must be what src/
-# builds, its translations must cover the integration, the tests (Node, no
-# Nextcloud and no network: tests/vault.test.js, tests/write.test.js) must pass, and
-# Cryptomator's own library must read what the app writes (tests/compat.sh).
+# schema, the Markdown must pass markdownlint, the committed build
+# (js/cryptomator_vaults-*.mjs) must be what src/ builds, its translations must
+# cover the integration, the tests (Node, no Nextcloud and no network:
+# tests/vault.test.js, tests/write.test.js) must pass, and Cryptomator's own
+# library must read what the app writes (tests/compat.sh).
 name: CI
 # A failed job mails whoever started the run. Renovate's bot has no mailbox: when its
 # branch fails, Renovate opens a pull request, which mails the repository's watchers.
 enable-email-notifications: true
 "on":
   push:
-    branches: [main, renovate/all-patch]
+    branches: [main, "renovate/**"]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -79,6 +80,9 @@ jobs:
           # Its build goes to a folder of its own: the app's must be as committed.
           test -z "$(git status --porcelain -- app/cryptomator_vaults)" \
             || { git status --porcelain -- app/cryptomator_vaults; echo "::error::npm run notice changed the app's folder"; exit 1; }
+
+      - name: Check the Markdown with markdownlint
+        run: npx --yes markdownlint-cli2 "*.md" "docs/**/*.md"
 
       - name: Check the translations are valid and complete
         run: node tests/l10n.js
