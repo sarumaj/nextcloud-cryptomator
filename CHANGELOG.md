@@ -13,6 +13,8 @@
 
 ### Changed
 
+- Releases through the shared action `nextcloud-app-release` of `dawid/ci-actions`: the release's
+  text is the version's section of this changelog, and a tag without one fails.
 - The app requires PHP 8.2, as Nextcloud 32 does.
 - The changelog follows Keep a Changelog, with each version's date.
 
