@@ -24,8 +24,12 @@ Not affiliated with Skymatic GmbH, the makers of Cryptomator.]]></description>
     <website>https://git.ciepiela.org/dawid/nextcloud-cryptomator</website>
     <bugs>https://git.ciepiela.org/dawid/nextcloud-cryptomator/issues</bugs>
     <repository>https://git.ciepiela.org/dawid/nextcloud-cryptomator</repository>
+    <screenshot>https://git.ciepiela.org/dawid/nextcloud-cryptomator/raw/branch/main/screenshots/1-open.png</screenshot>
+    <screenshot>https://git.ciepiela.org/dawid/nextcloud-cryptomator/raw/branch/main/screenshots/2-unlock.png</screenshot>
+    <screenshot>https://git.ciepiela.org/dawid/nextcloud-cryptomator/raw/branch/main/screenshots/3-entry-menu.png</screenshot>
+    <screenshot>https://git.ciepiela.org/dawid/nextcloud-cryptomator/raw/branch/main/screenshots/4-vault-menu.png</screenshot>
     <dependencies>
-        <php min-version="8.1"/>
+        <php min-version="8.2"/>
         <nextcloud min-version="32" max-version="36"/>
     </dependencies>
     <navigations>

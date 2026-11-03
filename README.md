@@ -21,6 +21,13 @@ app: open their folders, preview, download and upload files, without installing 
 
 Not affiliated with Skymatic GmbH, the makers of Cryptomator.
 
+## Screenshots
+
+|                                                                          |                                                           |
+| ------------------------------------------------------------------------ | --------------------------------------------------------- |
+| ![An unlocked vault in Files, with the lock bar](screenshots/1-open.png) | ![Unlocking a vault](screenshots/2-unlock.png)            |
+| ![An entry's menu in a vault](screenshots/3-entry-menu.png)              | ![A vault's menu in Vaults](screenshots/4-vault-menu.png) |
+
 ## Requirements
 
 - Nextcloud 32 to 36, reached over **HTTPS**: browsers offer their encryption (Web Crypto) only
