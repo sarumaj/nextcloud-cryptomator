@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Screenshots in the README and on the app store (`screenshots/`, `<screenshot>` in
+  `appinfo/info.xml`).
+- Development checks in CI: php-cs-fixer with Nextcloud's coding standard and Psalm against
+  `nextcloud/ocp` (`composer.json` holds these tools only), and markdownlint.
+- `AGENTS.md`, `SECURITY.md`, `docs/developer.md` (the tests and releasing, from the README),
+  `.editorconfig`, and the AI review workflow.
+
+### Changed
+
+- The app requires PHP 8.2, as Nextcloud 32 does.
+- The changelog follows Keep a Changelog, with each version's date.
+
 ## [0.7.0] - 2026-10-31
 
 ### Added
