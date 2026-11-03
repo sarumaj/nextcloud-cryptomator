@@ -1430,15 +1430,15 @@ const wa = {
   pptx: async (e) => (await import("./cryptomator_vaults-office-DHvoruxl.mjs")).pptxPage(e),
   odp: async (e) => (await import("./cryptomator_vaults-office-DHvoruxl.mjs")).odpPage(e),
   odt: async (e) => (await import("./cryptomator_vaults-office-DHvoruxl.mjs")).odtPage(e),
-  markdown: async (e) => (await import("./cryptomator_vaults-previews-B_i4ypfy.mjs")).markdownPage(e),
-  zip: async (e) => (await import("./cryptomator_vaults-previews-B_i4ypfy.mjs")).zipPage(e)
+  markdown: async (e) => (await import("./cryptomator_vaults-previews-9VMwwVCs.mjs")).markdownPage(e),
+  zip: async (e) => (await import("./cryptomator_vaults-previews-9VMwwVCs.mjs")).zipPage(e)
 };
 function fn(e) {
   return e in wa || e === "heic";
 }
 async function wn(e, a, o) {
   if (e.kind === "heic") {
-    const u = await (await import("./cryptomator_vaults-previews-B_i4ypfy.mjs")).heicToPng(a);
+    const u = await (await import("./cryptomator_vaults-previews-9VMwwVCs.mjs")).heicToPng(a);
     return y("img", { class: "cryptomator-preview", src: Se(u, "image/png"), alt: o });
   }
   const l = await wa[e.kind](a);
