@@ -1,0 +1,30 @@
+{
+    "name": "dawid/nextcloud-cryptomator",
+    "description": "Development tools of the Nextcloud app cryptomator_vaults (app/cryptomator_vaults); not part of the app",
+    "license": "AGPL-3.0-or-later",
+    "type": "project",
+    "require": {
+        "php": ">=8.2"
+    },
+    "require-dev": {
+        "nextcloud/coding-standard": "^1.4",
+        "nextcloud/ocp": "dev-stable32",
+        "vimeo/psalm": "^6.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "OCA\\CryptomatorVaults\\": "app/cryptomator_vaults/lib/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "platform": {
+            "php": "8.2.27"
+        }
+    },
+    "scripts": {
+        "cs:check": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "psalm": "psalm --no-cache --threads=1"
+    }
+}

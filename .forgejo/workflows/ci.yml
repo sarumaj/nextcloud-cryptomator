@@ -1,7 +1,8 @@
 ---
-# The app's PHP and JavaScript must parse, its info.xml must pass the app
-# store's schema, the committed build (js/cryptomator_vaults-*.mjs) must be what
-# src/ builds, its translations must cover the integration, the tests (Node, no
+# The app's PHP and JavaScript must parse, the PHP must follow Nextcloud's coding
+# standard (php-cs-fixer) and pass Psalm, its info.xml must pass the app store's
+# schema, the committed build (js/cryptomator_vaults-*.mjs) must be what src/
+# builds, its translations must cover the integration, the tests (Node, no
 # Nextcloud and no network: tests/vault.test.js, tests/write.test.js) must pass, and
 # Cryptomator's own library must read what the app writes (tests/compat.sh).
 name: CI
@@ -40,6 +41,15 @@ jobs:
           apk add -q libxml2-utils
           wget -q -O /tmp/info.xsd https://apps.nextcloud.com/schema/apps/info.xsd
           xmllint --noout --schema /tmp/info.xsd app/cryptomator_vaults/appinfo/info.xml
+
+      - name: Install the development tools
+        run: composer install -q --no-interaction --no-progress
+
+      - name: Check the PHP follows Nextcloud's coding standard
+        run: composer cs:check
+
+      - name: Check the PHP with Psalm
+        run: composer psalm
 
   javascript:
     runs-on: docker

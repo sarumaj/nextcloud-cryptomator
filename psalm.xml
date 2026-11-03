@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- The app's PHP against Nextcloud's public API (nextcloud/ocp), as the lowest supported
+     Nextcloud ships it. Level 4 passes; the baseline holds the methods without #[\Override],
+     an attribute PHP 8.2, the lowest PHP the app supports, does not know. -->
+<psalm
+    errorLevel="4"
+    resolveFromConfigFile="true"
+    errorBaseline="psalm-baseline.xml"
+    findUnusedBaselineEntry="true"
+    findUnusedCode="false"
+    phpVersion="8.2"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+>
+    <projectFiles>
+        <directory name="app/cryptomator_vaults/appinfo"/>
+        <directory name="app/cryptomator_vaults/lib"/>
+    </projectFiles>
+    <stubs>
+        <file name="tests/stubs/files.php"/>
+    </stubs>
+    <extraFiles>
+        <directory name="vendor/nextcloud/ocp"/>
+    </extraFiles>
+</psalm>
