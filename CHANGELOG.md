@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 - 2026-11-03
+
+### Fixed
+
+- The app's build has marked 18.1.3 (Markdown previews), as `package-lock.json` does: 0.8.0
+  still shipped the build with 18.1.2.
+
 ## 0.8.0 - 2026-11-03
 
 ### Added
