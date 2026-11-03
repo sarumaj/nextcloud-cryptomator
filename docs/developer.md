@@ -58,7 +58,7 @@
 
 ## Releasing
 
-1. Move the `## [Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD` and set
+1. Move the `## Unreleased` entries of `CHANGELOG.md` under `## X.Y.Z - YYYY-MM-DD` and set
    `<version>` in `appinfo/info.xml` to `X.Y.Z`.
 2. Commit as `release X.Y.Z`.
 3. Tag it, annotated and signed: `git tag -s vX.Y.Z -m "Vaults for Cryptomator X.Y.Z"`, and push

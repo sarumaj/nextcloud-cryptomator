@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## Unreleased
 
 ### Added
 
@@ -16,7 +16,7 @@
 - The app requires PHP 8.2, as Nextcloud 32 does.
 - The changelog follows Keep a Changelog, with each version's date.
 
-## [0.7.0] - 2026-10-31
+## 0.7.0 - 2026-10-31
 
 ### Added
 
@@ -29,7 +29,7 @@
 - Tests: cryptofs opens the vaults made here, after a password change and a reset; its findings on
   damaged vaults are the app's, and a vault the app repaired reads like one cryptofs repaired.
 
-## [0.6.0] - 2026-10-31
+## 0.6.0 - 2026-10-31
 
 ### Added
 
@@ -52,7 +52,7 @@
 - The vault picker (**Open a vault folder …**) starts at the top of your files.
 - Markdown previews use marked 18.1.2 (was 18.1.1).
 
-## [0.5.2] - 2026-10-31
+## 0.5.2 - 2026-10-31
 
 ### Changed
 
@@ -68,14 +68,14 @@
   combined the new one with the old version's shared module. Every other module's name now carries
   a hash of its contents.
 
-## [0.5.1] - 2026-10-31
+## 0.5.1 - 2026-10-31
 
 ### Added
 
 - Unlocking a vault removes the staging files and folders older than a day that uploads which never
   finished (a browser closed midway) left in its top folder.
 
-## [0.5.0] - 2026-10-31
+## 0.5.0 - 2026-10-31
 
 ### Added
 
@@ -102,7 +102,7 @@
 
 - The app is now called **Vaults for Cryptomator** (its ID stays `cryptomator_vaults`).
 
-## [0.4.1] - 2026-10-31
+## 0.4.1 - 2026-10-31
 
 ### Changed
 
@@ -111,7 +111,7 @@
   per vault. An entry saved by Cryptomator's apps has the app as its address, not the site: add the
   site to it (see the README).
 
-## [0.4.0] - 2026-10-31
+## 0.4.0 - 2026-10-31
 
 ### Added
 
@@ -131,7 +131,7 @@
   positive IDs above 2^52, and other apps' actions are switched off for a vault's entries in any
   view, not only in *Vaults*.
 
-## [0.3.0] - 2026-10-31
+## 0.3.0 - 2026-10-31
 
 ### Added
 
@@ -143,7 +143,7 @@
 - `tests/compat.sh` (also in CI) has Cryptomator's own library read what the app writes, look up
   every file by its path and run its health checks.
 
-## [0.2.0] - 2026-10-31
+## 0.2.0 - 2026-10-31
 
 ### Added
 
@@ -160,7 +160,7 @@
   icon (Files would ask the server for each file type's icon), and other apps' actions are not
   offered on a vault's entries.
 
-## [0.1.0] - 2026-10-31
+## 0.1.0 - 2026-10-31
 
 ### Added
 
