@@ -42,6 +42,9 @@ npx --yes markdownlint-cli2 "*.md" "docs/**/*.md"
 - Markdown: lines of at most 100 characters (tables excepted), tables aligned.
 - PHP, JavaScript and CSS indented with tabs (`.editorconfig`); PHP formatted by `composer cs:fix`.
   A reformatting is a commit of its own.
+- Settings save as they change, as Nextcloud's own do (its declarative forms, or a page of our
+  own doing the same): no Save button; what happened is shown (saved, or why not, at the field),
+  never silently. The README and `docs/` name where the settings are, by Nextcloud's menu names.
 - Every source file starts with `SPDX-License-Identifier: AGPL-3.0-or-later`.
 - The privacy promise: nothing decrypted (names, contents, file types) and no password reaches
   the server, except what an export is asked to write. `tests/e2e/check.mjs` checks the requests.

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The README says that the app has no settings on the server, and where its one choice is (moving
+  inbox files automatically on unlock, kept in the browser).
+
 ## 0.9.0 - 2026-11-04
 
 ### Added

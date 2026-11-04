@@ -46,6 +46,10 @@ Unpack a release's `cryptomator_vaults-X.Y.Z.tar.gz` into `custom_apps/` and run
 `occ app:enable cryptomator_vaults`. Files gets *Vaults* in its navigation; *Vaults* in the app
 menu leads there.
 
+It has no settings on the server, for the admin or anyone: the password, the keys and the one
+choice it offers (in *Vaults*, under a vault's inbox notice: **Move files from inboxes
+automatically when I unlock**) stay in each person's browser.
+
 ## Using it
 
 1. Open a vault, in one of these ways:
