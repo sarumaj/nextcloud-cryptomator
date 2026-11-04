@@ -16,6 +16,10 @@
       java -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -cp "/tmp/c:/tmp/l/*" Generate /f'
   ```
 
+  Changed copies of them, made in the test: the configuration signed anew with HS384 and HS512
+  (opens) and with `none`, RS256 and others (refused), a key file with a tampered `versionMac`
+  (corrupt) or another version than 999 (refused).
+
 - **Writing** (`tests/write.test.js`): the format's edges (names of exactly 220 and 224 encrypted
   characters around the shortening threshold, decomposed Unicode, empty files, a full chunk, long
   names, nested new folders), what is refused (a taken name, a folder in the way, unusable names),

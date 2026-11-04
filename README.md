@@ -132,8 +132,10 @@ The server only serves the app's scripts. Everything else runs in the browser:
 
 1. It reads the vault's files over WebDAV, as the Files app does, with your Nextcloud login.
 2. `js/vault.js` derives the key from your password (scrypt) and unwraps the vault's two keys
-   with it. It checks that the configuration `vault.cryptomator` is signed with them, then keeps
-   them as keys the browser won't export.
+   with it. It checks, as Cryptomator does, that the key file's version (999) is authenticated
+   with them (`versionMac`) and that the configuration `vault.cryptomator` is signed with them
+   (HS256, HS384 or HS512; any other algorithm is refused), then keeps them as keys the browser
+   won't export.
 3. It decrypts names (AES-SIV) and contents (AES-GCM, or AES-CTR with HMAC), and checks that
    each part is authentic: a changed byte is reported, not shown.
 4. `src/files.js` hands the decrypted folders to Files as a view of its own.

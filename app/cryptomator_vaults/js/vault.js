@@ -404,9 +404,11 @@
 	// As cryptolib (MasterkeyFileAccess) and cryptofs (VaultConfig) write them: the
 	// two 32-byte keys wrapped (AES-KW) with a key derived from the password by
 	// scrypt (8 bytes of salt, N = 2^15, r = 8), a version field from before vault
-	// format 8 with its HMAC; the configuration a JWT (HS256) signed with both keys.
+	// format 8 with its HMAC; the configuration a JWT signed with both keys (HS256
+	// as cryptofs writes it; HS384 and HS512 read too, as cryptofs reads them).
 
 	const MASTERKEY_VERSION = 999
+	const JWT_HASHES = { HS256: 'SHA-256', HS384: 'SHA-384', HS512: 'SHA-512' }
 	const SCRYPT_COST = 2 ** 15
 	const SCRYPT_BLOCK_SIZE = 8
 	const SHORTENING_THRESHOLD = 220
@@ -421,16 +423,50 @@
 		}
 	}
 
-	/** The raw keys {encRaw, macRaw} of a key file, or a VaultError 'wrong-password'. */
+	/**
+	 * The raw keys {encRaw, macRaw} of a key file, or a VaultError 'wrong-password';
+	 * 'unsupported-format' for a version other than Cryptomator 1.6's (999), and
+	 * 'corrupt' if the version's HMAC (versionMac) does not authenticate with the
+	 * MAC key, as cryptolib checks it.
+	 */
 	async function unwrapKeys(file, password) {
+		if (file.version !== MASTERKEY_VERSION) {
+			throw new VaultError('unsupported-format', 'key file version ' + file.version)
+		}
 		const kek = await deriveKek(password, base64Decode(file.scryptSalt), file.scryptCostParam, file.scryptBlockSize, ['unwrapKey'])
+		let keys
 		try {
 			const unwrap = async (wrapped) => new Uint8Array(await subtle.exportKey('raw',
 				await subtle.unwrapKey('raw', base64Decode(wrapped), kek, 'AES-KW', { name: 'HMAC', hash: 'SHA-256' }, true, ['sign'])))
-			return { encRaw: await unwrap(file.primaryMasterKey), macRaw: await unwrap(file.hmacMasterKey) }
+			keys = { encRaw: await unwrap(file.primaryMasterKey), macRaw: await unwrap(file.hmacMasterKey) }
 		} catch {
 			throw new VaultError('wrong-password')
 		}
+		if (!(await authenticVersion(keys.macRaw, file))) {
+			keys.encRaw.fill(0)
+			keys.macRaw.fill(0)
+			throw new VaultError('corrupt', 'the key file\'s version does not authenticate')
+		}
+		return keys
+	}
+
+	/** The version as cryptolib signs it: a 4-byte big-endian integer. */
+	function versionBytes(version) {
+		const bytes = new Uint8Array(4)
+		new DataView(bytes.buffer).setInt32(0, version)
+		return bytes
+	}
+
+	/** Whether a key file's versionMac is the HMAC-SHA256 of its version (compared in constant time by Web Crypto). */
+	async function authenticVersion(macRaw, file) {
+		let mac
+		try {
+			mac = base64Decode(String(file.versionMac ?? ''))
+		} catch {
+			return false
+		}
+		const key = await subtle.importKey('raw', macRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
+		return subtle.verify('HMAC', key, mac, versionBytes(file.version))
 	}
 
 	/** A key file's contents for the keys and a password (with a new salt), as cryptolib's lock() makes them. */
@@ -440,8 +476,6 @@
 		const wrap = async (raw) => new Uint8Array(await subtle.wrapKey('raw',
 			await subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, true, ['sign']), kek, 'AES-KW'))
 		const macKey = await subtle.importKey('raw', macRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-		const version = new Uint8Array(4)
-		new DataView(version.buffer).setInt32(0, MASTERKEY_VERSION)
 		const file = {
 			version: MASTERKEY_VERSION,
 			scryptSalt: base64Encode(salt),
@@ -449,7 +483,7 @@
 			scryptBlockSize: SCRYPT_BLOCK_SIZE,
 			primaryMasterKey: base64Encode(await wrap(encRaw)),
 			hmacMasterKey: base64Encode(await wrap(macRaw)),
-			versionMac: base64Encode(new Uint8Array(await subtle.sign('HMAC', macKey, version))),
+			versionMac: base64Encode(new Uint8Array(await subtle.sign('HMAC', macKey, versionBytes(MASTERKEY_VERSION)))),
 		}
 		return encoder.encode(JSON.stringify(file, null, 2))
 	}
@@ -463,9 +497,13 @@
 		return signed + '.' + base64UrlEncode(new Uint8Array(await subtle.sign('HMAC', key, encoder.encode(signed))), false)
 	}
 
-	/** Whether a configuration is signed with these keys (it belongs to them). */
+	/** Whether a configuration is signed with these keys (it belongs to them), by its header's algorithm. */
 	async function signedWith(config, { encRaw, macRaw }) {
-		const key = await subtle.importKey('raw', concat(encRaw, macRaw), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
+		const hash = Object.hasOwn(JWT_HASHES, config.header.alg) ? JWT_HASHES[config.header.alg] : null
+		if (hash === null) {
+			return false
+		}
+		const key = await subtle.importKey('raw', concat(encRaw, macRaw), { name: 'HMAC', hash }, false, ['verify'])
 		return subtle.verify('HMAC', key, config.signature, encoder.encode(config.signed))
 	}
 
@@ -551,7 +589,7 @@
 		if (!(payload.cipherCombo in SCHEMES)) {
 			throw new VaultError('unsupported-format', 'cipher combination ' + payload.cipherCombo)
 		}
-		if (header.alg !== 'HS256') {
+		if (!Object.hasOwn(JWT_HASHES, header.alg)) {
 			throw new VaultError('unsupported-format', 'signature ' + header.alg)
 		}
 		const kid = String(header.kid || '')

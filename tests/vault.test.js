@@ -10,8 +10,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { createHash } = require('node:crypto')
-const { Vault, VaultError, scrypt, Siv, Cmac, cleartextSize } = require('../app/cryptomator_vaults/js/vault.js')
+const { createHash, createHmac } = require('node:crypto')
+const { Vault, VaultError, scrypt, Siv, Cmac, cleartextSize, decodeRecoveryKey } = require('../app/cryptomator_vaults/js/vault.js')
 
 const hex = (text) => Uint8Array.from(Buffer.from(text.replace(/\s+/g, ''), 'hex'))
 const toHex = (bytes) => Buffer.from(bytes).toString('hex')
@@ -135,3 +135,78 @@ test('a Cryptomator Hub vault is refused: its key is not in a file', async () =>
 	const storage = { read: async () => Buffer.from(`${header}.${payload}.c2ln`), list: async () => [] }
 	await assert.rejects(Vault.open(storage), { code: 'unsupported-key' })
 })
+
+// The fixtures' raw keys (encryption key, MAC key), from their recovery keys.
+const WORDS = fs.readFileSync(path.join(__dirname, '..', 'src', 'recovery-words.txt'), 'utf8').split('\n')
+async function fixtureKeys(name, password) {
+	const vault = await Vault.open(folderStorage(path.join(FIXTURES, name)))
+	const raw = Buffer.from(decodeRecoveryKey(await vault.recoveryKey(password, WORDS), WORDS))
+	return { encRaw: raw.subarray(0, 32), macRaw: raw.subarray(32) }
+}
+
+/** A fixture's folder with some of its files replaced (path: bytes). */
+function changedStorage(name, files) {
+	const storage = folderStorage(path.join(FIXTURES, name))
+	const read = storage.read
+	storage.read = async (relative) => relative in files ? new Uint8Array(files[relative]) : read(relative)
+	return storage
+}
+
+/** A fixture's vault.cryptomator signed anew: its payload, a header with this alg, an HMAC with this hash (or none). */
+function resigned(name, alg, hash, keys) {
+	const token = fs.readFileSync(path.join(FIXTURES, name, 'vault.cryptomator'), 'utf8').trim().split('.')
+	const header = { ...JSON.parse(Buffer.from(token[0], 'base64url')), alg }
+	const signed = Buffer.from(JSON.stringify(header)).toString('base64url') + '.' + token[1]
+	const signature = hash ? createHmac(hash, Buffer.concat([keys.encRaw, keys.macRaw])).update(signed).digest('base64url') : ''
+	return Buffer.from(signed + '.' + signature)
+}
+
+for (const name of ['vault-gcm', 'vault-ctrmac']) {
+	const { password } = JSON.parse(fs.readFileSync(path.join(FIXTURES, name + '.json'), 'utf8'))
+
+	for (const [alg, hash] of [['HS384', 'sha384'], ['HS512', 'sha512']]) {
+		test(`${name}: a configuration signed with ${alg} opens, as cryptofs reads it`, async () => {
+			const keys = await fixtureKeys(name, password)
+			const vault = await Vault.open(changedStorage(name, { 'vault.cryptomator': resigned(name, alg, hash, keys) }))
+			await vault.unlock(password)
+			assert.ok((await vault.list('')).some((item) => item.name === 'hello.txt'))
+			// Signed with the right algorithm but another key: not this vault's.
+			const other = { encRaw: Buffer.alloc(32, 1), macRaw: keys.macRaw }
+			const foreign = await Vault.open(changedStorage(name, { 'vault.cryptomator': resigned(name, alg, hash, other) }))
+			await assert.rejects(foreign.unlock(password), { code: 'corrupt' })
+		})
+	}
+
+	for (const [alg, hash] of [['none', null], ['RS256', 'sha256'], ['HS1', 'sha1'], ['hasOwnProperty', 'sha256']]) {
+		test(`${name}: a configuration signed with ${alg} is refused before the password`, async () => {
+			const keys = await fixtureKeys(name, password)
+			const storage = changedStorage(name, { 'vault.cryptomator': resigned(name, alg, hash, keys) })
+			await assert.rejects(Vault.open(storage), { code: 'unsupported-format' })
+		})
+	}
+
+	test(`${name}: a key file whose versionMac does not authenticate is refused as corrupt`, async () => {
+		const file = JSON.parse(fs.readFileSync(path.join(FIXTURES, name, 'masterkey.cryptomator'), 'utf8'))
+		const mac = Buffer.from(file.versionMac, 'base64')
+		mac[0] ^= 1
+		for (const versionMac of [mac.toString('base64'), '', 'not base64!']) {
+			const storage = changedStorage(name, { 'masterkey.cryptomator': Buffer.from(JSON.stringify({ ...file, versionMac })) })
+			const vault = await Vault.open(storage)
+			await assert.rejects(vault.unlock(password), { code: 'corrupt' })
+			assert.equal(vault.unlocked, false)
+		}
+	})
+
+	test(`${name}: a key file of another version than 999 is refused, even with its versionMac`, async () => {
+		const keys = await fixtureKeys(name, password)
+		const file = JSON.parse(fs.readFileSync(path.join(FIXTURES, name, 'masterkey.cryptomator'), 'utf8'))
+		for (const version of [998, 1000, '999']) {
+			const number = Buffer.alloc(4)
+			number.writeInt32BE(Number(version))
+			const versionMac = createHmac('sha256', keys.macRaw).update(number).digest('base64')
+			const storage = changedStorage(name, { 'masterkey.cryptomator': Buffer.from(JSON.stringify({ ...file, version, versionMac })) })
+			const vault = await Vault.open(storage)
+			await assert.rejects(vault.unlock(password), { code: 'unsupported-format' })
+		}
+	})
+}

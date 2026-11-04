@@ -10,6 +10,14 @@
   kept beside (`Report (2).pdf`), and the plain copies deleted, also from the deleted files; or
   moves them as the vault is unlocked, if asked to. **Make an inbox for this vault …** in a vault's
   menu. The marker's format is a stable interface: `docs/inbox.md`.
+- Vaults whose configuration (`vault.cryptomator`) is signed with HS384 or HS512 open, as
+  Cryptomator reads them; any algorithm but HS256, HS384 and HS512 is still refused.
+
+### Fixed
+
+- The key file's `versionMac` is checked, as Cryptomator checks it: a key file whose version does
+  not authenticate with its keys is refused as damaged, and one of another version than 999
+  (Cryptomator 1.6 and later) as unsupported.
 
 ## 0.8.1 - 2026-11-03
 
