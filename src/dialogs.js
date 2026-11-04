@@ -523,9 +523,10 @@ export function showUploads(title) {
 
 /**
  * A form in the dialog. fields: {name, label, type ('text', 'password' or
- * 'textarea'), autocomplete, value, readonly, account (the vault's folder for a
- * password manager)}; run(values) does the work, its error shown and the form kept
- * for another try; resolves with what run returns, or null when closed.
+ * 'textarea'), autocomplete, value, readonly, optional (may stay empty), account
+ * (the vault's folder for a password manager)}; run(values) does the work, its
+ * error shown and the form kept for another try; resolves with what run returns,
+ * or null when closed.
  */
 export function askForm({ title, intro, fields, action, working, run }) {
 	return new Promise((resolve) => {
@@ -538,7 +539,7 @@ export function askForm({ title, intro, fields, action, working, run }) {
 				? el('textarea', { name: field.name, rows: 4, required: true, spellcheck: 'false', autocomplete: 'off', class: 'cryptomator-form__words' })
 				: el('input', {
 					type: field.type ?? 'text', name: field.name, autocomplete: field.autocomplete ?? 'off',
-					required: !field.readonly, readonly: field.readonly || null, class: field.account ? 'cryptomator-unlock__account' : null,
+					required: !field.readonly && !field.optional, readonly: field.readonly || null, class: field.account ? 'cryptomator-unlock__account' : null,
 				})
 			input.value = field.value ?? ''
 			inputs[field.name] = input

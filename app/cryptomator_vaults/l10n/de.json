@@ -188,7 +188,47 @@
         "Show recovery key …": "Wiederherstellungsschlüssel anzeigen …",
         "Reset password with recovery key …": "Passwort mit Wiederherstellungsschlüssel zurücksetzen …",
         "Check health …": "Integrität prüfen …",
-        "New vault …": "Neuer Tresor …"
+        "New vault …": "Neuer Tresor …",
+        "Encrypted and checked as “{name}”": "Verschlüsselt und geprüft als „{name}“",
+        "The search for inboxes failed: {detail}": "Die Suche nach Eingangsordnern ist fehlgeschlagen: {detail}",
+        "The inbox “{inbox}” needs a newer version of this app; it is left alone.": "Der Eingangsordner „{inbox}“ braucht eine neuere Version dieser App; er bleibt, wie er ist.",
+        "The inbox “{inbox}” is left alone: it is a vault's folder, inside one or holds one.": "Der Eingangsordner „{inbox}“ bleibt, wie er ist: Er ist der Ordner eines Tresors, liegt in einem oder enthält einen.",
+        "The inbox “{inbox}” is left alone: you cannot write to this vault.": "Der Eingangsordner „{inbox}“ bleibt, wie er ist: Du kannst in diesen Tresor nicht schreiben.",
+        "The inbox “{inbox}” is left alone: it is shared with you, and its files are not yours to delete.": "Der Eingangsordner „{inbox}“ bleibt, wie er ist: Er ist mit dir geteilt, und seine Dateien darfst nicht du löschen.",
+        "The inbox “{inbox}” cannot be read: {detail}": "Der Eingangsordner „{inbox}“ kann nicht gelesen werden: {detail}",
+        "Move files from inboxes automatically when I unlock": "Dateien aus Eingangsordnern beim Entsperren automatisch verschieben",
+        "Moving from inboxes into {vault}": "Verschieben aus Eingangsordnern in {vault}",
+        "Plain copy kept: you cannot delete it": "Unverschlüsselte Kopie behalten: Du kannst sie nicht löschen",
+        "Deleted files": "Gelöschte Dateien",
+        "Plain copies deleted for good: {removed}.": "Endgültig gelöschte unverschlüsselte Kopien: {removed}.",
+        "{count} of them may still be in the deleted files.": "{count} davon können noch in den gelöschten Dateien liegen.",
+        "Make an inbox for {vault}": "Eingangsordner für {vault} anlegen",
+        "Files put into an inbox, by you or by an app such as Harvester, are offered for the vault when you unlock it, and moved into it encrypted. Until then they are ordinary files on the server.": "Dateien, die du oder eine App wie Harvester in einen Eingangsordner legt, werden dir beim Entsperren des Tresors angeboten und verschlüsselt hineinverschoben. Bis dahin sind sie gewöhnliche Dateien auf dem Server.",
+        "The folder in the vault the files go to is written unencrypted into the inbox's marker file, {marker}.": "Der Ordner im Tresor, in den die Dateien kommen, steht unverschlüsselt in der Markierungsdatei des Eingangsordners, {marker}.",
+        "Inbox folder": "Eingangsordner",
+        "{vault} inbox": "{vault} Eingang",
+        "Folder in the vault": "Ordner im Tresor",
+        "Filled by (optional)": "Gefüllt von (optional)",
+        "Make the inbox": "Eingangsordner anlegen",
+        "Making the inbox …": "Eingangsordner wird angelegt …",
+        "An inbox cannot be a vault's folder, inside one or hold one.": "Ein Eingangsordner kann nicht der Ordner eines Tresors sein, in einem liegen oder einen enthalten.",
+        "“{folder}” could not be created: {detail}": "„{folder}“ konnte nicht angelegt werden: {detail}",
+        "“{folder}” is a file.": "„{folder}“ ist eine Datei.",
+        "“{folder}” is an inbox already.": "„{folder}“ ist schon ein Eingangsordner.",
+        "“{folder}” is an inbox of {vault} now.": "„{folder}“ ist jetzt ein Eingangsordner von {vault}.",
+        "Make an inbox for this vault …": "Eingangsordner für diesen Tresor anlegen …",
+        "_%n file from {from} is waiting in “{inbox}” ({size})._::_%n files from {from} are waiting in “{inbox}” ({size})._": [
+            "%n Datei von {from} wartet in „{inbox}“ ({size}).",
+            "%n Dateien von {from} warten in „{inbox}“ ({size})."
+        ],
+        "_%n file is waiting in “{inbox}” ({size})._::_%n files are waiting in “{inbox}” ({size})._": [
+            "%n Datei wartet in „{inbox}“ ({size}).",
+            "%n Dateien warten in „{inbox}“ ({size})."
+        ],
+        "_%n more is still being written and comes next time._::_%n more are still being written and come next time._": [
+            "%n weitere wird noch geschrieben und kommt beim nächsten Mal.",
+            "%n weitere werden noch geschrieben und kommen beim nächsten Mal."
+        ]
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

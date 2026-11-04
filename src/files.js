@@ -34,6 +34,10 @@
  * vault.cryptomator among its contents, or found by the search) and offers to
  * open the vault, above the list.
  *
+ * A vault's inboxes (src/inbox.mjs), folders of plain files that something without
+ * the key fills, are found when it is unlocked; their files are moved into the
+ * vault as "Add from your files" moves them.
+ *
  * tests/e2e/check.mjs checks all of it in a browser against a real Nextcloud.
  */
 import { DefaultType, File, FileType, Folder, Permission, View, getFileActions, getNavigation, registerFileAction, registerFileListAction, registerFileListHeader } from '@nextcloud/files'
@@ -41,8 +45,9 @@ import { emit, subscribe } from '@nextcloud/event-bus'
 import { generateFilePath, imagePath } from '@nextcloud/router'
 import vaultLib from '../app/cryptomator_vaults/js/vault.js'
 import { LARGE_FILE, askForm, askName, askPassword, hasPreview, chooseFolder, closeDialog, confirmAction, download, el, humanSize, notice, revokeAll, showFile, showHealth, showRecoveryKey, showUploads } from './dialogs.js'
-import { davStorage, findVaults, purgeDeleted, userId, walkFiles } from './storage.js'
-import { t } from './l10n.js'
+import { davStorage, findMarkers, findVaults, purgeDeleted, purgeDeletedMany, userId, walkFiles } from './storage.js'
+import { MARKER_LIMIT, MARKER_NAME, clashName, makeMarker, normalizePath, parseMarker, planInbox, segments, within } from './inbox.mjs'
+import { n, t } from './l10n.js'
 
 const { Vault, VaultError, checkName } = vaultLib
 
@@ -268,6 +273,7 @@ async function unlock(vault) {
 		startIdleTimer()
 		// What a browser that closed while writing left behind; not worth an error.
 		vault.vault.removeLeftovers().catch(() => {})
+		afterUnlock(vault)
 	}
 	return ok
 }
@@ -400,6 +406,7 @@ function lock(vault) {
 	vault.nodes.clear()
 	vault.dirs.clear()
 	vault.entries.clear()
+	vault.inbox = null
 	revokeAll()
 	updateLockBar(lockBar?.folder)
 	if (currentDir().startsWith('/' + vault.seg)) {
@@ -479,7 +486,8 @@ function inVaults(view) {
 }
 const OWN_ACTIONS = new Set(['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock', 'cryptomator-vaults-open-vault',
 	'cryptomator-vaults-rename', 'cryptomator-vaults-move', 'cryptomator-vaults-export', 'cryptomator-vaults-delete',
-	'cryptomator-vaults-change-password', 'cryptomator-vaults-recovery-key', 'cryptomator-vaults-reset-password', 'cryptomator-vaults-health'])
+	'cryptomator-vaults-change-password', 'cryptomator-vaults-recovery-key', 'cryptomator-vaults-reset-password', 'cryptomator-vaults-health',
+	'cryptomator-vaults-make-inbox'])
 const guarded = new WeakSet()
 let guardedCount = 0
 
@@ -692,7 +700,7 @@ function updateLockBar(folder) {
 		el('span', { class: 'cryptomator-banner__text' },
 			t('{vault} is unlocked in this browser. It locks after {minutes} minutes without use.', { vault: vault.name, minutes: AUTO_LOCK_MINUTES })),
 		el('button', { type: 'button', class: 'cryptomator-banner__lock', onclick: () => lock(vault) }, t('Lock')),
-	]))
+	]), ...inboxNotices(vault))
 	lockBar.el.querySelector('.cryptomator-banner__icon').innerHTML = ICON_UNLOCKED
 }
 
@@ -752,6 +760,8 @@ let busy = false
 // (Vault.writeFileStream), downloaded in pieces where the browser lets it be saved
 // so: memory holds a part, not the file.
 const STREAM_FROM = 16 * 1024 * 1024
+// Keeping both files of a name: "Report (2).pdf" up to this number, then it fails.
+const KEEP_BOTH_LIMIT = 1000
 
 /**
  * What is written into a vault: {name, size, dirs, source}, where source reads the
@@ -783,12 +793,15 @@ function fromServer(root, file) {
  * for large ones). files: {name, size, dirs, source} (fromFile, fromServer) with
  * the folders below this one it goes to (created, or merged into those there);
  * folders: further folder paths to create (empty ones of a dropped folder). A taken
- * name is replaced only when the person says so. options: title, written (a line's
- * text when done), check(file) after a file is written (throws if it does not
- * count), after(written files, dialog) before the summary, which it may add to.
+ * name is replaced only when the person says so. options: into ({vault, dirId}:
+ * where the files go, else the folder the list shows), title, written (a line's
+ * text when done), keepBoth (a taken name is never replaced: the file gets the
+ * next free name, clashName), check(file) after a file is written (throws if it
+ * does not count), after(written files, dialog) before the summary, which it may
+ * add to.
  */
 async function uploadFiles(files, folders = [], options = {}) {
-	const here = writableHere()
+	const here = options.into ?? writableHere()
 	if (!here || (files.length === 0 && folders.length === 0)) {
 		return
 	}
@@ -835,6 +848,7 @@ async function uploadFiles(files, folders = [], options = {}) {
 				continue
 			}
 			let replace = decision === 'replace-all'
+			let storedAs = file.name
 			const write = async () => {
 				const target = await folderOf(dirs)
 				const labels = { encrypt: t('Encrypting'), upload: t('Uploading'), verify: t('Checking') }
@@ -844,13 +858,28 @@ async function uploadFiles(files, folders = [], options = {}) {
 					const [start, width] = share[phase]
 					line.phase(phase === 'upload' && large ? t('Encrypting and uploading') : labels[phase], start + width * (total ? done / total : 1))
 				}
-				if (large) {
-					await vault.writeFileStream(target, file.name, file.source, { replace, onProgress })
-				} else {
+				let data = null
+				if (!large) {
 					if (file.source.remote) {
 						line.phase(t('Reading'), 0)
 					}
-					await vault.writeFile(target, file.name, await file.source.all(), { replace, onProgress })
+					data = await file.source.all()
+				}
+				// Keeping both: the next free name (a taken one is refused before anything is written).
+				for (let number = 1; ; number++) {
+					storedAs = options.keepBoth ? clashName(file.name, number) : file.name
+					try {
+						if (large) {
+							await vault.writeFileStream(target, storedAs, file.source, { replace, onProgress })
+						} else {
+							await vault.writeFile(target, storedAs, data, { replace, onProgress })
+						}
+						break
+					} catch (error) {
+						if (!options.keepBoth || !['exists', 'exists-other'].includes(error?.code) || number >= KEEP_BOTH_LIMIT) {
+							throw error
+						}
+					}
 				}
 				await options.check?.(file)
 			}
@@ -858,7 +887,7 @@ async function uploadFiles(files, folders = [], options = {}) {
 				try {
 					await write()
 				} catch (error) {
-					if (error?.code !== 'exists' || decision === 'skip-all') {
+					if (error?.code !== 'exists' || decision === 'skip-all' || options.keepBoth) {
 						throw error
 					}
 					const answer = decision === 'replace-all' ? 'replace' : await dialog.ask(label, files.length)
@@ -878,7 +907,7 @@ async function uploadFiles(files, folders = [], options = {}) {
 				}
 				written++
 				done.push(file)
-				line.done(options.written || t('Uploaded and checked'))
+				line.done(storedAs === file.name ? options.written || t('Uploaded and checked') : t('Encrypted and checked as “{name}”', { name: storedAs }))
 			} catch (error) {
 				if (error?.code === 'exists' && decision === 'skip-all') {
 					line.done(t('Skipped'))
@@ -1549,6 +1578,320 @@ function onDrop(event) {
 window.addEventListener('dragover', onDragOver, true)
 window.addEventListener('drop', onDrop, true)
 
+// ----- Inboxes: plain files waiting to go into a vault (src/inbox.mjs, docs/inbox.md) -----
+
+// The search for inboxes goes through all of the person's files: at most this
+// often, or when an inbox was just made here.
+const INBOX_SEARCH_EVERY = 10 * 60 * 1000
+// The vaults whose inboxes are moved into them as they are unlocked, per account.
+const AUTO_KEY = 'cryptomator_vaults.inbox-auto'
+let markers = null
+
+/** The markers in the person's files, read: [{folder, inbox} or {folder, problem, vault}]. */
+function readMarkers(force = false) {
+	if (force || !markers || Date.now() - markers.at > INBOX_SEARCH_EVERY) {
+		const promise = (async () => {
+			const root = davStorage('')
+			const found = []
+			for (const folder of (await findMarkers(MARKER_NAME)).map(normalizePath)) {
+				try {
+					const data = await root.read(folder.slice(1) + '/' + MARKER_NAME)
+					found.push({ folder, ...(data.length > MARKER_LIMIT ? { problem: 'invalid' } : parseMarker(new TextDecoder().decode(data), folder)) })
+				} catch {
+					// Gone since the search, or not readable: no inbox now.
+				}
+			}
+			return found
+		})()
+		markers = { at: Date.now(), promise }
+		promise.catch(() => {
+			if (markers?.promise === promise) {
+				markers = null
+			}
+		})
+	}
+	return markers.promise
+}
+
+function autoKey() {
+	return AUTO_KEY + '.' + userId()
+}
+
+function readAuto() {
+	try {
+		const value = JSON.parse(window.localStorage.getItem(autoKey()) || '[]')
+		return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []
+	} catch {
+		return []
+	}
+}
+
+function movesAutomatically(vault) {
+	return readAuto().includes(vault.folder)
+}
+
+function setAutomatic(vault, on) {
+	try {
+		const others = readAuto().filter((folder) => folder !== vault.folder)
+		window.localStorage.setItem(autoKey(), JSON.stringify(on ? [...others, vault.folder] : others))
+	} catch {
+		// Without storage the setting is not kept.
+	}
+}
+
+/**
+ * The inboxes of an unlocked vault and what waits in them, listed afresh:
+ * vault.inbox = {items: [{inbox, plan}], problems: [text]}. An inbox is left alone
+ * where the vault cannot be written, where it is the vault's folder, in a vault or
+ * holds one, and where it is shared with the person (its files are its owner's).
+ */
+async function checkInboxes(vault) {
+	const items = []
+	const problems = []
+	const root = davStorage('')
+	const folder = normalizePath(vault.folder)
+	let found
+	try {
+		found = (await readMarkers()).filter((marker) => (marker.inbox?.vault ?? marker.vault) === folder)
+	} catch (error) {
+		vault.inbox = { items, problems: [t('The search for inboxes failed: {detail}', { detail: error.message })] }
+		return vault.inbox
+	}
+	let writable = null
+	for (const marker of found) {
+		const name = marker.folder
+		if (marker.problem === 'version') {
+			problems.push(t('The inbox “{inbox}” needs a newer version of this app; it is left alone.', { inbox: name }))
+			continue
+		}
+		if (marker.problem === 'loop' || insideVault(name)) {
+			problems.push(t('The inbox “{inbox}” is left alone: it is a vault\'s folder, inside one or holds one.', { inbox: name }))
+			continue
+		}
+		if (!marker.inbox) {
+			continue
+		}
+		try {
+			if (writable === null) {
+				const permissions = (await root.stat(folder.slice(1)))?.permissions ?? ''
+				writable = permissions.includes('C') && permissions.includes('K')
+			}
+			if (!writable) {
+				problems.push(t('The inbox “{inbox}” is left alone: you cannot write to this vault.', { inbox: name }))
+				continue
+			}
+			const own = await root.stat(name.slice(1))
+			if (own === null || !own.isDir) {
+				continue
+			}
+			if (own.permissions.includes('S')) {
+				problems.push(t('The inbox “{inbox}” is left alone: it is shared with you, and its files are not yours to delete.', { inbox: name }))
+				continue
+			}
+			items.push({ inbox: marker.inbox, plan: await planInbox(marker.inbox, (inside) => root.list(inside)) })
+		} catch (error) {
+			problems.push(t('The inbox “{inbox}” cannot be read: {detail}', { inbox: name, detail: message(error) }))
+		}
+	}
+	vault.inbox = { items, problems }
+	return vault.inbox
+}
+
+/** What the bar above an unlocked vault's list says about its inboxes. */
+function inboxNotices(vault) {
+	const items = vault.inbox?.items ?? []
+	const waiting = items.filter((item) => item.plan.ready.length > 0)
+	const notices = (vault.inbox?.problems ?? []).map((text) => el('div', { class: 'cryptomator-banner cryptomator-banner--inbox', role: 'note' },
+		el('span', { class: 'cryptomator-banner__text cryptomator-notice--error' }, text)))
+	for (const item of waiting) {
+		const { inbox, plan } = item
+		const count = plan.ready.length
+		const vars = { from: inbox.from, inbox: inbox.folder, size: humanSize(plan.ready.reduce((sum, file) => sum + file.size, 0)) }
+		const text = (inbox.from
+			? n('%n file from {from} is waiting in “{inbox}” ({size}).', '%n files from {from} are waiting in “{inbox}” ({size}).', count, vars)
+			: n('%n file is waiting in “{inbox}” ({size}).', '%n files are waiting in “{inbox}” ({size}).', count, vars))
+			+ (plan.recent.length ? ' ' + n('%n more is still being written and comes next time.', '%n more are still being written and come next time.', plan.recent.length) : '')
+		notices.push(el('div', { class: 'cryptomator-banner cryptomator-banner--inbox', role: 'status' }, [
+			el('span', { class: 'cryptomator-banner__icon', 'aria-hidden': 'true' }),
+			el('span', { class: 'cryptomator-banner__text' }, text),
+			el('button', { type: 'button', class: 'primary', onclick: () => moveFromInboxes(vault, [item]) }, t('Move into the vault')),
+		]))
+		notices[notices.length - 1].querySelector('.cryptomator-banner__icon').innerHTML = ICON_IMPORT
+	}
+	if (waiting.length > 0) {
+		const box = el('input', { type: 'checkbox', checked: movesAutomatically(vault), onchange: () => setAutomatic(vault, box.checked) })
+		notices.push(el('label', { class: 'cryptomator-inbox-auto' }, [box, t('Move files from inboxes automatically when I unlock')]))
+	}
+	return notices
+}
+
+/** After unlocking: the vault's inboxes, moved at once where the person asked for that. */
+async function afterUnlock(vault) {
+	try {
+		await checkInboxes(vault)
+	} catch {
+		return
+	}
+	updateLockBar(lockBar?.folder)
+	if (movesAutomatically(vault) && vault.inbox.items.some((item) => item.plan.ready.length > 0)) {
+		await moveFromInboxes(vault, vault.inbox.items)
+	}
+}
+
+/**
+ * Moves the files waiting in inboxes (items of vault.inbox) into the vault: each
+ * encrypted and checked as an upload, a taken name kept beside the new file
+ * ("Report (2).pdf"); then the plain copies are deleted, also from the deleted
+ * files, and the subfolders they emptied removed. The marker and the inbox stay.
+ */
+async function moveFromInboxes(vault, chosen) {
+	if (!vault.vault?.unlocked) {
+		return
+	}
+	if (busy) {
+		showError(t('Another change to the vault is still running.'))
+		return
+	}
+	// Listed afresh: what waits now, with its current ETags.
+	const folders = new Set(chosen.map((item) => item.inbox.folder))
+	const items = (await checkInboxes(vault)).items.filter((item) => folders.has(item.inbox.folder) && item.plan.ready.length > 0)
+	updateLockBar(lockBar?.folder)
+	if (items.length === 0) {
+		return
+	}
+	const root = davStorage('')
+	await uploadFiles(items.flatMap((item) => item.plan.ready.map((file) => fromServer(root, file))), [], {
+		into: { vault, dirId: '' },
+		keepBoth: true,
+		title: t('Moving from inboxes into {vault}', { vault: vault.name }),
+		written: t('Encrypted and checked'),
+		// A file that changed while it was read may be in the vault half old, half new.
+		async check(file) {
+			if ((await root.stat(file.origin.path))?.etag !== file.origin.etag) {
+				throw new VaultError('changed', file.origin.path)
+			}
+		},
+		after: (done, dialog) => removeInboxCopies(root, items, done, dialog),
+	})
+	await checkInboxes(vault).catch(() => {})
+	updateLockBar(lockBar?.folder)
+}
+
+/** Deletes for good the plain copies of what arrived in the vault, and the subfolders this emptied. */
+async function removeInboxCopies(root, items, done, dialog) {
+	const deleted = []
+	for (const file of done.map((item) => item.origin)) {
+		if (!file.permissions.includes('D')) {
+			dialog.file(file.path).done(t('Plain copy kept: you cannot delete it'), true)
+			continue
+		}
+		try {
+			await root.removeUnchanged(file.path, file.etag)
+			deleted.push(file.path)
+		} catch (error) {
+			dialog.file(file.path).done(message(error), true)
+		}
+	}
+	// Deepest first; only those a moved file was in, and only if nothing is left in them.
+	const emptied = []
+	for (const item of items) {
+		for (const inner of item.plan.folders) {
+			const path = [item.inbox.folder.slice(1), ...inner].join('/')
+			if (!deleted.some((file) => file.startsWith(path + '/'))) {
+				continue
+			}
+			try {
+				if ((await root.list(path)).length === 0) {
+					await root.remove(path)
+					emptied.push(path)
+				}
+			} catch {
+				// Kept: it is not in the way.
+			}
+		}
+	}
+	let purged = new Set()
+	try {
+		purged = await purgeDeletedMany(deleted)
+		await purgeDeletedMany(emptied, { onlyEmpty: true })
+	} catch (error) {
+		dialog.file(t('Deleted files')).done(message(error), true)
+	}
+	const lingering = deleted.length - purged.size
+	return (deleted.length ? t('Plain copies deleted for good: {removed}.', { removed: purged.size }) : '')
+		+ (lingering ? ' ' + t('{count} of them may still be in the deleted files.', { count: lingering }) : '')
+}
+
+/**
+ * Makes a folder an inbox of the vault: creates it if need be and writes the
+ * marker, which names the vault's folder and the folder inside it the files go
+ * to. That folder's name is in the marker unencrypted, as the person is told.
+ */
+async function makeInbox(vault) {
+	const vaultFolder = normalizePath(vault.folder)
+	const parent = segments(vaultFolder).slice(0, -1)
+	const made = await askForm({
+		title: t('Make an inbox for {vault}', { vault: vault.name }),
+		intro: [
+			t('Files put into an inbox, by you or by an app such as Harvester, are offered for the vault when you unlock it, and moved into it encrypted. Until then they are ordinary files on the server.'),
+			t('The folder in the vault the files go to is written unencrypted into the inbox\'s marker file, {marker}.', { marker: MARKER_NAME }),
+		],
+		fields: [
+			{ name: 'folder', label: t('Inbox folder'), value: '/' + [...parent, t('{vault} inbox', { vault: vault.name })].join('/') },
+			{ name: 'target', label: t('Folder in the vault'), value: '/' },
+			{ name: 'from', label: t('Filled by (optional)'), value: '', optional: true },
+		],
+		action: t('Make the inbox'),
+		working: t('Making the inbox …'),
+		async run({ folder, target, from }) {
+			const inbox = normalizePath(folder)
+			const inside = normalizePath(target)
+			if (inbox === null || inbox === '/') {
+				throw new Error(t('“{name}” cannot be a folder\'s name.', { name: folder }))
+			}
+			if (inside === null) {
+				throw new Error(t('“{name}” cannot be a name in a vault.', { name: target }))
+			}
+			for (const name of segments(inside)) {
+				try {
+					checkName(name)
+				} catch (error) {
+					throw new Error(message(error))
+				}
+			}
+			if (within(inbox, vaultFolder) || within(vaultFolder, inbox) || insideVault(inbox)) {
+				throw new Error(t('An inbox cannot be a vault\'s folder, inside one or hold one.'))
+			}
+			const root = davStorage('')
+			const found = await root.stat(inbox.slice(1))
+			if (found === null) {
+				try {
+					await root.mkdir(inbox.slice(1))
+				} catch (error) {
+					throw new Error(t('“{folder}” could not be created: {detail}', { folder: inbox, detail: error.message }))
+				}
+			} else if (!found.isDir) {
+				throw new Error(t('“{folder}” is a file.', { folder: inbox }))
+			}
+			try {
+				await root.write(inbox.slice(1) + '/' + MARKER_NAME, new TextEncoder().encode(makeMarker({ vault: vaultFolder, target: inside, from: from.trim() })), { create: true })
+			} catch (error) {
+				throw new Error(error?.code === 'exists' ? t('“{folder}” is an inbox already.', { folder: inbox }) : message(error))
+			}
+			return inbox
+		},
+	})
+	if (!made) {
+		return
+	}
+	await readMarkers(true).catch(() => {})
+	if (vault.vault?.unlocked) {
+		await checkInboxes(vault).catch(() => {})
+		updateLockBar(lockBar?.folder)
+	}
+	showInfo(t('“{folder}” is an inbox of {vault} now.', { folder: made, vault: vault.name }))
+}
+
 // ----- Vault maintenance: new vaults, passwords, the recovery key, the health check -----
 
 // Cryptomator's shortest password for a vault.
@@ -1795,6 +2138,7 @@ for (const [id, name, icon, task, order] of [
 	['cryptomator-vaults-recovery-key', () => t('Show recovery key …'), ICON_KEY, showVaultRecoveryKey, -780],
 	['cryptomator-vaults-reset-password', () => t('Reset password with recovery key …'), ICON_KEY, resetPassword, -770],
 	['cryptomator-vaults-health', () => t('Check health …'), ICON_HEALTH, checkVaultHealth, -760],
+	['cryptomator-vaults-make-inbox', () => t('Make an inbox for this vault …'), ICON_IMPORT, makeInbox, -750],
 ]) {
 	registerFileAction({
 		id,

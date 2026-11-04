@@ -188,7 +188,53 @@
         "Show recovery key …": "Pokaż klucz odzyskiwania …",
         "Reset password with recovery key …": "Zresetuj hasło kluczem odzyskiwania …",
         "Check health …": "Sprawdź stan …",
-        "New vault …": "Nowy sejf …"
+        "New vault …": "Nowy sejf …",
+        "Encrypted and checked as “{name}”": "Zaszyfrowano i sprawdzono jako „{name}”",
+        "The search for inboxes failed: {detail}": "Wyszukiwanie skrzynek odbiorczych nie powiodło się: {detail}",
+        "The inbox “{inbox}” needs a newer version of this app; it is left alone.": "Skrzynka odbiorcza „{inbox}” wymaga nowszej wersji tej aplikacji; pozostaje nietknięta.",
+        "The inbox “{inbox}” is left alone: it is a vault's folder, inside one or holds one.": "Skrzynka odbiorcza „{inbox}” pozostaje nietknięta: jest folderem sejfu, leży w sejfie lub zawiera sejf.",
+        "The inbox “{inbox}” is left alone: you cannot write to this vault.": "Skrzynka odbiorcza „{inbox}” pozostaje nietknięta: nie możesz zapisywać w tym sejfie.",
+        "The inbox “{inbox}” is left alone: it is shared with you, and its files are not yours to delete.": "Skrzynka odbiorcza „{inbox}” pozostaje nietknięta: jest ci udostępniona, a jej plików nie tobie usuwać.",
+        "The inbox “{inbox}” cannot be read: {detail}": "Nie można odczytać skrzynki odbiorczej „{inbox}”: {detail}",
+        "Move files from inboxes automatically when I unlock": "Przenoś pliki ze skrzynek odbiorczych automatycznie po odblokowaniu",
+        "Moving from inboxes into {vault}": "Przenoszenie ze skrzynek odbiorczych do {vault}",
+        "Plain copy kept: you cannot delete it": "Niezaszyfrowana kopia zachowana: nie możesz jej usunąć",
+        "Deleted files": "Usunięte pliki",
+        "Plain copies deleted for good: {removed}.": "Usunięto na stałe niezaszyfrowane kopie: {removed}.",
+        "{count} of them may still be in the deleted files.": "{count} z nich może jeszcze być w usuniętych plikach.",
+        "Make an inbox for {vault}": "Utwórz skrzynkę odbiorczą dla {vault}",
+        "Files put into an inbox, by you or by an app such as Harvester, are offered for the vault when you unlock it, and moved into it encrypted. Until then they are ordinary files on the server.": "Pliki umieszczone w skrzynce odbiorczej przez ciebie lub aplikację taką jak Harvester są proponowane po odblokowaniu sejfu i przenoszone do niego zaszyfrowane. Do tego czasu są zwykłymi plikami na serwerze.",
+        "The folder in the vault the files go to is written unencrypted into the inbox's marker file, {marker}.": "Folder w sejfie, do którego trafiają pliki, jest zapisany bez szyfrowania w pliku znacznika skrzynki, {marker}.",
+        "Inbox folder": "Folder skrzynki odbiorczej",
+        "{vault} inbox": "{vault} – skrzynka odbiorcza",
+        "Folder in the vault": "Folder w sejfie",
+        "Filled by (optional)": "Wypełniana przez (opcjonalnie)",
+        "Make the inbox": "Utwórz skrzynkę",
+        "Making the inbox …": "Tworzenie skrzynki …",
+        "An inbox cannot be a vault's folder, inside one or hold one.": "Skrzynka odbiorcza nie może być folderem sejfu, leżeć w sejfie ani zawierać sejfu.",
+        "“{folder}” could not be created: {detail}": "Nie udało się utworzyć „{folder}”: {detail}",
+        "“{folder}” is a file.": "„{folder}” jest plikiem.",
+        "“{folder}” is an inbox already.": "„{folder}” jest już skrzynką odbiorczą.",
+        "“{folder}” is an inbox of {vault} now.": "„{folder}” jest teraz skrzynką odbiorczą sejfu {vault}.",
+        "Make an inbox for this vault …": "Utwórz skrzynkę odbiorczą dla tego sejfu …",
+        "_%n file from {from} is waiting in “{inbox}” ({size})._::_%n files from {from} are waiting in “{inbox}” ({size})._": [
+            "%n plik od {from} czeka w „{inbox}” ({size}).",
+            "%n pliki od {from} czekają w „{inbox}” ({size}).",
+            "%n plików od {from} czeka w „{inbox}” ({size}).",
+            "%n pliku od {from} czeka w „{inbox}” ({size})."
+        ],
+        "_%n file is waiting in “{inbox}” ({size})._::_%n files are waiting in “{inbox}” ({size})._": [
+            "%n plik czeka w „{inbox}” ({size}).",
+            "%n pliki czekają w „{inbox}” ({size}).",
+            "%n plików czeka w „{inbox}” ({size}).",
+            "%n pliku czeka w „{inbox}” ({size})."
+        ],
+        "_%n more is still being written and comes next time._::_%n more are still being written and come next time._": [
+            "%n kolejny jest jeszcze zapisywany i trafi do sejfu następnym razem.",
+            "%n kolejne są jeszcze zapisywane i trafią do sejfu następnym razem.",
+            "%n kolejnych jest jeszcze zapisywanych i trafi do sejfu następnym razem.",
+            "%n kolejnego jest jeszcze zapisywane i trafi do sejfu następnym razem."
+        ]
     },
     "pluralForm": "nplurals=4; plural=(n==1 ? 0 : (n%10>=2 && n%10<=4) && (n%100<12 || n%100>14) ? 1 : n!=1 && (n%10>=0 && n%10<=1) || n!=1 && (n%10>=5 && n%10<=9) || n%100>=12 && n%100<=14 ? 2 : 3);"
 }

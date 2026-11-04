@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Inboxes: folders linked to a vault by a marker file (`.cryptomator-inbox.json`), which an app
+  without the vault's key, such as Harvester, fills with plain files. When the vault is unlocked,
+  the bar above it offers to move them into it, encrypted and checked in the browser, a taken name
+  kept beside (`Report (2).pdf`), and the plain copies deleted, also from the deleted files; or
+  moves them as the vault is unlocked, if asked to. **Make an inbox for this vault …** in a vault's
+  menu. The marker's format is a stable interface: `docs/inbox.md`.
+
 ## 0.8.1 - 2026-11-03
 
 ### Fixed

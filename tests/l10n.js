@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// node tests/l10n.js: every string the integration translates (t('…') in src/)
-// and the app menu's entry are in every translation, and the .js and .json of a
-// language agree.
+// node tests/l10n.js: every string the integration translates (t('…') and
+// n('…', '…') in src/) and the app menu's entry are in every translation, a plural
+// with as many forms as the language has, and the .js and .json of a language agree.
 
 'use strict'
 
@@ -18,9 +18,16 @@ const wanted = new Set(['Vaults'])
 for (const match of source.matchAll(/\bt\('((?:[^'\\]|\\.)*)'/g)) {
 	wanted.add(match[1].replace(/\\'/g, "'"))
 }
+// Plurals (n('…', '…', count)): Nextcloud's key for the pair, its forms in a list.
+const plurals = new Set()
+for (const match of source.matchAll(/\bn\('((?:[^'\\]|\\.)*)', '((?:[^'\\]|\\.)*)'/g)) {
+	const key = '_' + match[1].replace(/\\'/g, "'") + '_::_' + match[2].replace(/\\'/g, "'") + '_'
+	wanted.add(key)
+	plurals.add(key)
+}
 let failed = false
 for (const file of fs.readdirSync(path.join(app, 'l10n')).filter((name) => name.endsWith('.json'))) {
-	const json = JSON.parse(fs.readFileSync(path.join(app, 'l10n', file), 'utf8')).translations
+	const { translations: json, pluralForm } = JSON.parse(fs.readFileSync(path.join(app, 'l10n', file), 'utf8'))
 	let registered = null
 	global.OC = { L10N: { register: (_app, table) => { registered = table } } }
 	require(path.join(app, 'l10n', file.replace(/\.json$/, '.js')))
@@ -28,6 +35,13 @@ for (const file of fs.readdirSync(path.join(app, 'l10n')).filter((name) => name.
 	if (missing.length) {
 		failed = true
 		console.error(`${file}: missing ${missing.map((text) => JSON.stringify(text)).join(', ')}`)
+	}
+	const forms = Number(/nplurals=(\d+)/.exec(pluralForm || '')?.[1] || 2)
+	for (const key of plurals) {
+		if (key in json && (!Array.isArray(json[key]) || json[key].length !== forms)) {
+			failed = true
+			console.error(`${file}: ${JSON.stringify(key)} needs ${forms} forms`)
+		}
 	}
 	if (JSON.stringify(registered) !== JSON.stringify(json)) {
 		failed = true

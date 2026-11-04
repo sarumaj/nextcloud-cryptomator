@@ -14,7 +14,10 @@
 // file's type (/core/mimeicon) or an entry's address; but for the exports, which
 // put files decrypted into the person's files as asked. It also creates a vault,
 // changes its password, shows its recovery key and sets a new password with it
-// (the key never sent either), and repairs a damage with the health check.
+// (the key never sent either), and repairs a damage with the health check. Files
+// waiting in two inboxes of the vault are moved into it, by hand and as it is
+// unlocked (a taken name kept beside, the plain copies deleted for good, a file
+// still being written left), and an inbox is made from the vault's menu.
 //
 //   NC_URL=http://localhost NC_USER=admin NC_PASSWORD=... [APP_REPO=<this repository>] node tests/e2e/check.mjs
 
@@ -106,6 +109,17 @@ const IMPORT_FILES = { 'x.txt': Buffer.from('imported x\n'), 'tief/y.txt': Buffe
 const COPIED = 'Kopie ✓.txt'
 const COPIED_DATA = Buffer.from('copied into the vault\n')
 const EXPORTS = 'Ausfuhr'
+// Two inboxes of the vault (docs/inbox.md), filled as Harvester fills them: plain
+// files, no secret before they are moved; both into the vault's top, so that the
+// file of the same name in each is kept twice.
+const INBOX_A = 'Eingang A'
+const INBOX_B = 'Eingang B'
+const INBOX_FILES = { [INBOX_A + '/Heft 1.txt']: Buffer.from('issue 1 from A\n'), [INBOX_A + '/Jahrgang/Heft 2.txt']: Buffer.from('issue 2 from A\n'),
+	[INBOX_B + '/Heft 1.txt']: Buffer.from('issue 1 from B\n') }
+const INBOX_MARKER = '.cryptomator-inbox.json'
+// The name a moved file gets beside one of the same name exists only in the vault.
+NAMES.push('Heft 1 (2).txt')
+let inboxFilled = 0
 // A vault made in the browser; its passwords and recovery key, which the server must not see.
 const NEW_VAULT = 'Neuer Tresor ✓'
 const NEW_PASSWORDS = ['erstes-' + randomBytes(6).toString('hex'), 'zweites-' + randomBytes(6).toString('hex'), 'drittes-' + randomBytes(6).toString('hex')]
@@ -174,6 +188,17 @@ await page.fill('#password', process.env.NC_PASSWORD)
 await page.click('button[type=submit]')
 await page.waitForURL(/apps/)
 sent.length = 0
+
+step('two inboxes of the vault are filled (their files wait two minutes after their upload)')
+for (const folder of [INBOX_A, INBOX_A + '/Jahrgang', INBOX_B]) {
+	assert.ok((await dav('MKCOL', folder)).ok, 'MKCOL ' + folder)
+}
+assert.ok((await dav('PUT', INBOX_A + '/' + INBOX_MARKER, JSON.stringify({ version: 1, vault: '/Vault', target: '/', from: 'Harvester job "Mag"', job: 1 }))).ok)
+assert.ok((await dav('PUT', INBOX_B + '/' + INBOX_MARKER, JSON.stringify({ version: 1, vault: '/Vault/' }))).ok)
+for (const [name, data] of Object.entries(INBOX_FILES)) {
+	assert.ok((await dav('PUT', name, data)).ok, 'PUT ' + name)
+}
+inboxFilled = Date.now()
 
 step('"Vaults" in the app menu leads to the view in Files, which lists the vault')
 await page.goto(base + '/index.php/apps/cryptomator_vaults/')
@@ -445,6 +470,84 @@ await page.goBack()
 await page.goBack()
 await row(RENAMED).waitFor()
 
+step('files waiting in an inbox are offered as the vault is unlocked, moved into it, and their plain copies deleted for good')
+// What was uploaded just now waits; the inboxes' files have waited long enough.
+assert.ok((await dav('PUT', INBOX_A + '/frisch.txt', Buffer.from('still arriving\n'))).ok)
+await new Promise((resolve) => setTimeout(resolve, Math.max(0, inboxFilled + 125 * 1000 - Date.now())))
+async function relock() {
+	await page.locator('.cryptomator-banner--unlocked button', { hasText: 'Lock' }).click()
+	await row('Vault').waitFor()
+	await openName('Vault')
+	await page.locator('.cryptomator-dialog input[type=password]').fill(PASSWORD)
+	await page.locator('.cryptomator-dialog button[type=submit]').click()
+	await row('hello.txt').waitFor()
+}
+await relock()
+const noticeA = page.locator('.cryptomator-banner--inbox', { hasText: '/' + INBOX_A })
+await noticeA.waitFor()
+assert.match(await noticeA.textContent(), /2 files from Harvester job "Mag" are waiting in “\/Eingang A”.*1 more is still being written/)
+assert.match(await page.locator('.cryptomator-banner--inbox', { hasText: '/' + INBOX_B }).textContent(), /1 file is waiting in “\/Eingang B”/)
+if (shots) await page.screenshot({ path: shots + '/inbox.png' })
+await noticeA.getByRole('button', { name: 'Move into the vault' }).click()
+await page.locator('.cryptomator-dialog .cryptomator-notice').filter({ hasText: /uploaded/ }).last().waitFor({ timeout: 60000 })
+{
+	const text = await page.locator('.cryptomator-dialog').textContent()
+	assert.match(text, /2 uploaded and checked\. Plain copies deleted for good: 2\./, text)
+	await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+}
+assert.equal((await dav('PROPFIND', INBOX_A + '/Heft 1.txt', undefined, { Depth: '0' })).status, 404, 'the plain copy is gone')
+assert.equal((await dav('PROPFIND', INBOX_A + '/Jahrgang', undefined, { Depth: '0' })).status, 404, 'the folder it emptied too')
+assert.equal((await dav('PROPFIND', INBOX_A + '/' + INBOX_MARKER, undefined, { Depth: '0' })).status, 207, 'the marker stays')
+assert.equal((await dav('PROPFIND', INBOX_A + '/frisch.txt', undefined, { Depth: '0' })).status, 207, 'the file still being written stays')
+{
+	const trash = await fetch(base + '/remote.php/dav/trashbin/' + encodeURIComponent(process.env.NC_USER) + '/trash/', { method: 'PROPFIND', headers: { Authorization: auth, Depth: '1' },
+		body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns"><d:prop><nc:trashbin-original-location/></d:prop></d:propfind>' })
+	assert.ok(!(await trash.text()).includes(INBOX_A), 'nor among the deleted files')
+}
+await page.locator('.cryptomator-banner--inbox', { hasText: '/' + INBOX_B }).waitFor()
+assert.equal(await noticeA.count(), 0, 'nothing ready waits in the first inbox')
+
+step('with the setting on, an inbox is moved as the vault is unlocked; a taken name is kept beside')
+await page.locator('.cryptomator-inbox-auto input[type=checkbox]').check()
+await relock()
+await page.locator('.cryptomator-dialog .cryptomator-notice').filter({ hasText: /uploaded/ }).last().waitFor({ timeout: 60000 })
+{
+	const text = await page.locator('.cryptomator-dialog').textContent()
+	assert.match(text, /Encrypted and checked as “Heft 1 \(2\)\.txt”/, text)
+	assert.match(text, /1 uploaded and checked\. Plain copies deleted for good: 1\./, text)
+	await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+}
+assert.equal((await dav('PROPFIND', INBOX_B + '/Heft 1.txt', undefined, { Depth: '0' })).status, 404)
+for (const [name, data] of [['Heft 1.txt', INBOX_FILES[INBOX_A + '/Heft 1.txt']], ['Heft 1 (2).txt', INBOX_FILES[INBOX_B + '/Heft 1.txt']]]) {
+	await openName(name)
+	assert.equal(await page.locator('.cryptomator-preview--text').textContent(), data.toString())
+	await page.locator('.cryptomator-dialog__close').click()
+}
+await openName('Jahrgang')
+await openName('Heft 2.txt')
+assert.equal(await page.locator('.cryptomator-preview--text').textContent(), INBOX_FILES[INBOX_A + '/Jahrgang/Heft 2.txt'].toString())
+await page.locator('.cryptomator-dialog__close').click()
+await page.goBack()
+await row(RENAMED).waitFor()
+await page.evaluate(() => window.localStorage.clear())
+
+step('an inbox is made from the vault\'s menu: a folder beside it, with the marker')
+await page.locator('[data-cy-files-navigation-item="cryptomator-vaults"] a').first().click()
+await row('Vault').waitFor()
+await rowActions('Vault')
+await page.locator('[data-cy-files-list-row-action="cryptomator-vaults-make-inbox"]:visible').click()
+assert.equal(await page.locator('.cryptomator-dialog input[name=folder]').inputValue(), '/Vault inbox')
+await page.locator('.cryptomator-dialog input[name=from]').fill('Test')
+await page.locator('.cryptomator-dialog button[type=submit]').click()
+await page.locator('.cryptomator-dialog').waitFor({ state: 'detached' })
+{
+	const response = await dav('GET', 'Vault inbox/' + INBOX_MARKER)
+	assert.equal(response.status, 200)
+	assert.deepEqual(await response.json(), { version: 1, vault: '/Vault', target: '/', from: 'Test' })
+}
+await openName('Vault')
+await row(RENAMED).waitFor()
+
 step('entries are exported decrypted into the person\'s files: copied (a large one in parts) and moved')
 async function exportTo(name, button) {
 	await rowActions(name)
@@ -597,6 +700,10 @@ if (process.env.EXPECTED_OUT) {
 		[XLSX_NAME]: { sha256: sha(XLSX_DATA), size: XLSX_DATA.length, type: 'file' },
 		...Object.fromEntries(Object.entries(MORE_DATA).map(([name, data]) => [name, { sha256: sha(data), size: data.length, type: 'file' }])),
 		[COPIED]: { sha256: sha(COPIED_DATA), size: COPIED_DATA.length, type: 'file' },
+		'Heft 1.txt': { sha256: sha(INBOX_FILES[INBOX_A + '/Heft 1.txt']), size: INBOX_FILES[INBOX_A + '/Heft 1.txt'].length, type: 'file' },
+		'Heft 1 (2).txt': { sha256: sha(INBOX_FILES[INBOX_B + '/Heft 1.txt']), size: INBOX_FILES[INBOX_B + '/Heft 1.txt'].length, type: 'file' },
+		Jahrgang: { type: 'dir' },
+		'Jahrgang/Heft 2.txt': { sha256: sha(INBOX_FILES[INBOX_A + '/Jahrgang/Heft 2.txt']), size: INBOX_FILES[INBOX_A + '/Jahrgang/Heft 2.txt'].length, type: 'file' },
 	}))
 }
 

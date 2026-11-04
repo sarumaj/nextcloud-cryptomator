@@ -253,6 +253,20 @@
 	color: var(--color-main-text);
 }
 
+/* Below it, the files waiting in the vault's inboxes, and whether they move by themselves. */
+.cryptomator-banner--inbox {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+.cryptomator-inbox-auto {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 12px 8px;
+	color: var(--color-text-maxcontrast);
+}
+
 .cryptomator-preview--document {
 	background: #fff;
 	border-radius: var(--border-radius, 4px);

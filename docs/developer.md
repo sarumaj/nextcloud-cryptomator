@@ -39,14 +39,19 @@
   folder into another, deletes a link and a folder, stays in *Vaults* on the browser's Back, checks
   that only
   the app's own actions are offered on the vault's entries, opens the vault from the notice and
-  from its `vault.cryptomator`, and locks. It fails if any request carried the password, a
+  from its `vault.cryptomator`, and locks. It moves the files of two inboxes into the vault (by
+  hand, then as it is unlocked: a name kept twice, the plain copies and the folder they emptied
+  deleted for good, a file uploaded just before left) and makes an inbox from the vault's menu;
+  the inboxes' files must wait 2 minutes after their upload, so the test waits for that where it
+  gets there sooner. It fails if any request carried the password, a
   decrypted name or content, a file type icon or an entry's address. With `EXPECTED_OUT` set, it
   writes the entries it expects; copy the vault out of Nextcloud's data directory afterwards (or
   download it over WebDAV) and run `Verify.java` on it to check what Nextcloud stored. Run it also
   against a Nextcloud with object storage as primary storage and Redis, as servers usually are:
   Nextcloud's chunked uploads take another path there (and answer a part with 200, not 201). Run
   it against each new Nextcloud version: the integration relies on how Files decides what to
-  offer. Web Crypto needs HTTPS or `localhost`, so run the browser in the Nextcloud container's
+  offer. Switch the first-run wizard off (`occ app:disable firstrunwizard`): its dialog covers
+  the list. Web Crypto needs HTTPS or `localhost`, so run the browser in the Nextcloud container's
   network:
 
   ```bash
@@ -55,6 +60,12 @@
     mcr.microsoft.com/playwright:v1.49.1-noble \
     sh -c 'npm i --no-save playwright@1.49.1 && node tests/e2e/check.mjs'
   ```
+
+- **Inboxes** (`tests/inbox.test.mjs`, `src/inbox.mjs`): the marker of [the contract](inbox.md)
+  read and refused (bad JSON, missing or wrong keys, `.` and `..`, a later version, an inbox that is
+  its vault or lies in it), where an inbox's files go in the vault, which files wait (changed or
+  uploaded in the last 2 minutes, also with an old modification time), subfolders that are an inbox
+  or a vault of their own, and the names of files kept beside one of the same name.
 
 ## Releasing
 

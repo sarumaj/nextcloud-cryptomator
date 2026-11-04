@@ -16,6 +16,9 @@ app: open their folders, preview, download and upload files, without installing 
   browser and written exactly as Cryptomator writes them, each checked before it enters the vault;
   the vault stays readable by Cryptomator at every step. Large files go in pieces, so the browser
   never holds a whole file of gigabytes.
+- **Inboxes:** an app without the vault's key, such as Harvester, saves plain files into a folder
+  linked to a vault; when you unlock the vault, the app offers to move them into it, encrypted in
+  your browser, and deletes the plain copies for good.
 - **Previews** of pictures, PDFs, text, audio, video, Word documents (docx) and spreadsheets (xlsx,
   xls, ods), all made in the browser.
 
@@ -76,6 +79,10 @@ menu leads there.
    recovery key …** and **Check health …**.
 7. Choose **Lock** in the bar above an open vault, in the vault's menu in *Vaults*, or **Lock all
    vaults** at the top.
+8. Files that wait in an inbox of the vault are offered in the bar above it when you unlock it:
+   **Move into the vault**, or have them moved as you unlock. **Make an inbox for this vault …**
+   in the vault's menu makes a folder one. How inboxes work, and the marker file that makes a
+   folder one (for apps that fill them): [inboxes](docs/inbox.md).
 
 Files from 16 MB are encrypted, uploaded and checked in parts of 10 MB, so memory holds a part,
 not the file. Downloading a large file in pieces needs a browser that lets a page save a file so
@@ -87,6 +94,10 @@ which changes with anything inside it, is compared just before, as Nextcloud ref
 folders). It is also removed from Nextcloud's deleted files, with its versions, so that no
 unencrypted copy stays on the server. What is shared with you is copied, never deleted: deleting
 it would take it from its owner. A folder that holds a vault cannot go into one.
+
+The files of an inbox are moved the same way, a taken name kept beside rather than replaced, and
+their emptied subfolders removed as well ([inboxes](docs/inbox.md)). Until they are moved, they
+are ordinary files on the server, as whatever put them there sent them.
 
 An export writes the decrypted file into your files and checks it: read back and compared (a large
 one in parts of 10 MB, each against its SHA-256). Moving out removes an entry from the vault only

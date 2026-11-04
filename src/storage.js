@@ -3,7 +3,7 @@
  *
  * The person's files over WebDAV, as the Files app reads and writes them: a
  * vault's folder as the storage js/vault.js uses (encrypted files only), and the
- * search for folders that hold a vault.
+ * search for folders that hold a vault (or an inbox's marker).
  *
  * A write succeeds on any 2xx that no redirect led to (a redirect could end on a
  * sign-in page with 200): Nextcloud answers a part of a chunked upload to object
@@ -30,9 +30,10 @@ const DAV = 'DAV:'
 const OC = 'http://owncloud.org/ns'
 const NC = 'http://nextcloud.org/ns'
 // What a listing asks for: the type, size and time, the ETag (which changes with
-// the contents, a folder's also with anything inside it) and the permissions.
-const PROPS = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns"><d:prop>'
-	+ '<d:resourcetype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><oc:permissions/></d:prop></d:propfind>'
+// the contents, a folder's also with anything inside it), the permissions and when
+// a file was uploaded (an inbox's files wait while they may still be written).
+const PROPS = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:prop>'
+	+ '<d:resourcetype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><oc:permissions/><nc:upload_time/></d:prop></d:propfind>'
 // Larger files go up in chunks (Nextcloud's chunked upload, v2): each request
 // stays below the server's upload limit, and the object store assembles the parts.
 const CHUNKED_FROM = 20 * 1024 * 1024
@@ -66,11 +67,13 @@ function parseMultistatus(text) {
 		const prop = (name, ns = DAV) => response.getElementsByTagNameNS(ns, name)[0]
 		const length = prop('getcontentlength')
 		const modified = prop('getlastmodified')
+		const uploaded = Number(prop('upload_time', NC)?.textContent) || 0
 		return {
 			href: prop('href').textContent,
 			isDir: response.getElementsByTagNameNS(DAV, 'collection').length > 0,
 			size: length ? Number(length.textContent) : 0,
 			mtime: modified ? new Date(modified.textContent) : undefined,
+			uploadTime: uploaded ? new Date(uploaded * 1000) : undefined,
 			etag: prop('getetag')?.textContent || undefined,
 			permissions: prop('permissions', OC)?.textContent ?? '',
 			originalLocation: prop('trashbin-original-location', NC)?.textContent,
@@ -314,13 +317,13 @@ export function davStorage(folder) {
 			}
 			// The first response is the folder itself.
 			return parseMultistatus(await response.text()).slice(1)
-				.map((entry) => ({ name: lastSegment(entry.href), isDir: entry.isDir, size: entry.size, mtime: entry.mtime, etag: entry.etag, permissions: entry.permissions }))
+				.map((entry) => ({ name: lastSegment(entry.href), isDir: entry.isDir, size: entry.size, mtime: entry.mtime, uploadTime: entry.uploadTime, etag: entry.etag, permissions: entry.permissions }))
 		},
 	}
 }
 
-/** The folders of the person's files that hold a vault.cryptomator, e.g. /Documents/Vault. */
-export async function findVaults() {
+/** The folders of the person's files that hold a file of this name, e.g. /Documents/Vault. */
+async function foldersHolding(name) {
 	const user = userId()
 	const escape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 	const response = await fetch(generateRemoteUrl('dav') + '/', {
@@ -331,7 +334,7 @@ export async function findVaults() {
 			+ '<d:searchrequest xmlns:d="DAV:"><d:basicsearch>'
 			+ '<d:select><d:prop><d:displayname/></d:prop></d:select>'
 			+ '<d:from><d:scope><d:href>/files/' + escape(user) + '</d:href><d:depth>infinity</d:depth></d:scope></d:from>'
-			+ '<d:where><d:like><d:prop><d:displayname/></d:prop><d:literal>vault.cryptomator</d:literal></d:like></d:where>'
+			+ '<d:where><d:like><d:prop><d:displayname/></d:prop><d:literal>' + escape(name) + '</d:literal></d:like></d:where>'
 			+ '</d:basicsearch></d:searchrequest>',
 	})
 	if (!response.ok) {
@@ -340,10 +343,20 @@ export async function findVaults() {
 	const prefix = '/files/' + user + '/'
 	return parseMultistatus(await response.text())
 		.map((entry) => decodeURIComponent(entry.href))
-		.filter((href) => href.endsWith('/vault.cryptomator') && href.includes(prefix))
-		.map((href) => '/' + href.slice(href.indexOf(prefix) + prefix.length, -'/vault.cryptomator'.length))
+		.filter((href) => href.endsWith('/' + name) && href.includes(prefix))
+		.map((href) => '/' + href.slice(href.indexOf(prefix) + prefix.length, -('/' + name).length))
 		.map((folder) => folder.replace(/\/+$/, '') || '/')
 		.sort((a, b) => a.localeCompare(b))
+}
+
+/** The folders of the person's files that hold a vault.cryptomator, e.g. /Documents/Vault. */
+export function findVaults() {
+	return foldersHolding('vault.cryptomator')
+}
+
+/** The folders of the person's files that hold a file of this name: inboxes, by their marker. */
+export function findMarkers(name) {
+	return foldersHolding(name)
 }
 
 /**
@@ -396,27 +409,48 @@ export async function walkFiles(storage, paths) {
  * false if it is not among them (e.g. it was in someone else's share).
  */
 export async function purgeDeleted(path) {
+	return (await purgeDeletedMany([path])).has(path.replace(/^\/+|\/+$/g, ''))
+}
+
+/**
+ * purgeDeleted for several paths, with one listing of the deleted files: the set
+ * of those removed (all of them where there are no deleted files). onlyEmpty
+ * removes a deleted folder only if nothing is in it: a file put into it just
+ * before it was deleted is no one's to destroy.
+ */
+export async function purgeDeletedMany(paths, { onlyEmpty = false } = {}) {
+	const wanted = paths.map((path) => path.replace(/^\/+|\/+$/g, ''))
 	const trash = generateRemoteUrl('dav') + '/trashbin/' + encodeURIComponent(userId()) + '/trash/'
-	const response = await fetch(trash, {
+	const propfind = (url) => fetch(url, {
 		method: 'PROPFIND',
 		headers: davHeaders({ Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' }),
 		credentials: 'same-origin',
 		body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns"><d:prop>'
-			+ '<nc:trashbin-original-location/><nc:trashbin-deletion-time/></d:prop></d:propfind>',
+			+ '<d:resourcetype/><nc:trashbin-original-location/><nc:trashbin-deletion-time/></d:prop></d:propfind>',
 	})
+	const response = await propfind(trash)
 	if (response.status === 404 || response.status === 405) {
-		return true
+		return new Set(wanted)
 	}
 	if (response.status !== 207) {
-		throw davError(response.status, path, 'PROPFIND (deleted files)')
+		throw davError(response.status, wanted[0] ?? '', 'PROPFIND (deleted files)')
 	}
-	const wanted = path.replace(/^\/+|\/+$/g, '')
-	const [item] = parseMultistatus(await response.text()).slice(1)
-		.filter((entry) => entry.originalLocation === wanted)
-		.sort((a, b) => b.deletionTime - a.deletionTime)
-	if (!item) {
-		return false
+	const items = parseMultistatus(await response.text()).slice(1)
+	const removed = new Set()
+	for (const path of wanted) {
+		const [item] = items.filter((entry) => entry.originalLocation === path).sort((a, b) => b.deletionTime - a.deletionTime)
+		if (!item) {
+			continue
+		}
+		const url = new URL(item.href, window.location.href).href
+		if (onlyEmpty && item.isDir) {
+			const inside = await propfind(url)
+			if (inside.status !== 207 || parseMultistatus(await inside.text()).length > 1) {
+				continue
+			}
+		}
+		await davRequest('DELETE', url, {}, path, [404])
+		removed.add(path)
 	}
-	await davRequest('DELETE', new URL(item.href, window.location.href).href, {}, path, [404])
-	return true
+	return removed
 }
