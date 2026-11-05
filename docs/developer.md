@@ -83,4 +83,5 @@ A tag `vX.Y.Z` must carry the version in `appinfo/info.xml`. The release workflo
 (`.forgejo/workflows/release.yml`, the shared action `nextcloud-app-release` of `dawid/ci-actions`)
 builds `cryptomator_vaults-X.Y.Z.tar.gz` and attaches it to the release, whose text is the version's
 section of `CHANGELOG.md` (a tag without one fails before anything is released); with the secrets
-`APP_SIGNING_KEY` and `APPSTORE_TOKEN` it also signs it and publishes it on the app store.
+`NC_APP_SIGNING_KEY` and `NC_APPSTORE_TOKEN` it also signs it and publishes it on the app store (not
+when the repository's variable `NC_APP_STORE` is `false`).
