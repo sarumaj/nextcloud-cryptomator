@@ -73,9 +73,13 @@
 
 ## Releasing
 
+The release bot (`release-bot` on git.ciepiela.org) does it weekly when a release is due, from
+the Conventional Commits since the last tag and the `## Unreleased` entries of `CHANGELOG.md`
+(`.cz.toml`). By hand, at once:
+
 1. Move the `## Unreleased` entries of `CHANGELOG.md` under `## X.Y.Z - YYYY-MM-DD` and set
    `<version>` in `appinfo/info.xml` to `X.Y.Z`.
-2. Commit as `release X.Y.Z`.
+2. Commit as `chore(release): X.Y.Z`.
 3. Tag it, annotated and signed: `git tag -s vX.Y.Z -m "Vaults for Cryptomator X.Y.Z"`, and push
    the tag.
 
