@@ -65,6 +65,43 @@
     sh -c 'npm i --no-save playwright@1.49.1 && node tests/e2e/check.mjs'
   ```
 
+  CI runs it in the job `e2e` on Nextcloud 35 with PostgreSQL, on the server of the shared
+  action `nextcloud-app-server` (below), with `tests/e2e/run.sh` as the action's check: it
+  switches the wizard off, uploads the test vault as `/Vault` over WebDAV and runs the command
+  test beside the server, Playwright's Chromium installed on the job's host (with the libraries
+  it needs, through `sudo`). By hand, the same as CI (about 5 minutes; without `sudo` the
+  libraries must be there, else use the container above):
+
+  ```bash
+  python3 nextcloud-app-server.py run --app-dir app/cryptomator_vaults --nextcloud 35 \
+    --check tests/e2e/run.sh --port 8080
+  ```
+
+  Object storage, Redis and other Nextcloud versions remain by hand.
+
+- **The server part** (`tests/php/`, PHPUnit against Nextcloud's public API `nextcloud/ocp`, no
+  Nextcloud: `composer test`): the two listeners registered for their events; the Files page gets
+  the integration as an init script after its translations, and its styles, each a file the app
+  has; the policy for the previews adds only blob: media and frames and WebAssembly to
+  Nextcloud's own, never eval of scripts; *Vaults* in the menu (info.xml, `routes.php`, the
+  controller) redirects every person, not only admins, to the view `src/files.js` registers.
+  `tests/stubs/server.php` stands in for the server's classes that the public API calls.
+- **On a real Nextcloud** (the CI job `server`, Nextcloud 32 and 35 with PostgreSQL): the shared
+  action `nextcloud-app-server` of `dawid/ci-actions` installs the app store's release, upgrades
+  it to the checkout, checks that it is enabled, that occ loads, that it can be disabled and
+  enabled again and that `nextcloud.log` has no error of it, and runs `tests/server/check.sh`:
+  as a person who is no admin and reads German, *Tresore* in the app menu leads to the vaults'
+  view in Files, a visitor not signed in to the login; the Files page loads the translations and
+  the module before Files' own scripts, and its policy allows blob: media and frames and
+  WebAssembly; every module of the integration (its imports followed), the translations, styles
+  and icons are served with their types and as committed. By hand, with the action's script
+  (`nextcloud-app-server.py` of `dawid/ci-actions`, needs Docker and Python 3):
+
+  ```bash
+  python3 nextcloud-app-server.py run --app-dir app/cryptomator_vaults --nextcloud 35 \
+    --check tests/server/check.sh --port 8080
+  ```
+
 - **Inboxes** (`tests/inbox.test.mjs`, `src/inbox.mjs`): the marker of [the contract](inbox.md)
   read and refused (bad JSON, missing or wrong keys, `.` and `..`, a later version, an inbox that is
   its vault or lies in it), where an inbox's files go in the vault, which files wait (changed or

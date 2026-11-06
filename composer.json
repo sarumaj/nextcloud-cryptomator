@@ -9,11 +9,14 @@
     "require-dev": {
         "nextcloud/coding-standard": "^1.4",
         "nextcloud/ocp": "dev-stable32",
+        "phpunit/phpunit": "^11.5",
         "vimeo/psalm": "^6.0"
     },
     "autoload-dev": {
         "psr-4": {
-            "OCA\\CryptomatorVaults\\": "app/cryptomator_vaults/lib/"
+            "OCA\\CryptomatorVaults\\": "app/cryptomator_vaults/lib/",
+            "OCA\\CryptomatorVaults\\Tests\\": "tests/php/",
+            "OCP\\": "vendor/nextcloud/ocp/OCP/"
         }
     },
     "config": {
@@ -23,6 +26,7 @@
         }
     },
     "scripts": {
+        "test": "phpunit",
         "cs:check": "php-cs-fixer fix --dry-run --diff",
         "cs:fix": "php-cs-fixer fix",
         "psalm": "psalm --no-cache --threads=1"

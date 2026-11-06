@@ -2,3 +2,4 @@ node_modules/
 tests/fixtures/generator/target/
 vendor/
 .php-cs-fixer.cache
+.phpunit.result.cache

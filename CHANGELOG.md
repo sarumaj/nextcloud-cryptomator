@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- CI runs PHPUnit tests of the server part (`tests/php/`, against Nextcloud's public API), the
+  inbox tests (`tests/inbox.test.mjs`), and checks the app on a real Nextcloud 32 and 35 with
+  PostgreSQL (the shared action `nextcloud-app-server`): installed over the app store's release
+  and upgraded, then what people get (`tests/server/check.sh`): the menu's entry, the Files
+  page's scripts, styles and policy, every script served as committed. The browser test
+  (`tests/e2e/check.mjs`) runs in CI too, on Nextcloud 35 (`tests/e2e/run.sh`).
+
 ### Changed
 
 - The README says that the app has no settings on the server, and where its one choice is (moving

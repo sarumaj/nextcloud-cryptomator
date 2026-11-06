@@ -1,11 +1,16 @@
 ---
 # The app's PHP and JavaScript must parse, the PHP must follow Nextcloud's coding
-# standard (php-cs-fixer) and pass Psalm, its info.xml must pass the app store's
+# standard (php-cs-fixer), pass Psalm and its PHPUnit tests (tests/php, against
+# Nextcloud's public API, no Nextcloud), its info.xml must pass the app store's
 # schema, the Markdown must pass markdownlint, the committed build
 # (js/cryptomator_vaults-*.mjs) must be what src/ builds, its translations must
 # cover the integration, the tests (Node, no Nextcloud and no network:
-# tests/vault.test.js, tests/write.test.js) must pass, and Cryptomator's own
-# library must read what the app writes (tests/compat.sh).
+# tests/vault.test.js, tests/write.test.js, tests/keys.test.js, tests/health.test.js,
+# tests/inbox.test.mjs) must pass, and Cryptomator's own library must read what the
+# app writes (tests/compat.sh). On a real Nextcloud with PostgreSQL (the oldest and
+# the newest supported), the app must install over its release, upgrade and pass
+# tests/server/check.sh; the browser test (tests/e2e/check.mjs) must pass on the
+# newest.
 name: CI
 # A failed job mails whoever started the run. Renovate's bot has no mailbox: when its
 # branch fails, Renovate opens a pull request, which mails the repository's watchers.
@@ -52,6 +57,9 @@ jobs:
       - name: Check the PHP with Psalm
         run: composer psalm
 
+      - name: Run the PHPUnit tests
+        run: vendor/bin/phpunit
+
   javascript:
     runs-on: docker
     container: docker.io/library/node:24-bookworm
@@ -88,7 +96,7 @@ jobs:
         run: node tests/l10n.js
 
       - name: Run the tests
-        run: node --test tests/vault.test.js tests/write.test.js tests/keys.test.js tests/health.test.js
+        run: node --test tests/vault.test.js tests/write.test.js tests/keys.test.js tests/health.test.js tests/inbox.test.mjs
 
   # What the app writes, read and checked by Cryptomator's own library (cryptofs):
   # tests/compat.test.js through tests/compat.sh, with Java from the image and Node
@@ -111,3 +119,46 @@ jobs:
 
       - name: Check what the app writes with Cryptomator's library
         run: tests/compat.sh
+
+  # The app on a real Nextcloud (the shared action nextcloud-app-server of
+  # dawid/ci-actions): the app store's release installed and upgraded to the
+  # checkout, the checks every app gets, then what people get (tests/server/check.sh).
+  server:
+    # A whole Ubuntu with rootless Docker, for Nextcloud and PostgreSQL.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest Nextcloud info.xml supports and the newest released (36 has no image yet).
+        nextcloud: ["32", "35"]
+    steps:
+      - name: Check out
+        run: *checkout
+      - name: Check the app on Nextcloud ${{ matrix.nextcloud }}
+        uses: https://git.ciepiela.org/dawid/ci-actions/nextcloud-app-server@main
+        with:
+          app-id: cryptomator_vaults
+          nextcloud: ${{ matrix.nextcloud }}
+          check: tests/server/check.sh
+          # Docs or translations alone need no server.
+          paths: app/** tests/server/** .forgejo/workflows/ci.yml
+
+  # The browser test (tests/e2e/check.mjs) on the same kind of server, the newest
+  # Nextcloud only: it takes minutes (its inboxes' files wait 2 minutes), and the
+  # integration relies on how that Files decides what to offer. tests/e2e/run.sh
+  # uploads the test vault and runs Playwright's Chromium beside the server.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        run: *checkout
+      - name: Run the browser test on Nextcloud 35
+        uses: https://git.ciepiela.org/dawid/ci-actions/nextcloud-app-server@main
+        with:
+          app-id: cryptomator_vaults
+          nextcloud: "35"
+          check: tests/e2e/run.sh
+          # What the browser runs: the app, its sources and build, the test and its vault.
+          paths: app/** src/** package.json package-lock.json tests/e2e/** tests/fixtures/** .forgejo/workflows/ci.yml

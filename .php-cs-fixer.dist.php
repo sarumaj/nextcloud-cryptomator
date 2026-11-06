@@ -13,6 +13,8 @@ $config
 	->getFinder()
 	->in(__DIR__ . '/app/cryptomator_vaults/appinfo')
 	->in(__DIR__ . '/app/cryptomator_vaults/lib')
+	->in(__DIR__ . '/tests/php')
+	->in(__DIR__ . '/tests/stubs')
 	->append([__FILE__]);
 
 return $config;

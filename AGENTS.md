@@ -13,10 +13,12 @@ changed in the Files app; everything is decrypted and encrypted in the browser. 
 - `src/`: the Files integration, built by Vite (`vite.config.mjs`) into the app's `js/`.
 - `tests/`: Node tests (no Nextcloud, no network), `tests/fixtures/` (vaults written by
   Cryptomator's library, and the Java generator), `tests/compat.sh` (Cryptomator's library reads
-  what the app writes), `tests/e2e/` (Playwright against a Nextcloud), `tests/stubs/` (Psalm).
+  what the app writes), `tests/php/` (PHPUnit, against Nextcloud's public API, no Nextcloud),
+  `tests/server/check.sh` (what people get, on a real Nextcloud), `tests/e2e/` (Playwright
+  against a Nextcloud), `tests/stubs/` (Psalm, and the server's parts PHPUnit needs).
 - `docs/developer.md`: what the tests cover, releasing. `screenshots/`: the README's and the app
   store's pictures.
-- `composer.json`: development tools only (php-cs-fixer, Psalm); the app needs none.
+- `composer.json`: development tools only (PHPUnit, php-cs-fixer, Psalm); the app needs none.
 
 ## Checks
 
@@ -28,8 +30,14 @@ npm test                                                 # Node tests and transl
 npm run notice && git diff --exit-code NOTICE.md         # third-party notice
 npm run test:compat                                      # Java 25 and Maven, or Docker
 composer install && composer cs:check && composer psalm  # composer:2 in Docker if missing
+composer test                                            # PHPUnit (tests/php)
 npx --yes markdownlint-cli2 "*.md" "docs/**/*.md"
 ```
+
+On a real Nextcloud (the CI jobs `server` and `e2e`, Docker and Python 3), with the shared
+script `nextcloud-app-server.py` of `dawid/ci-actions`: `run --app-dir app/cryptomator_vaults
+--nextcloud 35 --check tests/server/check.sh` (or `--check tests/e2e/run.sh`, the browser test);
+`docs/developer.md` has the details.
 
 `appinfo/info.xml` is checked against `https://apps.nextcloud.com/schema/apps/info.xsd` with
 `xmllint --noout --schema`.
