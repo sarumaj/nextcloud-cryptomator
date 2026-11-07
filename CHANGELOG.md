@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.0 - 2026-11-07
+
 ### Added
 
 - Videos, audio and PDFs are streamed, of any size: the browser's player asks for the bytes it
