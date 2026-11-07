@@ -69,10 +69,11 @@ echo "OK: the app menu has Tresore, in the person's language"
 
 curl -fsS "${as_person[@]}" -D "$work/headers" -o "$work/files.html" "$url/index.php/apps/files/"
 policy=$(tr -d '\r' <"$work/headers" | sed -n 's/^content-security-policy: *//Ip')
-for wanted in "media-src [^;]*blob:" "frame-src [^;]*blob:" "script-src [^;]*'wasm-unsafe-eval'"; do
+for wanted in "media-src [^;]*blob:" "frame-src [^;]*blob:" "frame-src [^;]*'self'" "worker-src [^;]*'self'" \
+	"script-src [^;]*'wasm-unsafe-eval'"; do
 	grep -Eq "(^|;)$wanted" <<<"$policy" || fail "the Files page's policy lacks $wanted: $policy"
 done
-echo "OK: the Files page's policy allows blob: media and frames, and WebAssembly"
+echo "OK: the Files page's policy allows blob: media and frames, the stream worker and its frames, and WebAssembly"
 
 # The page's scripts in their order, each as its path without the cache's ?v=.
 sed -n 's/.*<script[^>]* src="\([^"?]*\).*/\1/p' "$work/files.html" >"$work/scripts"
@@ -112,9 +113,15 @@ done
 modules=("$dir"/js/"$app"-*.mjs)
 [ "${#seen[@]}" -eq "${#modules[@]}" ] \
 	|| fail "the integration loads ${#seen[@]} of the ${#modules[@]} modules in js/"
-for path in l10n/de.js l10n/pl.js; do served "$path" text/javascript; done
+for path in l10n/de.js l10n/pl.js js/stream-worker.js; do served "$path" text/javascript; done
 for path in css/files.css "css/$app-files.css"; do served "$path" text/css; done
 for path in img/app.svg img/file.svg; do served "$path" image/svg+xml; done
-echo "OK: the ${#seen[@]} modules, the translations, styles and icons are served as committed"
+echo "OK: the ${#seen[@]} modules, the stream worker, the translations, styles and icons are served as committed"
+
+# The stream worker's URLs are answered in the browser alone (js/stream-worker.js): the server
+# knows none of them, so that a page without the worker gets "not found" and falls back.
+status=$(curl -sS "${as_person[@]}" -o /dev/null -w '%{http_code}' "$url$web/js/stream/probe")
+[ "$status" = 404 ] || fail "the server answers the stream worker's probe with $status, not 404"
+echo "OK: the server answers the stream worker's URLs with 404"
 
 ocs -X DELETE "$url/ocs/v2.php/cloud/users/$person" >/dev/null

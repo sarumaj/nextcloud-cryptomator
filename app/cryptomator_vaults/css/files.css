@@ -95,6 +95,11 @@
 	border: none;
 }
 
+/* A streamed player's page (js/stream-worker.js): audio needs only its controls. */
+.cryptomator-preview--audio {
+	height: 80px;
+}
+
 .cryptomator-preview--text {
 	margin: 0;
 	padding: 8px;

@@ -4,6 +4,17 @@
 
 ### Added
 
+- Videos, audio and PDFs are streamed, of any size: the browser's player asks for the bytes it
+  needs (after a seek, those there), and only the chunks that hold them are read and decrypted,
+  so playback starts at once and no file is held whole. Downloads from 16 MB are streamed too in
+  browsers that can't save a file in pieces (Firefox, Safari). This uses the app's service worker
+  (`js/stream-worker.js`), which holds no key and whose addresses never reach the server; where
+  it doesn't run (a private window of Firefox), files are decrypted whole as before. The Files
+  page's policy allows the worker and its frames (`worker-src`, `frame-src 'self'`).
+- More media are previewed: MKV and 3GP videos, M4B (audiobooks), AAC and WEBA audio. A video or
+  audio the browser can't play (its type or codecs) says so and offers the download, instead of
+  an empty player; a video of which the browser plays only the sound says that.
+
 - CI runs PHPUnit tests of the server part (`tests/php/`, against Nextcloud's public API), the
   inbox tests (`tests/inbox.test.mjs`), and checks the app on a real Nextcloud 32 and 35 with
   PostgreSQL (the shared action `nextcloud-app-server`): installed over the app store's release

@@ -10,12 +10,16 @@
  * downloads are typed application/octet-stream, which no browser renders.
  */
 import { t } from './l10n.js'
+import { closeStream, closeStreams, openStream, streamDownload, streaming } from './stream.js'
 
 // Above this size a file is only offered for download: the browser holds it
-// encrypted and decrypted at once.
+// encrypted and decrypted at once. Not for the kinds streamed (STREAMED), where
+// the browser's worker answers (src/stream.js).
 const PREVIEW_LIMIT = 100 * 1024 * 1024
 const TEXT_LIMIT = 5 * 1024 * 1024
 export const LARGE_FILE = 1024 * 1024 * 1024
+// The kinds the browser plays or shows from a URL it reads in ranges: streamed.
+const STREAMED = ['video', 'audio', 'pdf']
 
 /** Every decrypted file the dialogs made into a URL, revoked on lock. */
 const urls = new Set()
@@ -69,6 +73,7 @@ export function revokeAll() {
 	}
 	urls.clear()
 	closeDialog()
+	closeStreams()
 }
 
 export function download(name, data) {
@@ -179,8 +184,12 @@ export function askPassword(vaultName, unlock, account) {
 // ----- Previews -----
 
 const IMAGE = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'svg']
-const VIDEO = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', ogv: 'video/ogg' }
-const AUDIO = { mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac' }
+// Which of these play depends on the browser and the codecs inside (MKV and 3GP
+// most): a file it cannot play says so (watchPlayer).
+const VIDEO = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', ogv: 'video/ogg',
+	mkv: 'video/x-matroska', '3gp': 'video/3gpp' }
+const AUDIO = { mp3: 'audio/mpeg', m4a: 'audio/mp4', m4b: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', oga: 'audio/ogg',
+	opus: 'audio/ogg', weba: 'audio/webm', wav: 'audio/wav', flac: 'audio/flac' }
 const TEXT = ['txt', 'csv', 'tsv', 'json', 'log', 'xml', 'yml', 'yaml', 'ini', 'conf', 'cfg', 'toml',
 	'js', 'ts', 'py', 'sh', 'php', 'java', 'go', 'rs', 'c', 'h', 'css', 'html', 'htm', 'vcf', 'ics', 'tex']
 
@@ -275,10 +284,15 @@ function render(preview, data, name) {
 
 /**
  * A file's preview: read(onProgress, onDownload) decrypts it; previewed where it
- * is safe and small enough, always offered for download.
+ * is safe and small enough, always offered for download. A video, audio or PDF is
+ * streamed instead, of any size, where the browser can (open() opens the file
+ * for reads in ranges, Vault.openFile).
  */
-export async function showFile(name, size, read, message) {
+export async function showFile(name, size, read, message, open) {
 	const preview = previewKind(name)
+	if (open && STREAMED.includes(preview.kind) && await streaming()) {
+		return showStream(name, size, preview, open, message)
+	}
 	const previewable = preview.kind !== 'none' && size <= (preview.kind === 'text' ? TEXT_LIMIT : PREVIEW_LIMIT)
 	if (!previewable && size > LARGE_FILE
 		&& !window.confirm(t('This file is {size}. Your browser holds it twice while decrypting. Continue?', { size: humanSize(size) }))) {
@@ -325,6 +339,83 @@ export async function showFile(name, size, read, message) {
 	} catch (error) {
 		if (current?.dialog === dialog) {
 			body.replaceChildren(notice(message(error), 'error'))
+		}
+	}
+}
+
+/**
+ * A streamed preview: the browser's player (in a page of the worker's, in a frame)
+ * or PDF viewer reads the file in ranges, each decrypted as it is asked for; the
+ * download is streamed too. The file is closed with the dialog.
+ */
+async function showStream(name, size, preview, open, message) {
+	let stream = null
+	const body = el('div', { class: 'cryptomator-dialog__body' }, notice(t('Decrypting …')))
+	const downloadButton = el('button', { type: 'button', disabled: true }, t('Download'))
+	const dialog = openDialog(name, [
+		el('div', { class: 'cryptomator-dialog__head' }, [
+			el('h2', {}, name),
+			el('span', { class: 'cryptomator-dialog__meta' }, humanSize(size)),
+			downloadButton,
+			el('button', { type: 'button', class: 'cryptomator-dialog__close', onclick: closeDialog }, t('Close')),
+		]),
+		body,
+	], () => stream && closeStream(stream.id))
+	dialog.querySelector('.cryptomator-dialog__close').focus()
+	try {
+		const file = await open()
+		if (current?.dialog !== dialog) {
+			return
+		}
+		stream = openStream(file, name, preview.type, preview.kind)
+		downloadButton.disabled = false
+		downloadButton.addEventListener('click', () => streamDownload(file, name))
+		if (preview.kind === 'pdf') {
+			body.replaceChildren(el('iframe', { class: 'cryptomator-preview cryptomator-preview--frame', src: stream.url, title: name }))
+			return
+		}
+		const problem = el('div', { 'aria-live': 'polite' })
+		const frame = el('iframe', {
+			class: 'cryptomator-preview cryptomator-preview--frame cryptomator-preview--stream cryptomator-preview--' + preview.kind,
+			src: stream.frame,
+			title: name,
+			allow: 'autoplay; fullscreen',
+			allowfullscreen: true,
+			onload: () => watchPlayer(frame, preview.kind, problem),
+		})
+		body.replaceChildren(problem, frame)
+	} catch (error) {
+		if (current?.dialog === dialog) {
+			body.replaceChildren(notice(message(error), 'error'))
+		}
+	}
+}
+
+/**
+ * Says so when the browser cannot play the file (its type or codecs), or shows a
+ * video's sound only: the player's page runs no script, so its element is watched
+ * from here (the page is this origin's).
+ */
+function watchPlayer(frame, kind, problem) {
+	const media = frame.contentDocument?.querySelector(kind)
+	if (!media) {
+		return
+	}
+	const unplayable = () => problem.replaceChildren(notice(t('Your browser cannot play this file. Download it to open it.'), 'error'))
+	media.addEventListener('error', unplayable)
+	if (media.error) {
+		unplayable()
+	}
+	if (kind === 'video') {
+		const picture = () => {
+			if (media.videoWidth === 0 && !media.error) {
+				problem.replaceChildren(notice(t('Your browser plays only the sound of this video. Download it to watch it.')))
+			}
+		}
+		if (media.readyState >= 1) {
+			picture()
+		} else {
+			media.addEventListener('loadedmetadata', picture, { once: true })
 		}
 	}
 }

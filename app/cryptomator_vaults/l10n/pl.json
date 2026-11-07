@@ -22,6 +22,8 @@
         "Close": "Zamknij",
         "This file is {size}. Your browser holds it twice while decrypting. Continue?": "Ten plik ma {size}. Podczas odszyfrowywania przeglądarka trzyma go w pamięci dwa razy. Kontynuować?",
         "No preview for this file. Download it to open it.": "Brak podglądu tego pliku. Pobierz go, aby go otworzyć.",
+        "Your browser cannot play this file. Download it to open it.": "Twoja przeglądarka nie może odtworzyć tego pliku. Pobierz go, aby go otworzyć.",
+        "Your browser plays only the sound of this video. Download it to watch it.": "Twoja przeglądarka odtwarza tylko dźwięk tego filmu. Pobierz go, aby go obejrzeć.",
         "Vaults can only be opened over HTTPS: the browser provides its encryption only there.": "Sejfy można otwierać tylko przez HTTPS: tylko tam przeglądarka udostępnia swoje szyfrowanie.",
         "Unlock {vault}": "Odblokuj {vault}",
         "The password and the vault's keys stay in this browser tab: the server only sends the encrypted files.": "Hasło i klucze sejfu zostają w tej karcie przeglądarki: serwer wysyła tylko zaszyfrowane pliki.",

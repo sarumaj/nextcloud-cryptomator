@@ -20,7 +20,8 @@ app: open their folders, preview, download and upload files, without installing 
   linked to a vault; when you unlock the vault, the app offers to move them into it, encrypted in
   your browser, and deletes the plain copies for good.
 - **Previews** of pictures, PDFs, text, audio, video, Word documents (docx) and spreadsheets (xlsx,
-  xls, ods), all made in the browser.
+  xls, ods), all made in the browser. Videos, audio and PDFs of any size are streamed: the player
+  reads only the part it plays, decrypted as it asks for it, and starts at once.
 
 Not affiliated with Skymatic GmbH, the makers of Cryptomator.
 
@@ -65,9 +66,12 @@ automatically when I unlock**) stay in each person's browser.
    with the vault's folder as its user name.
 3. Browse it like any folder in Files. Choose a file to preview it (pictures, PDFs, text, audio,
    video, Markdown, ZIP archives, HEIC photos, Word, PowerPoint and OpenDocument documents and
-   spreadsheets up to 100 MB); its menu has **Download**. A large file
-   without a preview goes straight to your computer: Edge and Chrome ask where to save it and
-   write it in pieces as it is decrypted, other browsers hold it in memory first.
+   spreadsheets up to 100 MB; videos, audio and PDFs of any size); its menu has **Download**.
+   Videos are MP4, M4V, WebM, MOV, OGV, MKV and 3GP, audio MP3, M4A, M4B, AAC, OGG, OGA, Opus,
+   WEBA, WAV and FLAC; whether one plays depends on your browser and the codecs inside (MKV and
+   3GP most), and one it can't play says so. A large file without a preview goes straight to your
+   computer: Edge and Chrome ask where to save it and write it in pieces as it is decrypted, other
+   browsers save it as it is decrypted too.
 4. To add files, choose **Upload files …** or **Upload folder …** at the top, or drop files and
    folders on the list; **New folder …** creates a folder. A folder of a name that is there
    already gets the new files; if a file of that name exists, you're asked whether to replace it.
@@ -89,8 +93,11 @@ automatically when I unlock**) stay in each person's browser.
    folder one (for apps that fill them): [inboxes](docs/inbox.md).
 
 Files from 16 MB are encrypted, uploaded and checked in parts of 10 MB, so memory holds a part,
-not the file. Downloading a large file in pieces needs a browser that lets a page save a file so
-(Edge, Chrome); others hold the file in memory, and above 1 GB the app asks first.
+not the file. Videos, audio and PDFs are streamed, and so are downloads from 16 MB: the browser's
+player asks for the bytes it needs (after a seek, those there), and only the chunks of 32 KB that
+hold them are read and decrypted. This takes the app's service worker (`js/stream-worker.js`),
+which a private window of Firefox, for one, doesn't run: there the file is decrypted whole first,
+previews stop at 100 MB, and above 1 GB the app asks before a download.
 
 Moving a file or folder into the vault deletes the original once all of it is in the vault and
 checked, and only if it did not change meanwhile (its ETag: `If-Match` for a file; a folder's,
@@ -143,6 +150,10 @@ The server only serves the app's scripts. Everything else runs in the browser:
 3. It decrypts names (AES-SIV) and contents (AES-GCM, or AES-CTR with HMAC), and checks that
    each part is authentic: a changed byte is reported, not shown.
 4. `src/files.js` hands the decrypted folders to Files as a view of its own.
+5. A video, audio or PDF is played or shown from addresses of the app's service worker
+   (`js/stream-worker.js`), which the browser answers itself: the worker asks the page for the
+   bytes the player wants, and the page reads and decrypts just their chunks. The worker holds
+   no key, and these addresses never reach the server (it answers them with "not found").
 
 Files would ask the server for some things about what it shows, so the integration keeps it from
 that:
@@ -203,10 +214,12 @@ What this protects against, and what it doesn't:
   scripts that send the password elsewhere. That is true of every web page that encrypts in the
   browser. If you don't trust the server, use Cryptomator's own apps.
 - **On the device,** decrypted files exist while the vault is unlocked: as previews and as
-  downloads, which stay in your downloads folder. Locking drops the keys and the previews.
+  downloads, which stay in your downloads folder. Locking drops the keys and the previews, and
+  closes the files being streamed.
 
 Decrypted files are shown so that they can't act as you in Nextcloud: HTML only as text, SVG only
-as a picture, and downloads typed as plain data, which no browser renders. Word documents and
+as a picture, and downloads typed as plain data, which no browser renders. A streamed file is
+only ever a video, audio or PDF, and its player is a page that runs no script. Word documents and
 spreadsheets are rendered in the browser (Collabora would need the file on the server) into a
 frame with neither scripts nor an origin of its own, whose page loads nothing from outside; links
 and outside addresses are removed from it.

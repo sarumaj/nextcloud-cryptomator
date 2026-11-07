@@ -23,6 +23,8 @@ OC.L10N.register(
         "Close": "Schließen",
         "This file is {size}. Your browser holds it twice while decrypting. Continue?": "Diese Datei ist {size} groß. Dein Browser hält sie beim Entschlüsseln doppelt im Speicher. Fortfahren?",
         "No preview for this file. Download it to open it.": "Keine Vorschau für diese Datei. Lade sie herunter, um sie zu öffnen.",
+        "Your browser cannot play this file. Download it to open it.": "Dein Browser kann diese Datei nicht abspielen. Lade sie herunter, um sie zu öffnen.",
+        "Your browser plays only the sound of this video. Download it to watch it.": "Dein Browser spielt von diesem Video nur den Ton ab. Lade es herunter, um es anzusehen.",
         "Vaults can only be opened over HTTPS: the browser provides its encryption only there.": "Tresore lassen sich nur über HTTPS öffnen: Nur dort stellt der Browser seine Verschlüsselung bereit.",
         "Unlock {vault}": "{vault} entsperren",
         "The password and the vault's keys stay in this browser tab: the server only sends the encrypted files.": "Das Passwort und die Schlüssel des Tresors bleiben in diesem Browser-Tab: Der Server schickt nur die verschlüsselten Dateien.",

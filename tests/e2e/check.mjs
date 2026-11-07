@@ -54,8 +54,13 @@ const DOCX = 'Bericht über Tresore.docx'
 const XLSX_NAME = 'Tabelle Tresor.xlsx'
 const MORE = { md: 'Notizen ✓.md', zip: 'Archiv.zip', heic: 'Foto.heic', pptx: 'Folien.pptx', odp: 'Folien.odp', odt: 'Brief.odt' }
 const LONG_FOLDER = 'a-very-long-name-'.repeat(10) + 'end-folder'
+// Audio of two minutes (21 MB), streamed to the player (src/stream.js).
+const AUDIO = 'Aufnahme ✓.wav'
+const AUDIO_SECONDS = 120
+// A "video" no browser plays: it must say so, not show a broken player.
+const UNPLAYABLE = 'Kaputt ✓.mkv'
 const NAMES = [...new Set([...Object.keys(manifest.entries).flatMap((path) => path.split('/')), ...Object.keys(UPLOADS), 'Neuer Ordner ✓', 'inside new.txt', RENAMED,
-	FOLDER, DOCX, XLSX_NAME, ...Object.values(MORE)])]
+	FOLDER, DOCX, XLSX_NAME, AUDIO, UNPLAYABLE, ...Object.values(MORE)])]
 
 const PPTX_PARTS = (text) => ({
 	'[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>',
@@ -98,6 +103,31 @@ function makeXlsx(text) {
 	const book = XLSX.utils.book_new()
 	XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Spalte', 'Wert'], [text, 42]]), 'Blatt 1')
 	return XLSX.write(book, { type: 'buffer', bookType: 'xlsx' })
+}
+/** A WAV file of a 440 Hz tone: 16-bit stereo PCM, 44.1 kHz, which every browser plays. */
+function makeWav(seconds) {
+	const rate = 44100
+	const frames = rate * seconds
+	const data = Buffer.alloc(frames * 4)
+	for (let i = 0; i < frames; i++) {
+		const value = Math.round(Math.sin(2 * Math.PI * 440 * i / rate) * 8000)
+		data.writeInt16LE(value, i * 4)
+		data.writeInt16LE(value, i * 4 + 2)
+	}
+	const header = Buffer.alloc(44)
+	header.write('RIFF', 0)
+	header.writeUInt32LE(36 + data.length, 4)
+	header.write('WAVEfmt ', 8)
+	header.writeUInt32LE(16, 16)
+	header.writeUInt16LE(1, 20)
+	header.writeUInt16LE(2, 22)
+	header.writeUInt32LE(rate, 24)
+	header.writeUInt32LE(rate * 4, 28)
+	header.writeUInt16LE(4, 32)
+	header.writeUInt16LE(16, 34)
+	header.write('data', 36)
+	header.writeUInt32LE(data.length, 40)
+	return Buffer.concat([header, data])
 }
 const sha = (data) => createHash('sha256').update(data).digest('hex')
 const OWN_ACTIONS = ['cryptomator-vaults-open', 'cryptomator-vaults-download', 'cryptomator-vaults-lock',
@@ -297,6 +327,92 @@ await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
 await row('big upload.bin').waitFor()
 await openName('Notiz über ✓ Uploads.txt')
 assert.equal(await page.locator('.cryptomator-preview--text').textContent(), MARKER + ' first\n')
+await page.locator('.cryptomator-dialog__close').click()
+
+step('audio is streamed: played and sought in ranges, its bytes never leaving the browser')
+const wav = makeWav(AUDIO_SECONDS)
+await upload({ [AUDIO]: wav })
+await finished()
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+await row(AUDIO).waitFor()
+const davReads = []
+const streamAnswers = []
+const onDavRead = (request) => {
+	if (request.method() === 'GET' && request.url().includes('/remote.php/dav/files/')) {
+		davReads.push(request.headers().range ?? null)
+	}
+}
+const onStreamAnswer = (response) => {
+	if (response.url().includes('/js/stream/')) {
+		streamAnswers.push({ url: response.url(), worker: response.fromServiceWorker(), status: response.status() })
+	}
+}
+page.on('request', onDavRead)
+page.on('response', onStreamAnswer)
+await openName(AUDIO)
+await page.locator('iframe.cryptomator-preview--stream').waitFor({ timeout: 30000 })
+// The player in the worker's page, which runs no script: driven from the Files page, whose
+// policy refuses page.waitForFunction (a string evaluated), so polled.
+const duration = await page.evaluate(() => new Promise((resolve, reject) => {
+	const started = Date.now()
+	const check = () => {
+		const element = document.querySelector('iframe.cryptomator-preview--stream')?.contentDocument?.querySelector('audio')
+		if (element?.error) {
+			reject(new Error('media error ' + element.error.code))
+		} else if (element && element.readyState >= 1) {
+			resolve(element.duration)
+		} else if (Date.now() - started > 60000) {
+			reject(new Error('the player did not load the audio within 60 s'))
+		} else {
+			setTimeout(check, 200)
+		}
+	}
+	check()
+}))
+assert.ok(Math.abs(duration - AUDIO_SECONDS) < 1, `the player sees the whole length: ${duration}`)
+const sought = await page.evaluate((to) => new Promise((resolve, reject) => {
+	const element = document.querySelector('iframe.cryptomator-preview--stream').contentDocument.querySelector('audio')
+	element.addEventListener('error', () => reject(new Error('media error ' + element.error?.code)), { once: true })
+	element.addEventListener('seeked', () => {
+		// Sought, and the bytes there decoded.
+		const check = () => (element.readyState >= 2 ? resolve(element.currentTime) : setTimeout(check, 100))
+		check()
+	}, { once: true })
+	element.currentTime = to
+}), AUDIO_SECONDS - 10)
+assert.ok(Math.abs(sought - (AUDIO_SECONDS - 10)) < 1, `sought near the end: ${sought}`)
+if (shots) await page.screenshot({ path: shots + '/preview-audio.png' })
+step('… and downloaded, streamed as well')
+const [audioDownload] = await Promise.all([page.waitForEvent('download'), page.locator('.cryptomator-dialog__head button', { hasText: 'Download' }).click()])
+const audioChunks = []
+for await (const chunk of await audioDownload.createReadStream()) audioChunks.push(chunk)
+assert.equal(sha(Buffer.concat(audioChunks)), sha(wav), 'the download is the file')
+assert.equal(audioDownload.suggestedFilename(), AUDIO)
+const frameUrl = await page.locator('iframe.cryptomator-preview--stream').getAttribute('src')
+await page.locator('.cryptomator-dialog__close').click()
+page.off('request', onDavRead)
+page.off('response', onStreamAnswer)
+assert.ok(davReads.length > 0 && davReads.every((range) => /^bytes=\d+-\d+$/.test(range ?? '')), `only ranges read: ${davReads}`)
+assert.ok(streamAnswers.some(({ status }) => status === 206), `the player read in ranges: ${JSON.stringify(streamAnswers)}`)
+assert.ok(streamAnswers.every(({ worker }) => worker), `every stream URL answered by the worker: ${JSON.stringify(streamAnswers)}`)
+// A closed file's URL answers that it is no longer open.
+const closed = await page.evaluate((src) => new Promise((resolve) => {
+	const frame = document.createElement('iframe')
+	frame.hidden = true
+	frame.src = src
+	frame.addEventListener('load', () => {
+		resolve(frame.contentDocument?.body?.textContent ?? '')
+		frame.remove()
+	})
+	document.body.append(frame)
+}), frameUrl)
+assert.match(closed, /no longer open/, closed)
+step('… and a video the browser cannot play says so')
+await upload({ [UNPLAYABLE]: randomBytes(200 * 1024) })
+await finished()
+await page.locator('.cryptomator-dialog button', { hasText: 'Close' }).click()
+await openName(UNPLAYABLE)
+await page.locator('.cryptomator-dialog .cryptomator-notice--error', { hasText: 'cannot play this file' }).waitFor({ timeout: 30000 })
 await page.locator('.cryptomator-dialog__close').click()
 
 step('a taken name is replaced only when asked')

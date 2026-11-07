@@ -25,6 +25,13 @@
   names, nested new folders), what is refused (a taken name, a folder in the way, unusable names),
   and a storage that changes a file on the way, which must never reach the vault, not even when
   replacing.
+- **Streaming** (`tests/stream.test.js`): a file of 5 MB opened for ranges (`Vault.openFile`),
+  as the stream worker asks for them: any range, across chunks, past the end, empty, reads as
+  written; a seek reads the header and the range's chunks and no more, a range read again comes
+  from the chunks kept; an empty file, and a damaged chunk refused while the others read. The
+  worker's helpers (`js/stream-worker.js`): Range headers as players send them (capped at 8 MB),
+  the download's name in ASCII and UTF-8, only its own paths answered, and a player page without
+  scripts.
 - **Renaming, moving, deleting** (`tests/write.test.js`, `editSamples` in `tests/samples.js`):
   every change between short and long names for files and folders, moves into other folders (also
   below a moved folder, and with a new name), what is refused (a folder into itself, a taken name),
@@ -47,7 +54,11 @@
   hand, then as it is unlocked: a name kept twice, the plain copies and the folder they emptied
   deleted for good, a file uploaded just before left) and makes an inbox from the vault's menu;
   the inboxes' files must wait 2 minutes after their upload, so the test waits for that where it
-  gets there sooner. It fails if any request carried the password, a
+  gets there sooner. It streams a WAV of two minutes (21 MB): the player sees its length and
+  seeks near its end, the vault's file is read only in ranges, every stream address is answered
+  by the service worker (never the server), the streamed download is the file, and a closed
+  file's address says so; an MKV the browser can't play says so. It fails if any request carried
+  the password, a
   decrypted name or content, a file type icon or an entry's address. With `EXPECTED_OUT` set, it
   writes the entries it expects; copy the vault out of Nextcloud's data directory afterwards (or
   download it over WebDAV) and run `Verify.java` on it to check what Nextcloud stored. Run it also
@@ -82,7 +93,8 @@
 - **The server part** (`tests/php/`, PHPUnit against Nextcloud's public API `nextcloud/ocp`, no
   Nextcloud: `composer test`): the two listeners registered for their events; the Files page gets
   the integration as an init script after its translations, and its styles, each a file the app
-  has; the policy for the previews adds only blob: media and frames and WebAssembly to
+  has; the policy for the previews adds only blob: media and frames, WebAssembly, and the stream
+  worker and its frames (`'self'`) to
   Nextcloud's own, never eval of scripts; *Vaults* in the menu (info.xml, `routes.php`, the
   controller) redirects every person, not only admins, to the view `src/files.js` registers.
   `tests/stubs/server.php` stands in for the server's classes that the public API calls.
@@ -92,9 +104,10 @@
   enabled again and that `nextcloud.log` has no error of it, and runs `tests/server/check.sh`:
   as a person who is no admin and reads German, *Tresore* in the app menu leads to the vaults'
   view in Files, a visitor not signed in to the login; the Files page loads the translations and
-  the module before Files' own scripts, and its policy allows blob: media and frames and
-  WebAssembly; every module of the integration (its imports followed), the translations, styles
-  and icons are served with their types and as committed. By hand, with the action's script
+  the module before Files' own scripts, and its policy allows blob: media and frames, the stream
+  worker and its frames, and WebAssembly; every module of the integration (its imports followed),
+  the stream worker, the translations, styles and icons are served with their types and as
+  committed; the server answers the stream worker's addresses with 404. By hand, with the action's script
   (`nextcloud-app-server.py` of `dawid/ci-actions`, needs Docker and Python 3):
 
   ```bash

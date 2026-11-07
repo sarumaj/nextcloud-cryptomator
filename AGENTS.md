@@ -8,7 +8,8 @@ changed in the Files app; everything is decrypted and encrypted in the browser. 
 
 - `app/cryptomator_vaults/`: the app as servers install it (from the repository, no build there).
   - `appinfo/info.xml`, `lib/` (PHP: the app, a redirect, two listeners), `l10n/`, `css/`.
-  - `js/vault.js`: the vault format (hand-written); `js/cryptomator_vaults-*.mjs` and
+  - `js/vault.js`: the vault format (hand-written); `js/stream-worker.js`: the service worker
+    that streams videos, audio, PDFs and downloads (hand-written); `js/cryptomator_vaults-*.mjs` and
     `css/cryptomator_vaults-files.css`: the build of `src/`, committed, never edited by hand.
 - `src/`: the Files integration, built by Vite (`vite.config.mjs`) into the app's `js/`.
 - `tests/`: Node tests (no Nextcloud, no network), `tests/fixtures/` (vaults written by

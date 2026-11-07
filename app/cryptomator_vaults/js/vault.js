@@ -333,6 +333,8 @@
 	// ----- File contents -----
 
 	const CHUNK = 32 * 1024
+	// The chunks an opened file keeps decrypted (Vault.openFile): 4 MiB.
+	const CACHED_CHUNKS = 128
 
 	/** The two cipher combinations of vault format 8: their header and chunk layouts. */
 	const SCHEMES = {
@@ -1441,6 +1443,80 @@
 				}
 				yield concat(...pieces)
 				onProgress?.(Math.min(last * CHUNK, size), size)
+			}
+		}
+
+		/**
+		 * A file opened for reads anywhere in it, as a player asks (a range of bytes,
+		 * then another after a seek): { size, read(start, end) }. Each read fetches
+		 * only the chunks its bytes are in, in one range, and decrypts them (which
+		 * authenticates them); the header once. The chunks last read are kept
+		 * (CACHED_CHUNKS), as players ask for overlapping ranges.
+		 */
+		async openFile(entry) {
+			this.requireKeys()
+			const scheme = SCHEMES[this.scheme]
+			const found = await this.storage.stat(entry.path)
+			if (!found) {
+				throw new VaultError('not-found', entry.path)
+			}
+			if (found.size > 0 && found.size < scheme.header) {
+				throw new VaultError('corrupt', 'file header too short')
+			}
+			const size = cleartextSize(this.scheme, found.size)
+			const chunkSize = CHUNK + scheme.overhead
+			// Chunk number to its decrypted bytes, the least recently used first.
+			const cache = new Map()
+			const use = (number, plain) => {
+				cache.delete(number)
+				cache.set(number, plain)
+			}
+			let header = null
+			const keys = () => {
+				header ??= this.storage.readRange(entry.path, 0, scheme.header).then(async (stored) => {
+					const nonce = stored.subarray(0, scheme.nonce)
+					return { nonce, contentKey: await this.decryptHeader(stored, nonce) }
+				})
+				// A failed read is tried again with the next one.
+				header.catch(() => { header = null })
+				return header
+			}
+			return {
+				size,
+				read: async (start, end) => {
+					start = Math.max(0, start)
+					end = Math.min(end, size)
+					if (end <= start) {
+						return new Uint8Array(0)
+					}
+					const first = Math.floor(start / CHUNK)
+					const last = Math.ceil(end / CHUNK)
+					// The chunks kept from the start on; the rest is read from the first one missing.
+					let missing = first
+					while (missing < last && cache.has(missing)) {
+						use(missing, cache.get(missing))
+						missing++
+					}
+					if (missing < last) {
+						const { nonce, contentKey } = await keys()
+						const stored = await this.storage.readRange(entry.path, scheme.header + missing * chunkSize, Math.min(scheme.header + last * chunkSize, found.size))
+						for (let number = missing; number < last; number++) {
+							const offset = (number - missing) * chunkSize
+							use(number, await this.decryptChunk(stored.subarray(offset, Math.min(offset + chunkSize, stored.length)), number, nonce, contentKey))
+						}
+					}
+					const out = new Uint8Array(end - start)
+					for (let number = first; number < last; number++) {
+						const plain = cache.get(number)
+						const from = Math.max(start - number * CHUNK, 0)
+						const to = Math.min(end - number * CHUNK, plain.length)
+						out.set(plain.subarray(from, to), number * CHUNK + from - start)
+					}
+					while (cache.size > CACHED_CHUNKS) {
+						cache.delete(cache.keys().next().value)
+					}
+					return out
+				},
 			}
 		}
 

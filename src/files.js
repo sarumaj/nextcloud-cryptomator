@@ -48,6 +48,7 @@ import { LARGE_FILE, askForm, askName, askPassword, hasPreview, chooseFolder, cl
 import { davStorage, findMarkers, findVaults, purgeDeleted, purgeDeletedMany, userId, walkFiles } from './storage.js'
 import { MARKER_LIMIT, MARKER_NAME, clashName, makeMarker, normalizePath, parseMarker, planInbox, segments, within } from './inbox.mjs'
 import { n, t } from './l10n.js'
+import { streamDownload, streaming } from './stream.js'
 
 const { Vault, VaultError, checkName } = vaultLib
 
@@ -271,6 +272,8 @@ async function unlock(vault) {
 	}, vault.folder)
 	if (ok) {
 		startIdleTimer()
+		// The worker that streams videos and downloads, ready by the time one is opened.
+		streaming()
 		// What a browser that closed while writing left behind; not worth an error.
 		vault.vault.removeLeftovers().catch(() => {})
 		afterUnlock(vault)
@@ -556,7 +559,8 @@ registerFileAction({
 			// Nothing to show: straight to the computer, in pieces where possible.
 			await downloadEntry(vault, entry)
 		} else {
-			await showFile(entry.name, entry.size, (onProgress, onDownload) => vault.vault.readFile(entry, onProgress, onDownload), message)
+			await showFile(entry.name, entry.size, (onProgress, onDownload) => vault.vault.readFile(entry, onProgress, onDownload), message,
+				() => vault.vault.openFile(entry))
 		}
 		return null
 	},
@@ -566,7 +570,8 @@ registerFileAction({
 
 /**
  * A file decrypted to the person's computer: a large one in pieces where the browser
- * lets a file be saved so (Edge, Chrome), else whole from memory.
+ * lets a file be saved so (Edge, Chrome), else streamed through the worker
+ * (src/stream.js), else whole from memory.
  */
 async function downloadEntry(vault, entry) {
 	if (entry.size >= STREAM_FROM && typeof window.showSaveFilePicker === 'function') {
@@ -582,6 +587,14 @@ async function downloadEntry(vault, entry) {
 			await writable.close()
 		} catch (error) {
 			await writable.abort().catch(() => {})
+			showError(message(error))
+		}
+		return
+	}
+	if (entry.size >= STREAM_FROM && await streaming()) {
+		try {
+			streamDownload(await vault.vault.openFile(entry), entry.name)
+		} catch (error) {
 			showError(message(error))
 		}
 		return

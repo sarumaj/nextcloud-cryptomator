@@ -17,8 +17,8 @@ require_once __DIR__ . '/../stubs/server.php';
 
 /**
  * The policy the previews need, and nothing more: Nextcloud applies it to every page, so it
- * may widen only what the previews use (blob: media and frames, compiling WebAssembly), never
- * eval of scripts or other origins.
+ * may widen only what the previews use (blob: media and frames, compiling WebAssembly, the
+ * stream worker and its frames of this server), never eval of scripts or other origins.
  */
 class AddPreviewPolicyTest extends TestCase {
 	/**
@@ -52,7 +52,8 @@ class AddPreviewPolicyTest extends TestCase {
 		$this->assertSame([
 			'script-src' => ["'wasm-unsafe-eval'"],
 			'media-src' => ['blob:'],
-			'frame-src' => ['blob:'],
+			'frame-src' => ['blob:', "'self'"],
+			'worker-src' => ["'self'"],
 		], $changed);
 		$this->assertSame([], array_diff(array_keys($default), array_keys($added)), 'no directive left out');
 		$this->assertNotContains("'unsafe-eval'", $added['script-src']);
