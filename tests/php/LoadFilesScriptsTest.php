@@ -30,8 +30,9 @@ class LoadFilesScriptsTest extends TestCase {
 			(new ReflectionProperty(Util::class, $name))->setValue(null, []);
 		}
 		\OC_Util::$styles = [];
-		$languages = $this->createMock(IFactory::class);
-		$languages->method('findLanguage')->with('cryptomator_vaults')->willReturn('pl');
+		// The person's language for this app only: another app's would load other translations.
+		$languages = $this->createStub(IFactory::class);
+		$languages->method('findLanguage')->willReturnCallback(fn (?string $app = null) => $app === 'cryptomator_vaults' ? 'pl' : 'en');
 		(new FakeServer([IFactory::class => $languages]))->install();
 	}
 
@@ -62,7 +63,7 @@ class LoadFilesScriptsTest extends TestCase {
 	}
 
 	public function testOtherEventsLoadNothing(): void {
-		(new LoadFilesScripts())->handle($this->createMock(Event::class));
+		(new LoadFilesScripts())->handle($this->createStub(Event::class));
 		$this->assertSame([], self::scripts('scriptsInit'));
 		$this->assertSame([], self::scripts('scripts'));
 		$this->assertSame([], \OC_Util::$styles);

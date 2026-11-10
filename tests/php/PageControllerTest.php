@@ -27,7 +27,7 @@ class PageControllerTest extends TestCase {
 		$urls->expects($this->once())->method('linkToRoute')
 			->with('files.view.indexView', ['view' => 'cryptomator-vaults'])
 			->willReturn('/index.php/apps/files/cryptomator-vaults');
-		$response = (new PageController('cryptomator_vaults', $this->createMock(IRequest::class), $urls))->index();
+		$response = (new PageController('cryptomator_vaults', $this->createStub(IRequest::class), $urls))->index();
 		$this->assertSame(Http::STATUS_SEE_OTHER, $response->getStatus());
 		$this->assertSame('/index.php/apps/files/cryptomator-vaults', $response->getRedirectURL());
 	}

@@ -25,15 +25,15 @@ require_once __DIR__ . '/../stubs/files.php';
  */
 class ApplicationTest extends TestCase {
 	private function application(): Application {
-		$config = $this->createMock(IConfig::class);
+		$config = $this->createStub(IConfig::class);
 		$config->method('getSystemValueBool')->willReturn(false);
-		(new FakeServer([IConfig::class => $config], $this->createMock(IAppContainer::class)))->install();
+		(new FakeServer([IConfig::class => $config], $this->createStub(IAppContainer::class)))->install();
 		return new Application();
 	}
 
 	public function testTheListenersAreRegisteredForTheirEvents(): void {
 		$registered = [];
-		$context = $this->createMock(IRegistrationContext::class);
+		$context = $this->createStub(IRegistrationContext::class);
 		$context->method('registerEventListener')->willReturnCallback(function (string $event, string $listener) use (&$registered): void {
 			$registered[$event][] = $listener;
 		});

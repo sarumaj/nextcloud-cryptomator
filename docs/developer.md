@@ -98,6 +98,7 @@
   Nextcloud's own, never eval of scripts; *Vaults* in the menu (info.xml, `routes.php`, the
   controller) redirects every person, not only admins, to the view `src/files.js` registers.
   `tests/stubs/server.php` stands in for the server's classes that the public API calls.
+  The tools need PHP 8.4 (`config.platform.php`, for PHPUnit 13); the app runs on PHP 8.2.
 - **On a real Nextcloud** (the CI job `server`, Nextcloud 32 and 35 with PostgreSQL): the shared
   action `nextcloud-app-server` of `dawid/ci-actions` installs the app store's release, upgrades
   it to the checkout, checks that it is enabled, that occ loads, that it can be disabled and
