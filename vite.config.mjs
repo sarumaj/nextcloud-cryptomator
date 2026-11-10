@@ -8,10 +8,8 @@
 // build of its own.
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
-const vaultJs = fileURLToPath(new URL('./app/cryptomator_vaults/js/vault.js', import.meta.url))
 const DIALOGS = /node_modules\/@nextcloud\/dialogs\//
 // The office previews' libraries (src/documents.js), loaded when a document is opened.
 const DOCUMENTS = /node_modules\/(docx-preview|xlsx)\//
@@ -21,7 +19,7 @@ const ZIP = /node_modules\/(jszip|pako|lie|immediate|setimmediate|readable-strea
 // Characters that show as nothing: control characters (but tab and line ends)
 // and Unicode's invisible ones (spaces that do not break, joiners, direction
 // marks and overrides, the byte order mark). Libraries write them as escapes,
-// esbuild's minifier writes them as they are (JSZip's "PK\x03\x04"), which
+// the minifier writes them as they are (JSZip's "PK\x03\x04"), which
 // Forgejo and editors flag as hidden text.
 const INVISIBLE = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\xa0\xad\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g
 
@@ -142,15 +140,19 @@ export default defineConfig({
 		sourcemap: false,
 		target: 'es2022',
 		cssCodeSplit: false,
-		// js/vault.js is also a plain script for Node's tests (CommonJS there).
-		commonjsOptions: { include: [/node_modules/, vaultJs] },
+		// js/vault.js is also a plain script for Node's tests (CommonJS there): Rolldown
+		// bundles CommonJS as it is, in node_modules and outside.
 		lib: {
 			entry: 'src/files.js',
 			formats: ['es'],
 			fileName: () => 'js/cryptomator_vaults-files.mjs',
 			cssFileName: 'css/cryptomator_vaults-files',
 		},
-		rollupOptions: {
+		rolldownOptions: {
+			// Rolldown requires it for the chunks below (includeDependenciesRecursively):
+			// the entry may then export more than src/files.js does, what a chunk
+			// imports from it. Nothing else imports the entry: the Files app loads it.
+			preserveEntrySignatures: 'allow-extension',
 			output: {
 				// What only @nextcloud/dialogs needs (toasts, the file picker: Vue and its
 				// components) and what only the office previews need, each in a chunk
@@ -160,22 +162,38 @@ export default defineConfig({
 				// with the app's version (?v=), so a chunk of a fixed name would be one of
 				// the old version after an update, and the entry would fail with it.
 				chunkFileNames: 'js/cryptomator_vaults-[name]-[hash].mjs',
-				manualChunks(id, { getModuleInfo }) {
-					if (!id.includes('node_modules')) {
-						return undefined
-					}
-					if (onlyThrough(DOCUMENTS, id, getModuleInfo)) {
-						return 'office-libraries'
-					}
-					if (ZIP.test(id) && !fromEntry(id, getModuleInfo)) {
-						return 'zip'
-					}
-					if (onlyThrough(DIALOGS, id, getModuleInfo)) {
-						return 'dialogs'
-					}
-					// What the entry needs at once in one chunk; the rest (the previews'
-					// libraries) in chunks loaded with what imports them.
-					return fromEntry(id, getModuleInfo) ? 'common' : undefined
+				codeSplitting: {
+					// A module goes where name() puts it, as Rollup's manualChunks did: by
+					// default a group also takes the modules its modules import, and the
+					// office libraries took JSZip (docx-preview imports it), which the
+					// ZIP preview and the presentations load without them.
+					includeDependenciesRecursively: false,
+					groups: [
+						{
+							name(id, context) {
+								// Vite's empty stand-in for a Node module (sax's stream) is a
+								// library's too: left to Rolldown, it went into the entry, and
+								// the common chunk imported it from there, in a cycle.
+								if (!id.includes('node_modules') && id !== '__vite-browser-external') {
+									return undefined
+								}
+								// A method of the context, not a function of its own.
+								const getModuleInfo = (module) => context.getModuleInfo(module)
+								if (onlyThrough(DOCUMENTS, id, getModuleInfo)) {
+									return 'office-libraries'
+								}
+								if (ZIP.test(id) && !fromEntry(id, getModuleInfo)) {
+									return 'zip'
+								}
+								if (onlyThrough(DIALOGS, id, getModuleInfo)) {
+									return 'dialogs'
+								}
+								// What the entry needs at once in one chunk; the rest (the
+								// previews' libraries) in chunks loaded with what imports them.
+								return fromEntry(id, getModuleInfo) ? 'common' : undefined
+							},
+						},
+					],
 				},
 			},
 		},

@@ -1,3767 +1,3969 @@
-import { g as Tr, t as Ir, d as Nr, K as Fn, v as Dr, x as lt, L as Rr, M as me, O as Fr, Q as On, s as Or, F as ce, R as Me, S as _r, V as Pr, z as _n, P as Pt, T as zr, y as Lr, A as Pn } from "./cryptomator_vaults-common-ByXmhu3u.mjs";
-var nt = { exports: {} }, Ur = nt.exports, pn;
-function Hr() {
-  return pn || (pn = 1, (function(e) {
-    (function(n, r) {
-      e.exports ? e.exports = r(globalThis.crypto) : n.CryptomatorVault = r(n.crypto);
-    })(typeof self < "u" ? self : Ur, function(n) {
-      const r = n.subtle, s = new TextEncoder(), d = new TextDecoder("utf-8", { fatal: !0 });
-      class o extends Error {
-        constructor(t, i) {
-          super(i || t), this.name = "VaultError", this.code = t;
-        }
-      }
-      function p(b) {
-        const t = b.replace(/-/g, "+").replace(/_/g, "/"), i = t + "=".repeat((4 - t.length % 4) % 4), a = atob(i), l = new Uint8Array(a.length);
-        for (let h = 0; h < a.length; h++)
-          l[h] = a.charCodeAt(h);
-        return l;
-      }
-      function u(b, t) {
-        let i = "";
-        for (let l = 0; l < b.length; l++)
-          i += String.fromCharCode(b[l]);
-        const a = btoa(i).replace(/\+/g, "-").replace(/\//g, "_");
-        return t ? a : a.replace(/=+$/, "");
-      }
-      function m(b) {
-        let t = "";
-        for (let i = 0; i < b.length; i++)
-          t += String.fromCharCode(b[i]);
-        return btoa(t);
-      }
-      const v = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-      function x(b) {
-        let t = "", i = 0, a = 0;
-        for (const l of b)
-          for (i = i << 8 | l, a += 8; a >= 5; )
-            t += v[i >>> a - 5 & 31], a -= 5;
-        return a > 0 && (t += v[i << 5 - a & 31]), t;
-      }
-      function A(...b) {
-        const t = new Uint8Array(b.reduce((a, l) => a + l.length, 0));
-        let i = 0;
-        for (const a of b)
-          t.set(a, i), i += a.length;
-        return t;
-      }
-      function C(b) {
-        const t = new Uint8Array(8);
-        return new DataView(t.buffer).setBigUint64(0, BigInt(b)), t;
-      }
-      function M(b, t) {
-        if (b.length !== t.length)
-          return !1;
-        let i = 0;
-        for (let a = 0; a < b.length; a++)
-          i |= b[a] ^ t[a];
-        return i === 0;
-      }
-      async function D(b, t, i) {
-        const a = await r.importKey(
-          "raw",
-          b.length ? b : new Uint8Array(64),
-          { name: "HMAC", hash: "SHA-256" },
-          !1,
-          ["sign"]
-        ), l = new Uint8Array(i);
-        for (let h = 1, f = 0; f < i; h++, f += 32) {
-          const w = new Uint8Array([h >>> 24, h >>> 16 & 255, h >>> 8 & 255, h & 255]), y = new Uint8Array(await r.sign("HMAC", a, A(t, w)));
-          l.set(y.subarray(0, Math.min(32, i - f)), f);
-        }
-        return l;
-      }
-      function j(b) {
-        const t = b.slice(), i = (a, l) => a << l | a >>> 32 - l;
-        for (let a = 0; a < 8; a += 2)
-          t[4] ^= i(t[0] + t[12], 7), t[8] ^= i(t[4] + t[0], 9), t[12] ^= i(t[8] + t[4], 13), t[0] ^= i(t[12] + t[8], 18), t[9] ^= i(t[5] + t[1], 7), t[13] ^= i(t[9] + t[5], 9), t[1] ^= i(t[13] + t[9], 13), t[5] ^= i(t[1] + t[13], 18), t[14] ^= i(t[10] + t[6], 7), t[2] ^= i(t[14] + t[10], 9), t[6] ^= i(t[2] + t[14], 13), t[10] ^= i(t[6] + t[2], 18), t[3] ^= i(t[15] + t[11], 7), t[7] ^= i(t[3] + t[15], 9), t[11] ^= i(t[7] + t[3], 13), t[15] ^= i(t[11] + t[7], 18), t[1] ^= i(t[0] + t[3], 7), t[2] ^= i(t[1] + t[0], 9), t[3] ^= i(t[2] + t[1], 13), t[0] ^= i(t[3] + t[2], 18), t[6] ^= i(t[5] + t[4], 7), t[7] ^= i(t[6] + t[5], 9), t[4] ^= i(t[7] + t[6], 13), t[5] ^= i(t[4] + t[7], 18), t[11] ^= i(t[10] + t[9], 7), t[8] ^= i(t[11] + t[10], 9), t[9] ^= i(t[8] + t[11], 13), t[10] ^= i(t[9] + t[8], 18), t[12] ^= i(t[15] + t[14], 7), t[13] ^= i(t[12] + t[15], 9), t[14] ^= i(t[13] + t[12], 13), t[15] ^= i(t[14] + t[13], 18);
-        for (let a = 0; a < 16; a++)
-          b[a] = b[a] + t[a] | 0;
-      }
-      function G(b, t, i, a) {
-        a.set(b.subarray((2 * i - 1) * 16, 2 * i * 16));
-        for (let l = 0; l < 2 * i; l++) {
-          for (let h = 0; h < 16; h++)
-            a[h] ^= b[l * 16 + h];
-          j(a), t.set(a, ((l & 1) * i + (l >> 1)) * 16);
-        }
-      }
-      function V(b, t, i) {
-        const a = 32 * i, l = new Int32Array(a * t), h = new Int32Array(b), f = new Int32Array(a), w = new Int32Array(16);
-        for (let y = 0; y < t; y++)
-          l.set(h, y * a), G(h, f, i, w), h.set(f);
-        for (let y = 0; y < t; y++) {
-          const S = h[(2 * i - 1) * 16] & t - 1;
-          for (let k = 0; k < a; k++)
-            h[k] ^= l[S * a + k];
-          G(h, f, i, w), h.set(f);
-        }
-        return h;
-      }
-      function L(b) {
-        const t = new DataView(b.buffer, b.byteOffset, b.byteLength), i = new Int32Array(b.length / 4);
-        for (let a = 0; a < i.length; a++)
-          i[a] = t.getInt32(a * 4, !0);
-        return i;
-      }
-      function K(b, t) {
-        const i = new DataView(t.buffer, t.byteOffset, t.byteLength);
-        for (let a = 0; a < b.length; a++)
-          i.setInt32(a * 4, b[a], !0);
-      }
-      async function ae(b, t, i, a, l, h) {
-        if (i < 2 || (i & i - 1) !== 0)
-          throw new o("corrupt", "scrypt cost is not a power of two");
-        const f = 128 * a, w = await D(b, t, l * f);
-        for (let y = 0; y < l; y++) {
-          const S = w.subarray(y * f, (y + 1) * f);
-          K(V(L(S), i, a), S);
-        }
-        return D(b, w, h);
-      }
-      function B(b) {
-        const t = new Uint8Array(16);
-        for (let i = 0; i < 15; i++)
-          t[i] = (b[i] << 1 | b[i + 1] >>> 7) & 255;
-        return t[15] = b[15] << 1 & 255, b[0] & 128 && (t[15] ^= 135), t;
-      }
-      function J(b, t) {
-        const i = new Uint8Array(b.length);
-        for (let a = 0; a < b.length; a++)
-          i[a] = b[a] ^ t[a];
-        return i;
-      }
-      class Q {
-        constructor(t) {
-          this.key = t, this.subkeys = null;
-        }
-        async cbcLast(t) {
-          return new Uint8Array(await r.encrypt({ name: "AES-CBC", iv: new Uint8Array(16) }, this.key, t)).subarray(t.length - 16, t.length);
-        }
-        async mac(t) {
-          if (this.subkeys === null) {
-            const w = await this.cbcLast(new Uint8Array(16)), y = B(w);
-            this.subkeys = [y, B(y)];
-          }
-          const [i, a] = this.subkeys, l = Math.max(1, Math.ceil(t.length / 16)), h = new Uint8Array(l * 16);
-          h.set(t);
-          const f = h.subarray((l - 1) * 16);
-          return t.length > 0 && t.length % 16 === 0 ? f.set(J(f, i)) : (f[t.length - (l - 1) * 16] = 128, f.set(J(f, a))), this.cbcLast(h);
-        }
-      }
-      async function be(b, t, i) {
-        let a = await b.mac(new Uint8Array(16));
-        for (const h of t)
-          a = J(B(a), await b.mac(h));
-        let l;
-        if (i.length >= 16)
-          l = i.slice(), l.set(J(l.subarray(l.length - 16), a), l.length - 16);
-        else {
-          const h = new Uint8Array(16);
-          h.set(i), h[i.length] = 128, l = J(B(a), h);
-        }
-        return b.mac(l);
-      }
-      function pe(b) {
-        const t = b.slice();
-        return t[8] &= 127, t[12] &= 127, t;
-      }
-      class $ {
-        constructor(t, i) {
-          this.cmac = t, this.ctrKey = i;
-        }
-        async encrypt(t, i) {
-          const a = await be(this.cmac, i, t), l = await r.encrypt({ name: "AES-CTR", counter: pe(a), length: 128 }, this.ctrKey, t);
-          return A(a, new Uint8Array(l));
-        }
-        async decrypt(t, i) {
-          if (t.length < 16)
-            throw new o("corrupt", "name too short");
-          const a = t.subarray(0, 16), l = new Uint8Array(await r.decrypt(
-            { name: "AES-CTR", counter: pe(a), length: 128 },
-            this.ctrKey,
-            t.subarray(16)
-          ));
-          if (!M(await be(this.cmac, i, l), a))
-            throw new o("corrupt", "name does not authenticate");
-          return l;
-        }
-      }
-      const F = 32 * 1024, fe = 128, oe = {
-        SIV_GCM: { header: 68, nonce: 12, overhead: 28 },
-        SIV_CTRMAC: { header: 88, nonce: 16, overhead: 48 }
-      };
-      function we(b, t) {
-        const { header: i, overhead: a } = oe[b], l = t - i;
-        if (l <= 0)
-          return 0;
-        const h = Math.floor(l / (F + a)), f = l % (F + a);
-        return h * F + Math.max(0, f - a);
-      }
-      const wt = /[a-zA-Z0-9\-_]{20}(?:[a-zA-Z0-9\-_]{4})*(?:[a-zA-Z0-9\-_]{4}|[a-zA-Z0-9\-_]{3}=|[a-zA-Z0-9\-_]{2}==)/g, en = 36, wr = 10 * 1024, yr = 28, tn = "LOST+FOUND", Xe = "recovery";
-      async function gr(b, t, i) {
-        let a = 0;
-        const l = async () => {
-          for (; a < b.length; )
-            await i(b[a++]);
-        };
-        await Promise.all(Array.from({ length: Math.min(t, b.length) }, l));
-      }
-      const vr = 32767, yt = ".cryptomator-vaults-", br = 1440 * 60 * 1e3, kr = 255;
-      function Te(b) {
-        return n.getRandomValues(new Uint8Array(b));
-      }
-      function $e() {
-        return n.randomUUID();
-      }
-      async function Ze(b) {
-        return new Uint8Array(await r.digest("SHA-256", b));
-      }
-      const gt = 999, vt = { HS256: "SHA-256", HS384: "SHA-384", HS512: "SHA-512" }, xr = 2 ** 15, nn = 8, rn = 220, bt = "masterkeyfile:";
-      async function an(b, t, i, a, l) {
-        const h = await ae(s.encode(String(b).normalize("NFC")), t, i, a, 1, 32);
-        try {
-          return await r.importKey("raw", h, "AES-KW", !1, l);
-        } finally {
-          h.fill(0);
-        }
-      }
-      async function Qe(b, t) {
-        if (b.version !== gt)
-          throw new o("unsupported-format", "key file version " + b.version);
-        const i = await an(t, p(b.scryptSalt), b.scryptCostParam, b.scryptBlockSize, ["unwrapKey"]);
-        let a;
-        try {
-          const l = async (h) => new Uint8Array(await r.exportKey(
-            "raw",
-            await r.unwrapKey("raw", p(h), i, "AES-KW", { name: "HMAC", hash: "SHA-256" }, !0, ["sign"])
-          ));
-          a = { encRaw: await l(b.primaryMasterKey), macRaw: await l(b.hmacMasterKey) };
-        } catch {
-          throw new o("wrong-password");
-        }
-        if (!await Cr(a.macRaw, b))
-          throw a.encRaw.fill(0), a.macRaw.fill(0), new o("corrupt", "the key file's version does not authenticate");
-        return a;
-      }
-      function on(b) {
-        const t = new Uint8Array(4);
-        return new DataView(t.buffer).setInt32(0, b), t;
-      }
-      async function Cr(b, t) {
-        let i;
-        try {
-          i = p(String(t.versionMac ?? ""));
-        } catch {
-          return !1;
-        }
-        const a = await r.importKey("raw", b, { name: "HMAC", hash: "SHA-256" }, !1, ["verify"]);
-        return r.verify("HMAC", a, i, on(t.version));
-      }
-      async function kt({ encRaw: b, macRaw: t }, i, a = xr) {
-        const l = Te(8), h = await an(i, l, a, nn, ["wrapKey"]), f = async (S) => new Uint8Array(await r.wrapKey(
-          "raw",
-          await r.importKey("raw", S, { name: "HMAC", hash: "SHA-256" }, !0, ["sign"]),
-          h,
-          "AES-KW"
-        )), w = await r.importKey("raw", t, { name: "HMAC", hash: "SHA-256" }, !1, ["sign"]), y = {
-          version: gt,
-          scryptSalt: m(l),
-          scryptCostParam: a,
-          scryptBlockSize: nn,
-          primaryMasterKey: m(await f(b)),
-          hmacMasterKey: m(await f(t)),
-          versionMac: m(new Uint8Array(await r.sign("HMAC", w, on(gt))))
-        };
-        return s.encode(JSON.stringify(y, null, 2));
-      }
-      async function Ar({ encRaw: b, macRaw: t }, i, a) {
-        const l = (w) => u(s.encode(JSON.stringify(w)), !1), h = l({ kid: i, typ: "JWT", alg: "HS256" }) + "." + l({ jti: $e(), format: 8, cipherCombo: a, shorteningThreshold: rn }), f = await r.importKey("raw", A(b, t), { name: "HMAC", hash: "SHA-256" }, !1, ["sign"]);
-        return h + "." + u(new Uint8Array(await r.sign("HMAC", f, s.encode(h))), !1);
-      }
-      async function sn(b, { encRaw: t, macRaw: i }) {
-        const a = Object.hasOwn(vt, b.header.alg) ? vt[b.header.alg] : null;
-        if (a === null)
-          return !1;
-        const l = await r.importKey("raw", A(t, i), { name: "HMAC", hash: a }, !1, ["verify"]);
-        return r.verify("HMAC", l, b.signature, s.encode(b.signed));
-      }
-      const Er = Array.from({ length: 256 }, (b, t) => {
-        let i = t;
-        for (let a = 0; a < 8; a++)
-          i = i & 1 ? 3988292384 ^ i >>> 1 : i >>> 1;
-        return i >>> 0;
-      });
-      function cn(b) {
-        let t = 4294967295;
-        for (const i of b)
-          t = Er[(t ^ i) & 255] ^ t >>> 8;
-        return (t ^ 4294967295) >>> 0;
-      }
-      function ln(b, t) {
-        const i = cn(b), a = A(b, new Uint8Array([i & 255, i >>> 8 & 255])), l = [];
-        for (let h = 0; h < a.length; h += 3)
-          l.push(t[a[h] << 4 | a[h + 1] >> 4], t[(a[h + 1] & 15) << 8 | a[h + 2]]);
-        return a.fill(0), l.join(" ");
-      }
-      function dn(b, t) {
-        const i = new Map(t.map((y, S) => [y, S])), a = String(b).trim().toLowerCase().split(/\s+/).filter(Boolean);
-        if (a.length !== 44)
-          throw new o("invalid-recovery-key", a.length + " words, not 44");
-        const l = a.find((y) => !i.has(y));
-        if (l)
-          throw new o("invalid-recovery-key", '"' + l + '" is not a word of the list');
-        const h = new Uint8Array(66);
-        for (let y = 0; y < a.length; y += 2) {
-          const S = i.get(a[y]), k = i.get(a[y + 1]);
-          h.set([S >> 4, (S & 15) << 4 | k >> 8, k & 255], y / 2 * 3);
-        }
-        const f = h.slice(0, 64), w = cn(f);
-        if (h[64] !== (w & 255) || h[65] !== (w >>> 8 & 255))
-          throw new o("invalid-recovery-key", "its check sum does not match");
-        return f;
-      }
-      async function Sr(b, t) {
-        const i = await Ze(t);
-        return b + "." + [...i.slice(0, 4)].map((a) => a.toString(16).padStart(2, "0").toUpperCase()).join("") + ".bkup";
-      }
-      async function un(b) {
-        let t;
-        try {
-          t = Mr(d.decode(await b.read(et)));
-        } catch (f) {
-          throw f instanceof o ? f : new o("unsupported-format", "vault.cryptomator unreadable: " + f.message);
-        }
-        const { header: i, payload: a } = t;
-        if (a.format !== 8)
-          throw new o("unsupported-format", "vault format " + a.format);
-        if (!(a.cipherCombo in oe))
-          throw new o("unsupported-format", "cipher combination " + a.cipherCombo);
-        if (!Object.hasOwn(vt, i.alg))
-          throw new o("unsupported-format", "signature " + i.alg);
-        const l = String(i.kid || "");
-        if (!l.startsWith(bt))
-          throw new o("unsupported-key", l);
-        const h = l.slice(bt.length);
-        if (!/^[^/\\]+$/.test(h))
-          throw new o("unsupported-key", l);
-        return { config: t, name: h };
-      }
-      function Ie(b) {
-        const t = String(b).normalize("NFC");
-        if (t === "" || t === "." || t === ".." || /[/\\\u0000-\u001f\u007f]/.test(t) || t.length > kr)
-          throw new o("invalid-name", t);
-        return t;
-      }
-      const et = "vault.cryptomator";
-      function Mr(b) {
-        const t = b.trim().split(".");
-        if (t.length !== 3)
-          throw new o("unsupported-format", "vault.cryptomator is not a JWT");
-        const i = (a) => JSON.parse(d.decode(p(a)));
-        return { header: i(t[0]), payload: i(t[1]), signed: t[0] + "." + t[1], signature: p(t[2]) };
-      }
-      function R(...b) {
-        return b.filter((t) => t !== "").join("/");
-      }
-      class ke {
-        constructor(t, i, a) {
-          this.storage = t, this.config = i, this.masterkeyFile = a, this.keys = null;
-        }
-        /** Reads the vault's configuration and key file; checks the format before any password. */
-        static async open(t) {
-          const { config: i, name: a } = await un(t), l = JSON.parse(d.decode(await t.read(a))), h = new ke(t, i, l);
-          return h.masterkeyName = a, h;
-        }
-        get scheme() {
-          return this.config.payload.cipherCombo;
-        }
-        get unlocked() {
-          return this.keys !== null;
-        }
-        /** Derives the keys from the password; a VaultError 'wrong-password' if it is not the vault's. */
-        async unlock(t) {
-          const i = await Qe(this.masterkeyFile, t);
-          try {
-            await this.useKeys(i);
-          } finally {
-            i.encRaw.fill(0), i.macRaw.fill(0);
-          }
-        }
-        /** Takes raw keys into use (not kept raw); refused if the configuration is not signed with them. */
-        async useKeys({ encRaw: t, macRaw: i }) {
-          if (!await sn(this.config, { encRaw: t, macRaw: i }))
-            throw new o("corrupt", "vault.cryptomator is not signed with this key");
-          const a = (l, h) => r.importKey("raw", l, h, !1, ["encrypt", "decrypt"]);
-          this.keys = {
-            gcm: await a(t, "AES-GCM"),
-            ctr: await a(t, "AES-CTR"),
-            mac: await r.importKey("raw", i, { name: "HMAC", hash: "SHA-256" }, !1, ["sign", "verify"])
-          }, this.siv = new $(new Q(await a(i, "AES-CBC")), this.keys.ctr), this.dirPaths = /* @__PURE__ */ new Map();
-        }
-        /**
-         * Creates a vault in an empty folder of the storage, as Cryptomator's desktop
-         * app and cryptofs do: new keys, the key file, the configuration, the root
-         * directory with its ID's backup (dirid.c9r). Opened again from the storage
-         * and unlocked with the password before it is returned, unlocked.
-         */
-        static async create(t, i, { cipherCombo: a = "SIV_GCM" } = {}) {
-          if (typeof t.write != "function")
-            throw new o("read-only");
-          if (!(a in oe))
-            throw new o("unsupported-format", "cipher combination " + a);
-          const l = "masterkey.cryptomator";
-          for (const w of [et, l, "d"])
-            if (await t.stat(w))
-              throw new o("exists-other", w);
-          const h = { encRaw: Te(32), macRaw: Te(32) };
-          try {
-            await t.write(l, await kt(h, i), { create: !0 }), await t.write(et, s.encode(await Ar(h, bt + l, a)), { create: !0 });
-            const w = await ke.open(t);
-            await w.useKeys(h);
-            const y = await w.dirPath("");
-            await t.mkdir("d", { existsOk: !0 }), await t.mkdir(y.split("/").slice(0, 2).join("/"), { existsOk: !0 }), await t.mkdir(y, { existsOk: !0 }), await t.write(R(y, "dirid.c9r"), await w.encryptContents(new Uint8Array(0)), { create: !0 });
-          } finally {
-            h.encRaw.fill(0), h.macRaw.fill(0);
-          }
-          const f = await ke.open(t);
-          return await f.unlock(i), f;
-        }
-        /**
-         * Changes the password, as Cryptomator's desktop app does: the keys unwrapped
-         * with the old one and wrapped with the new one (a new salt, the same scrypt
-         * cost); the old key file kept beside as a backup (backupName). The new one
-         * is read back and must give the same keys, else the old one is put back.
-         * Nothing else changes: the files stay as they are encrypted.
-         */
-        async changePassword(t, i) {
-          if (typeof this.storage.write != "function")
-            throw new o("read-only");
-          const a = this.masterkeyName, l = await this.storage.read(a), h = JSON.parse(d.decode(l)), f = await Qe(h, t);
-          try {
-            await this.replaceKeyFile(a, l, await kt(f, i, h.scryptCostParam), f, i);
-          } finally {
-            f.encRaw.fill(0), f.macRaw.fill(0);
-          }
-        }
-        /**
-         * Puts a new key file in place of the old one (backed up beside it, if there
-         * was one) and reads it back: it must give these keys with the password, else
-         * the old file is put back (VaultError 'corrupt').
-         */
-        async replaceKeyFile(t, i, a, l, h) {
-          i && await this.storage.write(await Sr(t, i), i), await this.storage.write(t, a, { create: !i });
-          const f = JSON.parse(d.decode(await this.storage.read(t)));
-          let w = null;
-          try {
-            w = await Qe(f, h);
-          } catch {
-          }
-          const y = w !== null && M(w.encRaw, l.encRaw) && M(w.macRaw, l.macRaw);
-          if (w?.encRaw.fill(0), w?.macRaw.fill(0), !y)
-            throw i && await this.storage.write(t, i), new o("corrupt", "the new key file does not read back");
-          this.masterkeyFile = f;
-        }
-        /** The vault's recovery key (encodeRecoveryKey), after its password. */
-        async recoveryKey(t, i) {
-          const a = await Qe(JSON.parse(d.decode(await this.storage.read(this.masterkeyName))), t), l = A(a.encRaw, a.macRaw);
-          try {
-            return ln(l, i);
-          } finally {
-            l.fill(0), a.encRaw.fill(0), a.macRaw.fill(0);
-          }
-        }
-        /**
-         * A new password with the recovery key, as Cryptomator's desktop app sets one:
-         * the keys from the recovery key, checked against the vault's configuration
-         * (signed with them), a new key file (the old one, if any, backed up). Also
-         * where the key file is lost. Returns the vault, unlocked.
-         */
-        static async resetPassword(t, i, a, l) {
-          if (typeof t.write != "function")
-            throw new o("read-only");
-          const { config: h, name: f } = await un(t), w = dn(i, l), y = { encRaw: w.slice(0, 32), macRaw: w.slice(32) };
-          w.fill(0);
-          try {
-            if (!await sn(h, y))
-              throw new o("invalid-recovery-key", "it is not this vault's");
-            const k = await t.read(f).catch((T) => {
-              if (T?.code === "not-found")
-                return null;
-              throw T;
-            }), E = new ke(t, h, null);
-            E.masterkeyName = f, await E.replaceKeyFile(f, k, await kt(y, a), y, a);
-          } finally {
-            y.encRaw.fill(0), y.macRaw.fill(0);
-          }
-          const S = await ke.open(t);
-          return await S.unlock(a), S;
-        }
-        /** Forgets the keys; reading needs the password again. */
-        lock() {
-          this.keys = null, this.siv = null, this.dirPaths = null;
-        }
-        requireKeys() {
-          if (!this.keys)
-            throw new o("locked");
-        }
-        /** The storage folder of a directory: d/XX/YYYY… from the hash of its ID. */
-        async dirPath(t) {
-          if (this.requireKeys(), !this.dirPaths.has(t)) {
-            const i = await this.siv.encrypt(s.encode(t), []), a = x(new Uint8Array(await r.digest("SHA-1", i)));
-            this.dirPaths.set(t, R("d", a.slice(0, 2), a.slice(2)));
-          }
-          return this.dirPaths.get(t);
-        }
-        /**
-         * The name in an entry's file name, found as cryptofs finds it (C9rDecryptor):
-         * the first run of base64 in it that decrypts; where one does not, the run is
-         * narrowed at its first and last '-' or '_' and tried again. {name, extracted}
-         * or null.
-         */
-        async extractName(t, i, a = 0, l = t.length) {
-          const h = new RegExp(wt.source, "g");
-          h.lastIndex = a;
-          const f = h.exec(t.slice(0, l));
-          if (f === null)
-            return null;
-          const w = f[0];
-          try {
-            return { name: d.decode(await this.siv.decrypt(p(w), [s.encode(i)])), extracted: w };
-          } catch {
-            const y = w.search(/[-_]/);
-            if (y === -1)
-              return null;
-            const S = Math.max(w.lastIndexOf("-"), w.lastIndexOf("_")), k = await this.extractName(t, i, f.index + Math.max(1, y), l);
-            return k !== null ? k : this.extractName(t, i, a, f.index + w.length - Math.max(1, w.length - S));
-          }
-        }
-        async decryptName(t, i) {
-          const a = t.endsWith(".c9r") ? t.slice(0, -4) : t;
-          try {
-            return d.decode(await this.siv.decrypt(p(a), [s.encode(i)]));
-          } catch (l) {
-            throw l instanceof o ? l : new o("corrupt", "name not decryptable");
-          }
-        }
-        /**
-         * The entries of a directory (the root's ID is ''): {name, type ('file',
-         * 'dir', 'link'), size (of a file, decrypted), dirId (of a directory), path
-         * (in the storage), mtime (the storage's, if known)}. As Cryptomator lists a
-         * directory (cryptofs' NodeProcessor): an entry whose name does not decrypt is
-         * left out, a sync conflict's copy is resolved (resolveConflict), a folder whose
-         * directory is missing is left out (BrokenDirectoryFilter). An entry that cannot
-         * be read for another reason is listed as type 'broken'.
-         */
-        async list(t) {
-          const i = await this.dirPath(t), a = await this.storage.list(i), l = await Promise.all(a.map((w) => this.describe(i, w, t))), h = l.filter((w) => w !== null && !w.conflict);
-          for (const w of l.filter((y) => y?.conflict)) {
-            const y = await this.resolveConflict(i, t, w);
-            y !== null && h.push(y);
-          }
-          const f = await Promise.all(h.map(async (w) => w.type !== "dir" || await this.storage.stat?.(await this.dirPath(w.dirId)).then((y) => y !== null, () => !0) !== !1));
-          return h.filter((w, y) => f[y]).sort((w, y) => (y.type === "dir") - (w.type === "dir") || w.name.localeCompare(y.name));
-        }
-        /**
-         * A sync conflict's copy, resolved as Cryptomator resolves it (cryptofs'
-         * C9rConflictResolver), so that the vault ends up as if Cryptomator had listed
-         * the directory: moved to its proper name if that is free; deleted if it and
-         * the entry of that name are the same folder or link; else renamed to its name
-         * with the sync tool's suffix, or " (1)" to " (9)". Left for the next listing
-         * (not listed now) if a folder's type cannot be told yet, or on an error.
-         * Returns the entry it became, or null.
-         */
-        async resolveConflict(t, i, a) {
-          if (typeof this.storage.move != "function")
-            return null;
-          const l = a.found.extracted + ".c9r", h = R(t, l);
-          try {
-            try {
-              return await this.storage.move(a.path, h), this.describe(t, { ...a.entry, name: l }, i);
-            } catch (w) {
-              if (w?.code !== "exists")
-                throw w;
-            }
-            const f = await this.storage.stat(h);
-            if (a.entry.isDir && f?.isDir) {
-              const w = await this.compareTypeFile(a.path, h, "dir.c9r", en, !0);
-              if (w.both)
-                return w.same ? this.removeDuplicate(a.path) : this.renameConflict(t, i, a);
-              const y = await this.compareTypeFile(a.path, h, "symlink.c9r", vr, !1);
-              if (y.both)
-                return y.same ? this.removeDuplicate(a.path) : this.renameConflict(t, i, a);
-              if (!((w.conflicting || y.conflicting) && (w.canonical || y.canonical)))
-                return null;
-            }
-            return this.renameConflict(t, i, a);
-          } catch {
-            return null;
-          }
-        }
-        async removeDuplicate(t) {
-          return await this.storage.remove(t), null;
-        }
-        /** The first bytes of a folder entry's type file in both entries, compared. */
-        async compareTypeFile(t, i, a, l, h) {
-          const f = (T) => this.storage.read(R(T, a)).then((I) => I.subarray(0, l), (I) => {
-            if (I?.code === "not-found")
-              return new Uint8Array(0);
-            throw I;
-          }), [w, y] = await Promise.all([f(t), f(i)]), S = h ? l : 1, k = w.length >= S, E = y.length >= S;
-          return { conflicting: k, canonical: E, both: k && E, same: k && E && M(w, y) };
-        }
-        /** Renames a conflict's copy as cryptofs does (renameConflictingFile). */
-        async renameConflict(t, i, a) {
-          const l = a.found.name, h = l.lastIndexOf("."), f = h > 0 ? l.slice(h) : "", w = h > 0 ? l.slice(0, h) : l, y = a.entry.name, S = y.indexOf(a.found.extracted) + a.found.extracted.length, k = y.slice(S, y.length - 4), E = this.config.payload.shorteningThreshold ?? 220, I = Math.trunc((E - 4) / 4) * 3 - 16 - f.length, N = k.slice(0, Math.min(k.length, Math.trunc(I / 2))), _ = w.slice(0, Math.max(0, Math.min(w.length, I - Math.max(4, N.length)))), P = [_ + N + f];
-          for (let O = 1; O < 10; O++)
-            P.push(_ + " (" + O + ")" + f);
-          for (const O of P) {
-            const U = u(await this.siv.encrypt(s.encode(O), [s.encode(i)]), !0) + ".c9r", Y = R(t, U);
-            if (await this.storage.stat(Y) === null)
-              return await this.storage.move(a.path, Y), this.describe(t, { ...a.entry, name: U }, i);
-          }
-          return null;
-        }
-        async describe(t, i, a) {
-          const l = R(t, i.name), h = await this.describeEntry(t, i, a, l);
-          return h !== null && i.mtime && !h.mtime && (h.mtime = i.mtime), h;
-        }
-        async describeEntry(t, i, a, l) {
-          try {
-            if (i.name.endsWith(".c9s") && i.isDir) {
-              const w = await this.decryptName(d.decode(await this.storage.read(R(l, "name.c9s"))).trim(), a), y = await this.storage.list(l), S = y.find((k) => k.name === "contents.c9r");
-              return S ? { name: w, type: "file", size: we(this.scheme, S.size), path: R(l, "contents.c9r"), mtime: S.mtime } : this.describeNode(w, l, y.map((k) => k.name));
-            }
-            if (!i.name.endsWith(".c9r"))
-              return null;
-            const h = await this.extractName(i.name.slice(0, -4), a);
-            if (h === null)
-              return null;
-            if (i.name !== h.extracted + ".c9r")
-              return i.name.startsWith(".") ? null : { conflict: !0, entry: i, found: h, path: l };
-            const f = h.name;
-            return i.isDir ? this.describeNode(f, l, null) : { name: f, type: "file", size: we(this.scheme, i.size), path: l };
-          } catch (h) {
-            return { name: i.name, type: "broken", error: h.message, path: l };
-          }
-        }
-        // A folder <name>.c9r (or .c9s): a directory (dir.c9r, its ID) or a link (symlink.c9r).
-        async describeNode(t, i, a) {
-          const l = async (w) => {
-            if (a !== null && !a.includes(w))
-              return null;
-            try {
-              return await this.storage.read(R(i, w));
-            } catch (y) {
-              if (y instanceof o && y.code === "not-found")
-                return null;
-              throw y;
-            }
-          }, h = await l("dir.c9r");
-          if (h !== null)
-            return { name: t, type: "dir", dirId: d.decode(h).trim(), path: i };
-          const f = await l("symlink.c9r");
-          if (f !== null) {
-            const w = d.decode(await this.decryptContents(f));
-            return { name: t, type: "link", target: w, path: i };
-          }
-          throw new o("corrupt", "neither a directory nor a link");
-        }
-        /**
-         * A file's decrypted contents: onProgress(done, total) after each chunk,
-         * onDownload(done, total) while the storage reads it (if it reports that).
-         */
-        async readFile(t, i, a) {
-          return this.decryptContents(await this.storage.read(t.path, a), i);
-        }
-        async decryptContents(t, i) {
-          this.requireKeys();
-          const a = oe[this.scheme];
-          if (t.length === 0)
-            return new Uint8Array(0);
-          if (t.length < a.header)
-            throw new o("corrupt", "file header too short");
-          const l = t.subarray(0, a.header), h = l.subarray(0, a.nonce), f = await this.decryptHeader(l, h), w = t.subarray(a.header), y = F + a.overhead, S = new Uint8Array(we(this.scheme, t.length));
-          for (let k = 0, E = 0; E < w.length; k++, E += y) {
-            const T = w.subarray(E, Math.min(E + y, w.length)), I = await this.decryptChunk(T, k, h, f);
-            S.set(I, k * F), i && i(Math.min(E + y, w.length), w.length);
-          }
-          return S;
-        }
-        async decryptHeader(t, i) {
-          let a;
-          if (this.scheme === "SIV_GCM")
-            try {
-              a = new Uint8Array(await r.decrypt({ name: "AES-GCM", iv: i }, this.keys.gcm, t.subarray(12)));
-            } catch {
-              throw new o("corrupt", "file header does not authenticate");
-            }
-          else {
-            const w = t.subarray(16, 56);
-            if (!await r.verify("HMAC", this.keys.mac, t.subarray(56, 88), t.subarray(0, 56)))
-              throw new o("corrupt", "file header does not authenticate");
-            a = new Uint8Array(await r.decrypt({ name: "AES-CTR", counter: i, length: 128 }, this.keys.ctr, w));
-          }
-          const l = a.subarray(8, 40), h = this.scheme === "SIV_GCM" ? "AES-GCM" : "AES-CTR", f = await r.importKey("raw", l, h, !1, ["decrypt"]);
-          return a.fill(0), f;
-        }
-        async decryptChunk(t, i, a, l) {
-          try {
-            if (this.scheme === "SIV_GCM") {
-              const y = t.subarray(0, 12);
-              return new Uint8Array(await r.decrypt(
-                { name: "AES-GCM", iv: y, additionalData: A(C(i), a) },
-                l,
-                t.subarray(12)
-              ));
-            }
-            const h = t.subarray(0, 16), f = t.subarray(16, t.length - 32), w = t.subarray(t.length - 32);
-            if (!await r.verify("HMAC", this.keys.mac, w, A(a, C(i), h, f)))
-              throw new Error("mac");
-            return new Uint8Array(await r.decrypt({ name: "AES-CTR", counter: h, length: 128 }, l, f));
-          } catch {
-            throw new o("corrupt", "chunk " + i + " does not authenticate");
-          }
-        }
-        // ----- Writing -----
-        //
-        // As Cryptomator writes (tests/compat.test.js has Cryptomator's own library
-        // read and check what is written here). The vault must never be left in a
-        // state Cryptomator cannot read:
-        // - a file is written under a staging name that Cryptomator ignores (in the
-        //   vault's top folder, outside d/), read back and compared, and only then moved into place in one
-        //   step (over the old file when replacing): a failed check leaves the vault
-        //   as it was, and what a browser that closed midway left there is removed
-        //   when the vault is next unlocked (removeLeftovers);
-        // - an entry of several files (a folder's dir.c9r, a long name's name.c9s) is
-        //   put together in a staging folder and moved into place in one step;
-        // - a new folder's own directory (with its dirid.c9r) exists before the entry
-        //   that points to it;
-        // - nothing is replaced unless asked to (a file only, never a folder), and a
-        //   new entry is refused where one of that name appeared meanwhile;
-        // - the encryption is undone in memory before anything is stored.
-        requireWritable() {
-          if (this.requireKeys(), typeof this.storage.write != "function")
-            throw new o("read-only");
-        }
-        /**
-         * Where a directory's entry of this (checked) name lives: {path (its .c9r, or
-         * .c9s for a long name), long, fullName (the encrypted name)}.
-         */
-        async entryPath(t, i) {
-          const a = await this.dirPath(t), l = u(await this.siv.encrypt(s.encode(i), [s.encode(t)]), !0) + ".c9r", h = this.config.payload.shorteningThreshold ?? 220;
-          if (l.length > h) {
-            const f = u(new Uint8Array(await r.digest("SHA-1", s.encode(l))), !0) + ".c9s";
-            return { folder: a, path: R(a, f), long: !0, fullName: l };
-          }
-          return { folder: a, path: R(a, l), long: !1, fullName: l };
-        }
-        /** What is stored at an entry's place: null, 'file', 'dir', 'link' or 'unknown'. */
-        async existing(t) {
-          const i = await this.storage.stat(t.path);
-          if (!i)
-            return null;
-          if (!i.isDir)
-            return "file";
-          const a = (await this.storage.list(t.path)).map((l) => l.name);
-          return a.includes("contents.c9r") ? "file" : a.includes("dir.c9r") ? "dir" : a.includes("symlink.c9r") ? "link" : "unknown";
-        }
-        /**
-         * The start of a file's encryption: a new content key and the header that
-         * holds it; encryptChunk(number, plain) encrypts the file's chunks in turn.
-         */
-        async startEncryption() {
-          this.requireKeys();
-          const t = oe[this.scheme], i = this.scheme === "SIV_GCM", a = Te(t.nonce), l = Te(32), h = A(new Uint8Array(8).fill(255), l);
-          let f;
-          if (i)
-            f = A(a, new Uint8Array(await r.encrypt({ name: "AES-GCM", iv: a }, this.keys.gcm, h)));
-          else {
-            const S = new Uint8Array(await r.encrypt({ name: "AES-CTR", counter: a, length: 128 }, this.keys.ctr, h)), k = new Uint8Array(await r.sign("HMAC", this.keys.mac, A(a, S)));
-            f = A(a, S, k);
-          }
-          const w = await r.importKey("raw", l, i ? "AES-GCM" : "AES-CTR", !1, ["encrypt"]);
-          h.fill(0), l.fill(0);
-          const y = this.keys;
-          return {
-            header: f,
-            async encryptChunk(S, k) {
-              const E = Te(t.nonce);
-              if (i)
-                return A(E, new Uint8Array(await r.encrypt(
-                  { name: "AES-GCM", iv: E, additionalData: A(C(S), a) },
-                  w,
-                  k
-                )));
-              const T = new Uint8Array(await r.encrypt({ name: "AES-CTR", counter: E, length: 128 }, w, k)), I = new Uint8Array(await r.sign("HMAC", y.mac, A(a, C(S), E, T)));
-              return A(E, T, I);
-            }
-          };
-        }
-        /** The size of a file of this many bytes, encrypted. */
-        encryptedSize(t) {
-          const i = oe[this.scheme];
-          return i.header + t + Math.ceil(t / F) * i.overhead;
-        }
-        /** A file's contents encrypted as Cryptomator does: a new content key, header, chunks. */
-        async encryptContents(t, i) {
-          const a = await this.startEncryption(), l = Math.ceil(t.length / F), h = new Uint8Array(this.encryptedSize(t.length));
-          h.set(a.header);
-          for (let f = 0, w = a.header.length; f < l; f++) {
-            const y = await a.encryptChunk(f, t.subarray(f * F, Math.min((f + 1) * F, t.length)));
-            h.set(y, w), w += y.length, i && i(f + 1, l);
-          }
-          return h;
-        }
-        // ----- Large files, in pieces -----
-        //
-        // A file too large to hold in memory twice: source.size and
-        // source.read(start, end) give its plain bytes in pieces (a File's slices).
-        // It is encrypted chunk by chunk into parts the storage takes in turn
-        // (storage.writeParts), then read back in ranges (storage.readRange), each
-        // chunk decrypted (which authenticates it) and compared byte for byte with
-        // the source. As with writeFile, under a staging name and moved into place
-        // only after; a failed check leaves the vault as it was. In memory: a part.
-        /** The encrypted file in parts of about partSize bytes (an async iterable). */
-        async *encryptedParts(t, i, a) {
-          const l = await this.startEncryption(), h = 32 * F;
-          let f = [l.header], w = l.header.length;
-          for (let y = 0, S = 0; y < t.size; y += h) {
-            const k = await t.read(y, Math.min(y + h, t.size));
-            for (let E = 0; E < k.length; E += F, S++) {
-              const T = await l.encryptChunk(S, k.subarray(E, Math.min(E + F, k.length)));
-              f.push(T), w += T.length, w >= i && (yield A(...f), f = [], w = 0);
-            }
-            a?.(Math.min(y + h, t.size), t.size);
-          }
-          w > 0 && (yield A(...f));
-        }
-        /**
-         * Compares a stored file with its source, in ranges: each chunk decrypted and
-         * authenticated, its bytes equal to the source's.
-         */
-        async checkStoredStream(t, i, a) {
-          const l = oe[this.scheme], h = this.encryptedSize(i.size), f = await this.storage.stat(t);
-          if (!f || f.size !== h)
-            throw new o("corrupt", "the stored file has " + (f?.size ?? "no") + " bytes, not " + h);
-          const w = await this.storage.readRange(t, 0, l.header), y = w.subarray(0, l.nonce), S = await this.decryptHeader(w, y), k = F + l.overhead, E = Math.ceil(i.size / F), T = 32;
-          for (let I = 0; I < E; I += T) {
-            const N = Math.min(I + T, E), _ = l.header + I * k, P = await this.storage.readRange(t, _, Math.min(l.header + N * k, h)), O = await i.read(I * F, Math.min(N * F, i.size));
-            for (let U = I; U < N; U++) {
-              const Y = (U - I) * k, re = await this.decryptChunk(P.subarray(Y, Math.min(Y + k, P.length)), U, y, S);
-              if (!M(re, O.subarray((U - I) * F, (U - I) * F + re.length)))
-                throw new o("corrupt", "the stored file differs from the one written (chunk " + U + ")");
-            }
-            a?.(Math.min(N * F, i.size), i.size);
-          }
-        }
-        /**
-         * writeFile for a source read in pieces (see above). options: replace,
-         * onProgress(phase, done, total) with the phases 'upload' and 'verify',
-         * partSize (bytes per part handed to the storage).
-         */
-        async writeFileStream(t, i, a, l = {}) {
-          this.requireWritable();
-          const { replace: h = !1, onProgress: f, partSize: w = 10 * 1024 * 1024 } = l, y = (O) => (U, Y) => f?.(O, U, Y), S = Ie(i), k = await this.entryPath(t, S), E = await this.existing(k);
-          if (E !== null && (E !== "file" || !h))
-            throw new o(E === "file" ? "exists" : "exists-other", S);
-          const T = this.encryptedSize(a.size), I = k.long ? R(k.path, "contents.c9r") : k.path, N = this.stagingPath(), _ = k.long && E === null, P = _ ? R(N, "contents.c9r") : N;
-          try {
-            _ && (await this.storage.mkdir(N), await this.storage.write(R(N, "name.c9s"), s.encode(k.fullName), { create: !0 })), await this.storage.writeParts(P, T, this.encryptedParts(a, w, y("upload")), { create: !0 }), await this.checkStoredStream(P, a, y("verify")), _ ? await this.storage.move(N, k.path) : await this.storage.move(N, I, { overwrite: E !== null });
-          } catch (O) {
-            throw await this.storage.remove(N).catch(() => {
-            }), O;
-          }
-          return { name: S, path: I, size: a.size };
-        }
-        /**
-         * A file's decrypted contents in pieces, for a file too large to hold:
-         * onPiece(bytes) for each range of chunks in turn (awaited), each chunk
-         * authenticated; onProgress(done, total).
-         */
-        async readFileStream(t, i, a) {
-          for await (const l of this.decryptedPieces(t, a))
-            await i(l);
-        }
-        /**
-         * A file's decrypted contents in pieces of up to 64 chunks (2 MiB), in order,
-         * each read in one range and checked: what readFileStream hands on, for a
-         * reader that pulls (e.g. an upload in parts). Nothing for an empty file.
-         */
-        async *decryptedPieces(t, i) {
-          this.requireKeys();
-          const a = oe[this.scheme], l = await this.storage.stat(t.path);
-          if (!l || l.size === 0)
-            return;
-          if (l.size < a.header)
-            throw new o("corrupt", "file header too short");
-          const h = await this.storage.readRange(t.path, 0, a.header), f = h.subarray(0, a.nonce), w = await this.decryptHeader(h, f), y = F + a.overhead, S = we(this.scheme, l.size), k = Math.ceil((l.size - a.header) / y), E = 64;
-          for (let T = 0; T < k; T += E) {
-            const I = Math.min(T + E, k), N = await this.storage.readRange(t.path, a.header + T * y, Math.min(a.header + I * y, l.size)), _ = [];
-            for (let P = T; P < I; P++) {
-              const O = (P - T) * y;
-              _.push(await this.decryptChunk(N.subarray(O, Math.min(O + y, N.length)), P, f, w));
-            }
-            yield A(..._), i?.(Math.min(I * F, S), S);
-          }
-        }
-        /**
-         * A file opened for reads anywhere in it, as a player asks (a range of bytes,
-         * then another after a seek): { size, read(start, end) }. Each read fetches
-         * only the chunks its bytes are in, in one range, and decrypts them (which
-         * authenticates them); the header once. The chunks last read are kept
-         * (CACHED_CHUNKS), as players ask for overlapping ranges.
-         */
-        async openFile(t) {
-          this.requireKeys();
-          const i = oe[this.scheme], a = await this.storage.stat(t.path);
-          if (!a)
-            throw new o("not-found", t.path);
-          if (a.size > 0 && a.size < i.header)
-            throw new o("corrupt", "file header too short");
-          const l = we(this.scheme, a.size), h = F + i.overhead, f = /* @__PURE__ */ new Map(), w = (k, E) => {
-            f.delete(k), f.set(k, E);
-          };
-          let y = null;
-          const S = () => (y ??= this.storage.readRange(t.path, 0, i.header).then(async (k) => {
-            const E = k.subarray(0, i.nonce);
-            return { nonce: E, contentKey: await this.decryptHeader(k, E) };
-          }), y.catch(() => {
-            y = null;
-          }), y);
-          return {
-            size: l,
-            read: async (k, E) => {
-              if (k = Math.max(0, k), E = Math.min(E, l), E <= k)
-                return new Uint8Array(0);
-              const T = Math.floor(k / F), I = Math.ceil(E / F);
-              let N = T;
-              for (; N < I && f.has(N); )
-                w(N, f.get(N)), N++;
-              if (N < I) {
-                const { nonce: P, contentKey: O } = await S(), U = await this.storage.readRange(t.path, i.header + N * h, Math.min(i.header + I * h, a.size));
-                for (let Y = N; Y < I; Y++) {
-                  const re = (Y - N) * h;
-                  w(Y, await this.decryptChunk(U.subarray(re, Math.min(re + h, U.length)), Y, P, O));
-                }
-              }
-              const _ = new Uint8Array(E - k);
-              for (let P = T; P < I; P++) {
-                const O = f.get(P), U = Math.max(k - P * F, 0), Y = Math.min(E - P * F, O.length);
-                _.set(O.subarray(U, Y), P * F + U - k);
-              }
-              for (; f.size > fe; )
-                f.delete(f.keys().next().value);
-              return _;
-            }
-          };
-        }
-        /**
-         * A staging name in the vault's top folder, outside d/: Cryptomator passes it
-         * by, and its health checks (which look at d/) do not report one a browser
-         * left behind. Moving from there is still one rename on the server.
-         */
-        stagingPath() {
-          return yt + $e() + ".tmp";
-        }
-        /**
-         * Removes the staging files and folders that writes which never finished (a
-         * browser closed midway) left in the vault's top folder, once they are older
-         * than olderThan (milliseconds; LEFTOVER_AGE), so that a write still going on
-         * elsewhere is left alone. Nothing for a vault that cannot be written. Returns
-         * the names removed.
-         */
-        async removeLeftovers({ olderThan: t = br, now: i = Date.now() } = {}) {
-          if (this.requireKeys(), typeof this.storage.write != "function")
-            return [];
-          const a = [];
-          for (const l of await this.storage.list(""))
-            l.name.startsWith(yt) && l.name.endsWith(".tmp") && l.mtime && i - l.mtime.getTime() >= t && (await this.storage.remove(l.name), a.push(l.name));
-          return a;
-        }
-        /**
-         * Puts an entry of several files (name -> bytes) together in a staging folder,
-         * checks it (check(stagingFolder), if given) and moves it into
-         * place in one step; refused if the place is taken meanwhile. The staging
-         * folder goes on any failure.
-         */
-        async stageAndMove(t, i, a) {
-          const l = this.stagingPath();
-          await this.storage.mkdir(l);
-          try {
-            for (const [h, f] of Object.entries(i))
-              await this.storage.write(R(l, h), f, { create: !0 });
-            a && await a(l), await this.storage.move(l, t.path);
-          } catch (h) {
-            throw await this.storage.remove(l).catch(() => {
-            }), h;
-          }
-        }
-        /** Reads a stored file back and compares it with what was written. */
-        async checkStored(t, i, a) {
-          const l = await this.storage.read(t, a);
-          let h;
-          try {
-            h = await this.decryptContents(l);
-          } catch (f) {
-            throw new o("corrupt", "the stored file does not decrypt: " + f.message);
-          }
-          if (!M(await Ze(h), i))
-            throw new o("corrupt", "the stored file differs from the one written");
-        }
-        /**
-         * Writes a file into a directory. options.replace allows replacing a file of
-         * that name (never a folder); onProgress(phase, done, total) with the phases
-         * 'encrypt', 'upload' and 'verify'. Returns {name, path, size}.
-         */
-        async writeFile(t, i, a, l = {}) {
-          this.requireWritable();
-          const { replace: h = !1, onProgress: f } = l, w = (_) => (P, O) => f?.(_, P, O), y = Ie(i), S = await this.entryPath(t, y), k = await this.existing(S);
-          if (k !== null && (k !== "file" || !h))
-            throw new o(k === "file" ? "exists" : "exists-other", y);
-          const E = await Ze(a), T = await this.encryptContents(a, w("encrypt"));
-          if (!M(await Ze(await this.decryptContents(T)), E))
-            throw new o("corrupt", "the encryption does not read back");
-          const I = S.long ? R(S.path, "contents.c9r") : S.path;
-          if (S.long && k === null)
-            return await this.stageAndMove(
-              S,
-              { "name.c9s": s.encode(S.fullName), "contents.c9r": T },
-              (_) => this.checkStored(R(_, "contents.c9r"), E, w("verify"))
-            ), { name: y, path: I, size: a.length };
-          const N = this.stagingPath();
-          try {
-            await this.storage.write(N, T, { create: !0, onProgress: w("upload") }), await this.checkStored(N, E, w("verify")), await this.storage.move(N, I, { overwrite: k !== null });
-          } catch (_) {
-            throw await this.storage.remove(N).catch(() => {
-            }), _;
-          }
-          return { name: y, path: I, size: a.length };
-        }
-        /** Creates a folder in a directory. Returns {name, dirId}. */
-        async createDirectory(t, i) {
-          this.requireWritable();
-          const a = Ie(i), l = await this.entryPath(t, a);
-          if (await this.existing(l) !== null)
-            throw new o("exists-other", a);
-          const h = $e(), f = await this.dirPath(h);
-          await this.storage.mkdir(f.split("/").slice(0, 2).join("/"), { existsOk: !0 }), await this.storage.mkdir(f);
-          try {
-            await this.storage.write(R(f, "dirid.c9r"), await this.encryptContents(s.encode(h)), { create: !0 });
-            const y = { "dir.c9r": s.encode(h) };
-            l.long && (y["name.c9s"] = s.encode(l.fullName)), await this.stageAndMove(l, y);
-          } catch (y) {
-            throw await this.storage.remove(f).catch(() => {
-            }), y;
-          }
-          const w = (await this.list(t)).find((y) => y.type === "dir" && y.dirId === h);
-          if (!w || w.name !== a)
-            throw new o("corrupt", "the new folder does not read back");
-          return { name: a, dirId: h };
-        }
-        /**
-         * The folder of this name in a directory: the one there (an upload of a folder
-         * merges into it), or a new one. Refused where a file or link has the name.
-         * Returns {name, dirId, created}.
-         */
-        async ensureDirectory(t, i) {
-          this.requireWritable();
-          const a = await this.findEntry(t, i);
-          if (a === null)
-            return { ...await this.createDirectory(t, i), created: !0 };
-          if (a.kind !== "dir")
-            throw new o("exists-other", a.name);
-          return { name: a.name, dirId: await this.entryDirId(a), created: !1 };
-        }
-        // ----- Renaming, moving, deleting -----
-        //
-        // A file's contents are not bound to its name or place, and a folder's entries
-        // live under its ID, not its name: renaming or moving changes an entry alone.
-        // Between two short names that is one move on the server. Where a long name
-        // (.c9s) is involved, the new entry is put together under a staging name (the
-        // contents copied on the server and checked), moved into place, and only then
-        // is the old one removed: a crash leaves both, never neither. Deleting a folder
-        // removes its entry first (all of it disappears at once), then the directories
-        // of everything that was in it.
-        /** An entry by name: {name, kind ('file', 'dir', 'link'), path, long, fullName, folder}, or null. */
-        async findEntry(t, i) {
-          const a = Ie(i), l = await this.entryPath(t, a), h = await this.existing(l);
-          if (h === null)
-            return null;
-          if (h === "unknown")
-            throw new o("corrupt", "the entry of " + a + " is neither file, folder nor link");
-          return { ...l, name: a, kind: h };
-        }
-        async entryDirId(t) {
-          return d.decode(await this.storage.read(R(t.path, "dir.c9r"))).trim();
-        }
-        /**
-         * Renames and/or moves an entry: from a directory to another (or the same)
-         * under a new (or the same) name. Refused where the new name is taken. A
-         * folder moved to another directory needs options.ancestors, the IDs of the
-         * target's directories from the vault's top ('' first): a folder cannot go into
-         * itself or below itself. Returns {name}.
-         */
-        async moveEntry(t, i, a, l, h = {}) {
-          this.requireWritable();
-          const f = await this.findEntry(t, i);
-          if (f === null)
-            throw new o("not-found", String(i));
-          const w = Ie(l ?? f.name);
-          if (t === a && w === f.name)
-            return { name: w };
-          if (f.kind === "dir" && t !== a) {
-            const S = h.ancestors;
-            if (!Array.isArray(S) || S[S.length - 1] !== a)
-              throw new o("invalid-move", "the target's ancestors are not known");
-            const k = await this.entryDirId(f);
-            if (S.includes(k))
-              throw new o("invalid-move", f.name);
-          }
-          const y = await this.entryPath(a, w);
-          if (await this.existing(y) !== null)
-            throw new o("exists-other", w);
-          return !f.long && !y.long ? (await this.storage.move(f.path, y.path), { name: w }) : (await this.rebuildEntry(f, y), await this.storage.remove(f.path), { name: w });
-        }
-        /**
-         * Puts an entry together anew at another place (for a change between short
-         * and long names): its files copied on the server into a staging name, a
-         * file's contents checked (they decrypt and authenticate), then moved into
-         * place in one step. The old entry stays.
-         */
-        async rebuildEntry(t, i) {
-          const a = this.stagingPath(), l = { file: "contents.c9r", dir: "dir.c9r", link: "symlink.c9r" }[t.kind], h = t.long || t.kind !== "file" ? R(t.path, l) : t.path, f = i.long || t.kind !== "file" ? R(a, l) : a;
-          try {
-            if (f !== a && await this.storage.mkdir(a), await this.storage.copy(h, f), i.long && await this.storage.write(R(a, "name.c9s"), s.encode(i.fullName), { create: !0 }), t.kind !== "dir")
-              await this.decryptContents(await this.storage.read(f));
-            else if (d.decode(await this.storage.read(f)).trim() !== await this.entryDirId(t))
-              throw new o("corrupt", "the copied folder entry differs");
-            await this.storage.move(a, i.path);
-          } catch (w) {
-            throw await this.storage.remove(a).catch(() => {
-            }), w;
-          }
-        }
-        /** The IDs of a folder and of every folder below it. */
-        async subtree(t) {
-          const i = [t];
-          for (const a of await this.list(t))
-            if (a.type === "dir")
-              i.push(...await this.subtree(a.dirId));
-            else if (a.type === "broken" && a.path.endsWith(".c9r")) {
-              const l = await this.storage.read(R(a.path, "dir.c9r")).then((h) => d.decode(h).trim(), () => null);
-              l !== null && i.push(...await this.subtree(l));
-            }
-          return i;
-        }
-        /**
-         * Deletes an entry: a file or link, or a folder with everything in it (its
-         * entry first, so that all of it disappears at once; then the directories of
-         * the folder and of every folder below it). Returns {name, folders}.
-         */
-        async removeEntry(t, i) {
-          this.requireWritable();
-          const a = await this.findEntry(t, i);
-          if (a === null)
-            throw new o("not-found", String(i));
-          if (a.kind !== "dir")
-            return await this.storage.remove(a.path), { name: a.name, folders: 0 };
-          const l = await this.subtree(await this.entryDirId(a));
-          await this.storage.remove(a.path);
-          for (const h of l)
-            await this.storage.remove(await this.dirPath(h));
-          return { name: a.name, folders: l.length };
-        }
-        // ----- Health check -----
-        //
-        // cryptofs' checks (DirIdCheck, ShortenedNamesCheck, CiphertextFileTypeCheck),
-        // their findings named as its kinds with its severities, and the repairs it
-        // offers (repair): the vault's folder d/ walked as they walk it.
-        /**
-         * The vault's findings, the worst first: {kind, severity ('CRITICAL', 'WARN' or
-         * 'INFO'), path (in the vault's folder), fixable, …}. onProgress(done, total)
-         * counts the directories looked into.
-         */
-        async checkHealth(t) {
-          this.requireKeys();
-          const i = [], a = (k, E, T, I = {}) => i.push({ kind: k, severity: E, path: T, fixable: !1, ...I }), l = async (k) => {
-            try {
-              return await this.storage.list(k);
-            } catch (E) {
-              if (E?.code === "not-found")
-                return [];
-              throw E;
-            }
-          }, h = /* @__PURE__ */ new Map([["", null]]), f = /* @__PURE__ */ new Map(), w = [];
-          for (const k of (await l("d")).filter((E) => E.isDir))
-            for (const E of (await l("d/" + k.name)).filter((T) => T.isDir)) {
-              const T = R("d", k.name, E.name), I = await l(T);
-              f.set(T, I.some((N) => !N.isDir && N.name === "dirid.c9r"));
-              for (const N of I)
-                N.isDir ? w.push(R(T, N.name)) : N.name === "dir.c9r" && a("LooseDirFile", "INFO", R(T, N.name), { fixable: !0 });
-            }
-          let y = 0;
-          await gr(w, 8, async (k) => {
-            const E = k.split("/").pop(), T = E.endsWith(".c9r"), I = E.endsWith(".c9s"), N = await l(k), _ = (O) => N.find((U) => !U.isDir && U.name === O), P = _("dir.c9r");
-            if (P) {
-              const O = R(k, "dir.c9r");
-              if (!T && !I)
-                a("LooseDirFile", "INFO", O, { fixable: !0 });
-              else if (P.size > en)
-                a("ObeseDirFile", "CRITICAL", O);
-              else if (P.size === 0)
-                a("EmptyDirFile", "CRITICAL", O, { fixable: !0 });
-              else {
-                const U = d.decode(await this.storage.read(O));
-                h.has(U) ? a("DirIdCollision", "CRITICAL", O, { dirId: U, other: h.get(U) }) : h.set(U, O);
-              }
-            }
-            if (T || I) {
-              const O = [P && "DIRECTORY", _("symlink.c9r") && "SYMLINK", I && _("contents.c9r") && "FILE"].filter(Boolean);
-              O.length === 0 ? a("UnknownType", "CRITICAL", k, { fixable: N.length === 0 }) : O.length > 1 && a("AmbiguousType", "CRITICAL", k, { types: O });
-            }
-            I && await this.checkShortened(k, _("name.c9s"), a), t?.(++y, w.length);
-          });
-          for (const [k, E] of h) {
-            const T = await this.dirPath(k);
-            f.has(T) ? (f.get(T) || a("MissingDirIdBackup", "INFO", T, { dirId: k, fixable: !0 }), f.delete(T)) : a("MissingContentDir", "WARN", E ?? T, { dirId: k, fixable: !0 });
-          }
-          for (const k of f.keys())
-            a("OrphanContentDir", "WARN", k, { fixable: !0 });
-          const S = { CRITICAL: 0, WARN: 1, INFO: 2 };
-          return i.sort((k, E) => S[k.severity] - S[E.severity] || k.kind.localeCompare(E.kind) || k.path.localeCompare(E.path));
-        }
-        /** cryptofs' ShortenedNamesCheck for one .c9s directory. */
-        async checkShortened(t, i, a) {
-          const l = R(t, "name.c9s");
-          if (!i) {
-            a("MissingLongName", "CRITICAL", t);
-            return;
-          }
-          if (i.size > wr) {
-            a("ObeseNameFile", "CRITICAL", l);
-            return;
-          }
-          const h = d.decode(await this.storage.read(l)), f = h.indexOf(".c9r");
-          if (f === -1 || !/^[A-Za-z0-9_-]*={0,2}$/.test(h.slice(0, f)) || h.slice(0, f).length % 4 !== 0) {
-            a("NotDecodableLongName", "CRITICAL", l);
-            return;
-          }
-          if (h.length > f + 4) {
-            a("TrailingBytesInNameFile", "WARN", l, { longName: h, fixable: !0 });
-            return;
-          }
-          const w = u(new Uint8Array(await r.digest("SHA-1", s.encode(h))), !0) + ".c9s";
-          t.split("/").pop() !== w && a("LongShortNamesMismatch", "WARN", t, { expected: w, fixable: !0 });
-        }
-        /** Applies the repair cryptofs offers for a finding of checkHealth. */
-        async repair(t) {
-          this.requireWritable();
-          const i = (a) => a.split("/").slice(0, -1).join("/");
-          switch (t.kind) {
-            case "LooseDirFile":
-              await this.storage.remove(t.path);
-              return;
-            case "EmptyDirFile": {
-              await this.storage.remove(t.path), (await this.storage.list(i(t.path))).length === 0 && await this.storage.remove(i(t.path));
-              return;
-            }
-            case "MissingContentDir":
-            case "MissingDirIdBackup": {
-              const a = await this.dirPath(t.dirId);
-              await this.storage.mkdir(i(a), { existsOk: !0 }), await this.storage.mkdir(a, { existsOk: !0 }), await this.storage.write(R(a, "dirid.c9r"), await this.encryptContents(s.encode(t.dirId)), { create: !0 });
-              return;
-            }
-            case "LongShortNamesMismatch":
-              await this.storage.move(t.path, R(i(t.path), t.expected));
-              return;
-            case "TrailingBytesInNameFile":
-              await this.storage.write(t.path, s.encode(t.longName.slice(0, t.longName.indexOf(".c9r") + 4)));
-              return;
-            case "UnknownType":
-              await this.storage.remove(t.path);
-              return;
-            case "OrphanContentDir":
-              await this.adoptOrphan(t.path);
-              return;
-            default:
-              throw new o("not-repairable", t.kind);
-          }
-        }
-        /**
-         * The entries of a directory no folder points to, rescued as cryptofs rescues
-         * them (OrphanContentDir): into /LOST+FOUND/<the directory's d/ path, XX and
-         * YYY joined>/, by their names where the directory's ID backup decrypts them,
-         * else as file1_…, directory1_…, symlink1_…; anything else in it moved along.
-         */
-        async adoptOrphan(t) {
-          const i = await this.dirPath(""), a = R(i, await this.encryptedName(tn, "")), l = R(a, "dir.c9r");
-          if (await this.storage.stat(l)) {
-            if (d.decode(await this.storage.read(l)) !== Xe)
-              throw new o("exists-other", "/" + tn);
-          } else
-            await this.storage.mkdir(a, { existsOk: !0 }), await this.storage.write(l, s.encode(Xe), { create: !0 });
-          const h = await this.ensureContentDir(Xe);
-          if (h === t)
-            return;
-          const f = R(h, await this.encryptedName(t.split("/").slice(1).join(""), Xe)), w = R(f, "dir.c9r");
-          let y;
-          await this.storage.stat(w) ? y = d.decode(await this.storage.read(w)) : (y = $e(), await this.storage.mkdir(f, { existsOk: !0 }), await this.storage.write(w, s.encode(y), { create: !0 }));
-          const S = await this.ensureContentDir(y);
-          let k = null;
-          try {
-            k = d.decode(await this.decryptContents(await this.storage.read(R(t, "dirid.c9r"))));
-          } catch {
-          }
-          const E = Math.floor(Math.random() * 65536).toString(32), T = { file: 0, directory: 0, symlink: 0 }, I = "_withVeryLongName".repeat((((rn - 4) / 4 | 0) * 3 - 16) % 17 + 1), N = await this.storage.list(t);
-          for (const _ of N) {
-            if (_.name.length < yr || !(_.name.endsWith(".c9r") || _.name.endsWith(".c9s")))
-              continue;
-            const P = _.name.endsWith(".c9s"), O = R(t, _.name);
-            let U = null;
-            if (k !== null)
-              try {
-                const re = P ? d.decode(await this.storage.read(R(O, "name.c9s"))) : _.name;
-                U = await this.decryptName(re, k);
-              } catch {
-              }
-            if (U === null) {
-              const re = _.isDir ? await this.storage.list(O) : [], hn = re.some((xt) => xt.name === "dir.c9r") ? "directory" : re.some((xt) => xt.name === "symlink.c9r") ? "symlink" : "file";
-              U = hn + ++T[hn] + "_" + E + (P ? I : "");
-            }
-            const Y = await this.encryptedName(U, y);
-            if (P) {
-              const re = u(new Uint8Array(await r.digest("SHA-1", s.encode(Y))), !0) + ".c9s";
-              await this.storage.move(O, R(S, re)), await this.storage.write(R(S, re, "name.c9s"), s.encode(Y));
-            } else
-              await this.storage.move(O, R(S, Y));
-          }
-          await this.storage.remove(R(t, "dirid.c9r"));
-          for (const _ of await this.storage.list(t))
-            await this.storage.move(R(t, _.name), R(S, _.name));
-          await this.storage.remove(t);
-        }
-        /** An entry's encrypted name (.c9r) in a directory, not shortened. */
-        async encryptedName(t, i) {
-          return u(await this.siv.encrypt(s.encode(t), [s.encode(i)]), !0) + ".c9r";
-        }
-        /** A directory's folder in d/, made with its ID's backup where missing. */
-        async ensureContentDir(t) {
-          const i = await this.dirPath(t);
-          return await this.storage.mkdir(i.split("/").slice(0, 2).join("/"), { existsOk: !0 }), await this.storage.mkdir(i, { existsOk: !0 }), await this.storage.stat(R(i, "dirid.c9r")) || await this.storage.write(R(i, "dirid.c9r"), await this.encryptContents(s.encode(t)), { create: !0 }), i;
-        }
-      }
-      return { Vault: ke, VaultError: o, cleartextSize: we, checkName: Ie, scrypt: ae, Siv: $, Cmac: Q, base32Encode: x, base64UrlEncode: u, base64Decode: p, encodeRecoveryKey: ln, decodeRecoveryKey: dn, VAULT_CONFIG: et, STAGING_PREFIX: yt };
-    });
-  })(nt)), nt.exports;
+import { i as e, t } from "./cryptomator_vaults-rolldown-runtime-CwxnZyOB.mjs";
+import { B as n, D as r, E as i, G as a, H as o, L as s, M as c, O as l, R as u, V as d, a as f, d as p, i as m, k as h, n as g, t as _, v as ee, x as te, y as ne } from "./cryptomator_vaults-common-B41zt4nR.mjs";
+// src/l10n.js
+var v = /* @__PURE__ */ e((/* @__PURE__ */ t(((e, t, n) => {
+	(function(e, n) {
+		typeof t == "object" && t.exports ? t.exports = n(globalThis.crypto) : e.CryptomatorVault = n(e.crypto);
+	})(typeof self < "u" ? self : n, function(e) {
+		let t = e.subtle, n = new TextEncoder(), r = new TextDecoder("utf-8", { fatal: !0 });
+		class i extends Error {
+			constructor(e, t) {
+				super(t || e), this.name = "VaultError", this.code = e;
+			}
+		}
+		function a(e) {
+			let t = e.replace(/-/g, "+").replace(/_/g, "/"), n = t + "=".repeat((4 - t.length % 4) % 4), r = atob(n), i = new Uint8Array(r.length);
+			for (let e = 0; e < r.length; e++) i[e] = r.charCodeAt(e);
+			return i;
+		}
+		function o(e, t) {
+			let n = "";
+			for (let t = 0; t < e.length; t++) n += String.fromCharCode(e[t]);
+			let r = btoa(n).replace(/\+/g, "-").replace(/\//g, "_");
+			return t ? r : r.replace(/=+$/, "");
+		}
+		function s(e) {
+			let t = "";
+			for (let n = 0; n < e.length; n++) t += String.fromCharCode(e[n]);
+			return btoa(t);
+		}
+		let c = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+		function l(e) {
+			let t = "", n = 0, r = 0;
+			for (let i of e) for (n = n << 8 | i, r += 8; r >= 5;) t += c[n >>> r - 5 & 31], r -= 5;
+			return r > 0 && (t += c[n << 5 - r & 31]), t;
+		}
+		function u(...e) {
+			let t = new Uint8Array(e.reduce((e, t) => e + t.length, 0)), n = 0;
+			for (let r of e) t.set(r, n), n += r.length;
+			return t;
+		}
+		function d(e) {
+			let t = /* @__PURE__ */ new Uint8Array(8);
+			return new DataView(t.buffer).setBigUint64(0, BigInt(e)), t;
+		}
+		function f(e, t) {
+			if (e.length !== t.length) return !1;
+			let n = 0;
+			for (let r = 0; r < e.length; r++) n |= e[r] ^ t[r];
+			return n === 0;
+		}
+		async function p(e, n, r) {
+			let i = await t.importKey("raw", e.length ? e : /* @__PURE__ */ new Uint8Array(64), {
+				name: "HMAC",
+				hash: "SHA-256"
+			}, !1, ["sign"]), a = new Uint8Array(r);
+			for (let e = 1, o = 0; o < r; e++, o += 32) {
+				let s = new Uint8Array([
+					e >>> 24,
+					e >>> 16 & 255,
+					e >>> 8 & 255,
+					e & 255
+				]), c = new Uint8Array(await t.sign("HMAC", i, u(n, s)));
+				a.set(c.subarray(0, Math.min(32, r - o)), o);
+			}
+			return a;
+		}
+		function m(e) {
+			let t = e.slice(), n = (e, t) => e << t | e >>> 32 - t;
+			for (let e = 0; e < 8; e += 2) t[4] ^= n(t[0] + t[12], 7), t[8] ^= n(t[4] + t[0], 9), t[12] ^= n(t[8] + t[4], 13), t[0] ^= n(t[12] + t[8], 18), t[9] ^= n(t[5] + t[1], 7), t[13] ^= n(t[9] + t[5], 9), t[1] ^= n(t[13] + t[9], 13), t[5] ^= n(t[1] + t[13], 18), t[14] ^= n(t[10] + t[6], 7), t[2] ^= n(t[14] + t[10], 9), t[6] ^= n(t[2] + t[14], 13), t[10] ^= n(t[6] + t[2], 18), t[3] ^= n(t[15] + t[11], 7), t[7] ^= n(t[3] + t[15], 9), t[11] ^= n(t[7] + t[3], 13), t[15] ^= n(t[11] + t[7], 18), t[1] ^= n(t[0] + t[3], 7), t[2] ^= n(t[1] + t[0], 9), t[3] ^= n(t[2] + t[1], 13), t[0] ^= n(t[3] + t[2], 18), t[6] ^= n(t[5] + t[4], 7), t[7] ^= n(t[6] + t[5], 9), t[4] ^= n(t[7] + t[6], 13), t[5] ^= n(t[4] + t[7], 18), t[11] ^= n(t[10] + t[9], 7), t[8] ^= n(t[11] + t[10], 9), t[9] ^= n(t[8] + t[11], 13), t[10] ^= n(t[9] + t[8], 18), t[12] ^= n(t[15] + t[14], 7), t[13] ^= n(t[12] + t[15], 9), t[14] ^= n(t[13] + t[12], 13), t[15] ^= n(t[14] + t[13], 18);
+			for (let n = 0; n < 16; n++) e[n] = e[n] + t[n] | 0;
+		}
+		function h(e, t, n, r) {
+			r.set(e.subarray((2 * n - 1) * 16, 2 * n * 16));
+			for (let i = 0; i < 2 * n; i++) {
+				for (let t = 0; t < 16; t++) r[t] ^= e[i * 16 + t];
+				m(r), t.set(r, ((i & 1) * n + (i >> 1)) * 16);
+			}
+		}
+		function g(e, t, n) {
+			let r = 32 * n, i = new Int32Array(r * t), a = new Int32Array(e), o = new Int32Array(r), s = /* @__PURE__ */ new Int32Array(16);
+			for (let e = 0; e < t; e++) i.set(a, e * r), h(a, o, n, s), a.set(o);
+			for (let e = 0; e < t; e++) {
+				let e = a[(2 * n - 1) * 16] & t - 1;
+				for (let t = 0; t < r; t++) a[t] ^= i[e * r + t];
+				h(a, o, n, s), a.set(o);
+			}
+			return a;
+		}
+		function _(e) {
+			let t = new DataView(e.buffer, e.byteOffset, e.byteLength), n = new Int32Array(e.length / 4);
+			for (let e = 0; e < n.length; e++) n[e] = t.getInt32(e * 4, !0);
+			return n;
+		}
+		function ee(e, t) {
+			let n = new DataView(t.buffer, t.byteOffset, t.byteLength);
+			for (let t = 0; t < e.length; t++) n.setInt32(t * 4, e[t], !0);
+		}
+		async function te(e, t, n, r, a, o) {
+			if (n < 2 || n & n - 1) throw new i("corrupt", "scrypt cost is not a power of two");
+			let s = 128 * r, c = await p(e, t, a * s);
+			for (let e = 0; e < a; e++) {
+				let t = c.subarray(e * s, (e + 1) * s);
+				ee(g(_(t), n, r), t);
+			}
+			return p(e, c, o);
+		}
+		function ne(e) {
+			let t = /* @__PURE__ */ new Uint8Array(16);
+			for (let n = 0; n < 15; n++) t[n] = (e[n] << 1 | e[n + 1] >>> 7) & 255;
+			return t[15] = e[15] << 1 & 255, e[0] & 128 && (t[15] ^= 135), t;
+		}
+		function v(e, t) {
+			let n = new Uint8Array(e.length);
+			for (let r = 0; r < e.length; r++) n[r] = e[r] ^ t[r];
+			return n;
+		}
+		class re {
+			constructor(e) {
+				this.key = e, this.subkeys = null;
+			}
+			async cbcLast(e) {
+				return new Uint8Array(await t.encrypt({
+					name: "AES-CBC",
+					iv: /* @__PURE__ */ new Uint8Array(16)
+				}, this.key, e)).subarray(e.length - 16, e.length);
+			}
+			async mac(e) {
+				if (this.subkeys === null) {
+					let e = ne(await this.cbcLast(/* @__PURE__ */ new Uint8Array(16)));
+					this.subkeys = [e, ne(e)];
+				}
+				let [t, n] = this.subkeys, r = Math.max(1, Math.ceil(e.length / 16)), i = new Uint8Array(r * 16);
+				i.set(e);
+				let a = i.subarray((r - 1) * 16);
+				return e.length > 0 && e.length % 16 == 0 ? a.set(v(a, t)) : (a[e.length - (r - 1) * 16] = 128, a.set(v(a, n))), this.cbcLast(i);
+			}
+		}
+		async function y(e, t, n) {
+			let r = await e.mac(/* @__PURE__ */ new Uint8Array(16));
+			for (let n of t) r = v(ne(r), await e.mac(n));
+			let i;
+			if (n.length >= 16) i = n.slice(), i.set(v(i.subarray(i.length - 16), r), i.length - 16);
+			else {
+				let e = /* @__PURE__ */ new Uint8Array(16);
+				e.set(n), e[n.length] = 128, i = v(ne(r), e);
+			}
+			return e.mac(i);
+		}
+		function ie(e) {
+			let t = e.slice();
+			return t[8] &= 127, t[12] &= 127, t;
+		}
+		class ae {
+			constructor(e, t) {
+				this.cmac = e, this.ctrKey = t;
+			}
+			async encrypt(e, n) {
+				let r = await y(this.cmac, n, e), i = await t.encrypt({
+					name: "AES-CTR",
+					counter: ie(r),
+					length: 128
+				}, this.ctrKey, e);
+				return u(r, new Uint8Array(i));
+			}
+			async decrypt(e, n) {
+				if (e.length < 16) throw new i("corrupt", "name too short");
+				let r = e.subarray(0, 16), a = new Uint8Array(await t.decrypt({
+					name: "AES-CTR",
+					counter: ie(r),
+					length: 128
+				}, this.ctrKey, e.subarray(16)));
+				if (!f(await y(this.cmac, n, a), r)) throw new i("corrupt", "name does not authenticate");
+				return a;
+			}
+		}
+		let b = 32768, x = {
+			SIV_GCM: {
+				header: 68,
+				nonce: 12,
+				overhead: 28
+			},
+			SIV_CTRMAC: {
+				header: 88,
+				nonce: 16,
+				overhead: 48
+			}
+		};
+		function S(e, t) {
+			let { header: n, overhead: r } = x[e], i = t - n;
+			if (i <= 0) return 0;
+			let a = Math.floor(i / (b + r)), o = i % (b + r);
+			return a * b + Math.max(0, o - r);
+		}
+		let oe = /[a-zA-Z0-9\-_]{20}(?:[a-zA-Z0-9\-_]{4})*(?:[a-zA-Z0-9\-_]{4}|[a-zA-Z0-9\-_]{3}=|[a-zA-Z0-9\-_]{2}==)/g, C = "recovery";
+		async function se(e, t, n) {
+			let r = 0;
+			await Promise.all(Array.from({ length: Math.min(t, e.length) }, async () => {
+				for (; r < e.length;) await n(e[r++]);
+			}));
+		}
+		let w = ".cryptomator-vaults-";
+		function T(t) {
+			return e.getRandomValues(new Uint8Array(t));
+		}
+		function E() {
+			return e.randomUUID();
+		}
+		async function ce(e) {
+			return new Uint8Array(await t.digest("SHA-256", e));
+		}
+		let le = {
+			HS256: "SHA-256",
+			HS384: "SHA-384",
+			HS512: "SHA-512"
+		}, ue = 2 ** 15, de = "masterkeyfile:";
+		async function fe(e, r, i, a, o) {
+			let s = await te(n.encode(String(e).normalize("NFC")), r, i, a, 1, 32);
+			try {
+				return await t.importKey("raw", s, "AES-KW", !1, o);
+			} finally {
+				s.fill(0);
+			}
+		}
+		async function pe(e, n) {
+			if (e.version !== 999) throw new i("unsupported-format", "key file version " + e.version);
+			let r = await fe(n, a(e.scryptSalt), e.scryptCostParam, e.scryptBlockSize, ["unwrapKey"]), o;
+			try {
+				let n = async (e) => new Uint8Array(await t.exportKey("raw", await t.unwrapKey("raw", a(e), r, "AES-KW", {
+					name: "HMAC",
+					hash: "SHA-256"
+				}, !0, ["sign"])));
+				o = {
+					encRaw: await n(e.primaryMasterKey),
+					macRaw: await n(e.hmacMasterKey)
+				};
+			} catch {
+				throw new i("wrong-password");
+			}
+			if (!await he(o.macRaw, e)) throw o.encRaw.fill(0), o.macRaw.fill(0), new i("corrupt", "the key file's version does not authenticate");
+			return o;
+		}
+		function me(e) {
+			let t = /* @__PURE__ */ new Uint8Array(4);
+			return new DataView(t.buffer).setInt32(0, e), t;
+		}
+		async function he(e, n) {
+			let r;
+			try {
+				r = a(String(n.versionMac ?? ""));
+			} catch {
+				return !1;
+			}
+			let i = await t.importKey("raw", e, {
+				name: "HMAC",
+				hash: "SHA-256"
+			}, !1, ["verify"]);
+			return t.verify("HMAC", i, r, me(n.version));
+		}
+		async function ge({ encRaw: e, macRaw: r }, i, a = ue) {
+			let o = T(8), c = await fe(i, o, a, 8, ["wrapKey"]), l = async (e) => new Uint8Array(await t.wrapKey("raw", await t.importKey("raw", e, {
+				name: "HMAC",
+				hash: "SHA-256"
+			}, !0, ["sign"]), c, "AES-KW")), u = await t.importKey("raw", r, {
+				name: "HMAC",
+				hash: "SHA-256"
+			}, !1, ["sign"]), d = {
+				version: 999,
+				scryptSalt: s(o),
+				scryptCostParam: a,
+				scryptBlockSize: 8,
+				primaryMasterKey: s(await l(e)),
+				hmacMasterKey: s(await l(r)),
+				versionMac: s(new Uint8Array(await t.sign("HMAC", u, me(999))))
+			};
+			return n.encode(JSON.stringify(d, null, 2));
+		}
+		async function _e({ encRaw: e, macRaw: r }, i, a) {
+			let s = (e) => o(n.encode(JSON.stringify(e)), !1), c = s({
+				kid: i,
+				typ: "JWT",
+				alg: "HS256"
+			}) + "." + s({
+				jti: E(),
+				format: 8,
+				cipherCombo: a,
+				shorteningThreshold: 220
+			}), l = await t.importKey("raw", u(e, r), {
+				name: "HMAC",
+				hash: "SHA-256"
+			}, !1, ["sign"]);
+			return c + "." + o(new Uint8Array(await t.sign("HMAC", l, n.encode(c))), !1);
+		}
+		async function ve(e, { encRaw: r, macRaw: i }) {
+			let a = Object.hasOwn(le, e.header.alg) ? le[e.header.alg] : null;
+			if (a === null) return !1;
+			let o = await t.importKey("raw", u(r, i), {
+				name: "HMAC",
+				hash: a
+			}, !1, ["verify"]);
+			return t.verify("HMAC", o, e.signature, n.encode(e.signed));
+		}
+		let ye = Array.from({ length: 256 }, (e, t) => {
+			let n = t;
+			for (let e = 0; e < 8; e++) n = n & 1 ? 3988292384 ^ n >>> 1 : n >>> 1;
+			return n >>> 0;
+		});
+		function be(e) {
+			let t = 4294967295;
+			for (let n of e) t = ye[(t ^ n) & 255] ^ t >>> 8;
+			return (t ^ 4294967295) >>> 0;
+		}
+		function xe(e, t) {
+			let n = be(e), r = u(e, new Uint8Array([n & 255, n >>> 8 & 255])), i = [];
+			for (let e = 0; e < r.length; e += 3) i.push(t[r[e] << 4 | r[e + 1] >> 4], t[(r[e + 1] & 15) << 8 | r[e + 2]]);
+			return r.fill(0), i.join(" ");
+		}
+		function D(e, t) {
+			let n = new Map(t.map((e, t) => [e, t])), r = String(e).trim().toLowerCase().split(/\s+/).filter(Boolean);
+			if (r.length !== 44) throw new i("invalid-recovery-key", r.length + " words, not 44");
+			let a = r.find((e) => !n.has(e));
+			if (a) throw new i("invalid-recovery-key", "\"" + a + "\" is not a word of the list");
+			let o = /* @__PURE__ */ new Uint8Array(66);
+			for (let e = 0; e < r.length; e += 2) {
+				let t = n.get(r[e]), i = n.get(r[e + 1]);
+				o.set([
+					t >> 4,
+					(t & 15) << 4 | i >> 8,
+					i & 255
+				], e / 2 * 3);
+			}
+			let s = o.slice(0, 64), c = be(s);
+			if (o[64] !== (c & 255) || o[65] !== (c >>> 8 & 255)) throw new i("invalid-recovery-key", "its check sum does not match");
+			return s;
+		}
+		async function Se(e, t) {
+			let n = await ce(t);
+			return e + "." + [...n.slice(0, 4)].map((e) => e.toString(16).padStart(2, "0").toUpperCase()).join("") + ".bkup";
+		}
+		async function O(e) {
+			let t;
+			try {
+				t = A(r.decode(await e.read(Ce)));
+			} catch (e) {
+				throw e instanceof i ? e : new i("unsupported-format", "vault.cryptomator unreadable: " + e.message);
+			}
+			let { header: n, payload: a } = t;
+			if (a.format !== 8) throw new i("unsupported-format", "vault format " + a.format);
+			if (!(a.cipherCombo in x)) throw new i("unsupported-format", "cipher combination " + a.cipherCombo);
+			if (!Object.hasOwn(le, n.alg)) throw new i("unsupported-format", "signature " + n.alg);
+			let o = String(n.kid || "");
+			if (!o.startsWith(de)) throw new i("unsupported-key", o);
+			let s = o.slice(14);
+			if (!/^[^/\\]+$/.test(s)) throw new i("unsupported-key", o);
+			return {
+				config: t,
+				name: s
+			};
+		}
+		function k(e) {
+			let t = String(e).normalize("NFC");
+			if (t === "" || t === "." || t === ".." || /[/\\\u0000-\u001f\u007f]/.test(t) || t.length > 255) throw new i("invalid-name", t);
+			return t;
+		}
+		let Ce = "vault.cryptomator";
+		function A(e) {
+			let t = e.trim().split(".");
+			if (t.length !== 3) throw new i("unsupported-format", "vault.cryptomator is not a JWT");
+			let n = (e) => JSON.parse(r.decode(a(e)));
+			return {
+				header: n(t[0]),
+				payload: n(t[1]),
+				signed: t[0] + "." + t[1],
+				signature: a(t[2])
+			};
+		}
+		function j(...e) {
+			return e.filter((e) => e !== "").join("/");
+		}
+		class M {
+			constructor(e, t, n) {
+				this.storage = e, this.config = t, this.masterkeyFile = n, this.keys = null;
+			}
+			static async open(e) {
+				let { config: t, name: n } = await O(e), i = JSON.parse(r.decode(await e.read(n))), a = new M(e, t, i);
+				return a.masterkeyName = n, a;
+			}
+			get scheme() {
+				return this.config.payload.cipherCombo;
+			}
+			get unlocked() {
+				return this.keys !== null;
+			}
+			async unlock(e) {
+				let t = await pe(this.masterkeyFile, e);
+				try {
+					await this.useKeys(t);
+				} finally {
+					t.encRaw.fill(0), t.macRaw.fill(0);
+				}
+			}
+			async useKeys({ encRaw: e, macRaw: n }) {
+				if (!await ve(this.config, {
+					encRaw: e,
+					macRaw: n
+				})) throw new i("corrupt", "vault.cryptomator is not signed with this key");
+				let r = (e, n) => t.importKey("raw", e, n, !1, ["encrypt", "decrypt"]);
+				this.keys = {
+					gcm: await r(e, "AES-GCM"),
+					ctr: await r(e, "AES-CTR"),
+					mac: await t.importKey("raw", n, {
+						name: "HMAC",
+						hash: "SHA-256"
+					}, !1, ["sign", "verify"])
+				}, this.siv = new ae(new re(await r(n, "AES-CBC")), this.keys.ctr), this.dirPaths = /* @__PURE__ */ new Map();
+			}
+			static async create(e, t, { cipherCombo: r = "SIV_GCM" } = {}) {
+				if (typeof e.write != "function") throw new i("read-only");
+				if (!(r in x)) throw new i("unsupported-format", "cipher combination " + r);
+				let a = "masterkey.cryptomator";
+				for (let t of [
+					Ce,
+					a,
+					"d"
+				]) if (await e.stat(t)) throw new i("exists-other", t);
+				let o = {
+					encRaw: T(32),
+					macRaw: T(32)
+				};
+				try {
+					await e.write(a, await ge(o, t), { create: !0 }), await e.write(Ce, n.encode(await _e(o, de + a, r)), { create: !0 });
+					let i = await M.open(e);
+					await i.useKeys(o);
+					let s = await i.dirPath("");
+					await e.mkdir("d", { existsOk: !0 }), await e.mkdir(s.split("/").slice(0, 2).join("/"), { existsOk: !0 }), await e.mkdir(s, { existsOk: !0 }), await e.write(j(s, "dirid.c9r"), await i.encryptContents(/* @__PURE__ */ new Uint8Array()), { create: !0 });
+				} finally {
+					o.encRaw.fill(0), o.macRaw.fill(0);
+				}
+				let s = await M.open(e);
+				return await s.unlock(t), s;
+			}
+			async changePassword(e, t) {
+				if (typeof this.storage.write != "function") throw new i("read-only");
+				let n = this.masterkeyName, a = await this.storage.read(n), o = JSON.parse(r.decode(a)), s = await pe(o, e);
+				try {
+					await this.replaceKeyFile(n, a, await ge(s, t, o.scryptCostParam), s, t);
+				} finally {
+					s.encRaw.fill(0), s.macRaw.fill(0);
+				}
+			}
+			async replaceKeyFile(e, t, n, a, o) {
+				t && await this.storage.write(await Se(e, t), t), await this.storage.write(e, n, { create: !t });
+				let s = JSON.parse(r.decode(await this.storage.read(e))), c = null;
+				try {
+					c = await pe(s, o);
+				} catch {}
+				let l = c !== null && f(c.encRaw, a.encRaw) && f(c.macRaw, a.macRaw);
+				if (c?.encRaw.fill(0), c?.macRaw.fill(0), !l) throw t && await this.storage.write(e, t), new i("corrupt", "the new key file does not read back");
+				this.masterkeyFile = s;
+			}
+			async recoveryKey(e, t) {
+				let n = await pe(JSON.parse(r.decode(await this.storage.read(this.masterkeyName))), e), i = u(n.encRaw, n.macRaw);
+				try {
+					return xe(i, t);
+				} finally {
+					i.fill(0), n.encRaw.fill(0), n.macRaw.fill(0);
+				}
+			}
+			static async resetPassword(e, t, n, r) {
+				if (typeof e.write != "function") throw new i("read-only");
+				let { config: a, name: o } = await O(e), s = D(t, r), c = {
+					encRaw: s.slice(0, 32),
+					macRaw: s.slice(32)
+				};
+				s.fill(0);
+				try {
+					if (!await ve(a, c)) throw new i("invalid-recovery-key", "it is not this vault's");
+					let t = await e.read(o).catch((e) => {
+						if (e?.code === "not-found") return null;
+						throw e;
+					}), r = new M(e, a, null);
+					r.masterkeyName = o, await r.replaceKeyFile(o, t, await ge(c, n), c, n);
+				} finally {
+					c.encRaw.fill(0), c.macRaw.fill(0);
+				}
+				let l = await M.open(e);
+				return await l.unlock(n), l;
+			}
+			lock() {
+				this.keys = null, this.siv = null, this.dirPaths = null;
+			}
+			requireKeys() {
+				if (!this.keys) throw new i("locked");
+			}
+			async dirPath(e) {
+				if (this.requireKeys(), !this.dirPaths.has(e)) {
+					let r = await this.siv.encrypt(n.encode(e), []), i = l(new Uint8Array(await t.digest("SHA-1", r)));
+					this.dirPaths.set(e, j("d", i.slice(0, 2), i.slice(2)));
+				}
+				return this.dirPaths.get(e);
+			}
+			async extractName(e, t, i = 0, o = e.length) {
+				let s = new RegExp(oe.source, "g");
+				s.lastIndex = i;
+				let c = s.exec(e.slice(0, o));
+				if (c === null) return null;
+				let l = c[0];
+				try {
+					return {
+						name: r.decode(await this.siv.decrypt(a(l), [n.encode(t)])),
+						extracted: l
+					};
+				} catch {
+					let n = l.search(/[-_]/);
+					if (n === -1) return null;
+					let r = Math.max(l.lastIndexOf("-"), l.lastIndexOf("_")), a = await this.extractName(e, t, c.index + Math.max(1, n), o);
+					return a === null ? this.extractName(e, t, i, c.index + l.length - Math.max(1, l.length - r)) : a;
+				}
+			}
+			async decryptName(e, t) {
+				let o = e.endsWith(".c9r") ? e.slice(0, -4) : e;
+				try {
+					return r.decode(await this.siv.decrypt(a(o), [n.encode(t)]));
+				} catch (e) {
+					throw e instanceof i ? e : new i("corrupt", "name not decryptable");
+				}
+			}
+			async list(e) {
+				let t = await this.dirPath(e), n = await this.storage.list(t), r = await Promise.all(n.map((n) => this.describe(t, n, e))), i = r.filter((e) => e !== null && !e.conflict);
+				for (let n of r.filter((e) => e?.conflict)) {
+					let r = await this.resolveConflict(t, e, n);
+					r !== null && i.push(r);
+				}
+				let a = await Promise.all(i.map(async (e) => e.type !== "dir" || await this.storage.stat?.(await this.dirPath(e.dirId)).then((e) => e !== null, () => !0) !== !1));
+				return i.filter((e, t) => a[t]).sort((e, t) => (t.type === "dir") - (e.type === "dir") || e.name.localeCompare(t.name));
+			}
+			async resolveConflict(e, t, n) {
+				if (typeof this.storage.move != "function") return null;
+				let r = n.found.extracted + ".c9r", i = j(e, r);
+				try {
+					try {
+						return await this.storage.move(n.path, i), this.describe(e, {
+							...n.entry,
+							name: r
+						}, t);
+					} catch (e) {
+						if (e?.code !== "exists") throw e;
+					}
+					let a = await this.storage.stat(i);
+					if (n.entry.isDir && a?.isDir) {
+						let r = await this.compareTypeFile(n.path, i, "dir.c9r", 36, !0);
+						if (r.both) return r.same ? this.removeDuplicate(n.path) : this.renameConflict(e, t, n);
+						let a = await this.compareTypeFile(n.path, i, "symlink.c9r", 32767, !1);
+						if (a.both) return a.same ? this.removeDuplicate(n.path) : this.renameConflict(e, t, n);
+						if (!r.conflicting && !a.conflicting || !r.canonical && !a.canonical) return null;
+					}
+					return this.renameConflict(e, t, n);
+				} catch {
+					return null;
+				}
+			}
+			async removeDuplicate(e) {
+				return await this.storage.remove(e), null;
+			}
+			async compareTypeFile(e, t, n, r, i) {
+				let a = (e) => this.storage.read(j(e, n)).then((e) => e.subarray(0, r), (e) => {
+					if (e?.code === "not-found") return /* @__PURE__ */ new Uint8Array();
+					throw e;
+				}), [o, s] = await Promise.all([a(e), a(t)]), c = i ? r : 1, l = o.length >= c, u = s.length >= c;
+				return {
+					conflicting: l,
+					canonical: u,
+					both: l && u,
+					same: l && u && f(o, s)
+				};
+			}
+			async renameConflict(e, t, r) {
+				let i = r.found.name, a = i.lastIndexOf("."), s = a > 0 ? i.slice(a) : "", c = a > 0 ? i.slice(0, a) : i, l = r.entry.name, u = l.indexOf(r.found.extracted) + r.found.extracted.length, d = l.slice(u, l.length - 4), f = this.config.payload.shorteningThreshold ?? 220, p = Math.trunc((f - 4) / 4) * 3 - 16 - s.length, m = d.slice(0, Math.min(d.length, Math.trunc(p / 2))), h = c.slice(0, Math.max(0, Math.min(c.length, p - Math.max(4, m.length)))), g = [h + m + s];
+				for (let e = 1; e < 10; e++) g.push(h + " (" + e + ")" + s);
+				for (let i of g) {
+					let a = o(await this.siv.encrypt(n.encode(i), [n.encode(t)]), !0) + ".c9r", s = j(e, a);
+					if (await this.storage.stat(s) === null) return await this.storage.move(r.path, s), this.describe(e, {
+						...r.entry,
+						name: a
+					}, t);
+				}
+				return null;
+			}
+			async describe(e, t, n) {
+				let r = j(e, t.name), i = await this.describeEntry(e, t, n, r);
+				return i !== null && t.mtime && !i.mtime && (i.mtime = t.mtime), i;
+			}
+			async describeEntry(e, t, n, i) {
+				try {
+					if (t.name.endsWith(".c9s") && t.isDir) {
+						let e = await this.decryptName(r.decode(await this.storage.read(j(i, "name.c9s"))).trim(), n), t = await this.storage.list(i), a = t.find((e) => e.name === "contents.c9r");
+						return a ? {
+							name: e,
+							type: "file",
+							size: S(this.scheme, a.size),
+							path: j(i, "contents.c9r"),
+							mtime: a.mtime
+						} : this.describeNode(e, i, t.map((e) => e.name));
+					}
+					if (!t.name.endsWith(".c9r")) return null;
+					let e = await this.extractName(t.name.slice(0, -4), n);
+					if (e === null) return null;
+					if (t.name !== e.extracted + ".c9r") return t.name.startsWith(".") ? null : {
+						conflict: !0,
+						entry: t,
+						found: e,
+						path: i
+					};
+					let a = e.name;
+					return t.isDir ? this.describeNode(a, i, null) : {
+						name: a,
+						type: "file",
+						size: S(this.scheme, t.size),
+						path: i
+					};
+				} catch (e) {
+					return {
+						name: t.name,
+						type: "broken",
+						error: e.message,
+						path: i
+					};
+				}
+			}
+			async describeNode(e, t, n) {
+				let a = async (e) => {
+					if (n !== null && !n.includes(e)) return null;
+					try {
+						return await this.storage.read(j(t, e));
+					} catch (e) {
+						if (e instanceof i && e.code === "not-found") return null;
+						throw e;
+					}
+				}, o = await a("dir.c9r");
+				if (o !== null) return {
+					name: e,
+					type: "dir",
+					dirId: r.decode(o).trim(),
+					path: t
+				};
+				let s = await a("symlink.c9r");
+				if (s !== null) return {
+					name: e,
+					type: "link",
+					target: r.decode(await this.decryptContents(s)),
+					path: t
+				};
+				throw new i("corrupt", "neither a directory nor a link");
+			}
+			async readFile(e, t, n) {
+				return this.decryptContents(await this.storage.read(e.path, n), t);
+			}
+			async decryptContents(e, t) {
+				this.requireKeys();
+				let n = x[this.scheme];
+				if (e.length === 0) return /* @__PURE__ */ new Uint8Array();
+				if (e.length < n.header) throw new i("corrupt", "file header too short");
+				let r = e.subarray(0, n.header), a = r.subarray(0, n.nonce), o = await this.decryptHeader(r, a), s = e.subarray(n.header), c = b + n.overhead, l = new Uint8Array(S(this.scheme, e.length));
+				for (let e = 0, n = 0; n < s.length; e++, n += c) {
+					let r = s.subarray(n, Math.min(n + c, s.length)), i = await this.decryptChunk(r, e, a, o);
+					l.set(i, e * b), t && t(Math.min(n + c, s.length), s.length);
+				}
+				return l;
+			}
+			async decryptHeader(e, n) {
+				let r;
+				if (this.scheme === "SIV_GCM") try {
+					r = new Uint8Array(await t.decrypt({
+						name: "AES-GCM",
+						iv: n
+					}, this.keys.gcm, e.subarray(12)));
+				} catch {
+					throw new i("corrupt", "file header does not authenticate");
+				}
+				else {
+					let a = e.subarray(16, 56);
+					if (!await t.verify("HMAC", this.keys.mac, e.subarray(56, 88), e.subarray(0, 56))) throw new i("corrupt", "file header does not authenticate");
+					r = new Uint8Array(await t.decrypt({
+						name: "AES-CTR",
+						counter: n,
+						length: 128
+					}, this.keys.ctr, a));
+				}
+				let a = r.subarray(8, 40), o = this.scheme === "SIV_GCM" ? "AES-GCM" : "AES-CTR", s = await t.importKey("raw", a, o, !1, ["decrypt"]);
+				return r.fill(0), s;
+			}
+			async decryptChunk(e, n, r, a) {
+				try {
+					if (this.scheme === "SIV_GCM") {
+						let i = e.subarray(0, 12);
+						return new Uint8Array(await t.decrypt({
+							name: "AES-GCM",
+							iv: i,
+							additionalData: u(d(n), r)
+						}, a, e.subarray(12)));
+					}
+					let i = e.subarray(0, 16), o = e.subarray(16, e.length - 32), s = e.subarray(e.length - 32);
+					if (!await t.verify("HMAC", this.keys.mac, s, u(r, d(n), i, o))) throw Error("mac");
+					return new Uint8Array(await t.decrypt({
+						name: "AES-CTR",
+						counter: i,
+						length: 128
+					}, a, o));
+				} catch {
+					throw new i("corrupt", "chunk " + n + " does not authenticate");
+				}
+			}
+			requireWritable() {
+				if (this.requireKeys(), typeof this.storage.write != "function") throw new i("read-only");
+			}
+			async entryPath(e, r) {
+				let i = await this.dirPath(e), a = o(await this.siv.encrypt(n.encode(r), [n.encode(e)]), !0) + ".c9r", s = this.config.payload.shorteningThreshold ?? 220;
+				return a.length > s ? {
+					folder: i,
+					path: j(i, o(new Uint8Array(await t.digest("SHA-1", n.encode(a))), !0) + ".c9s"),
+					long: !0,
+					fullName: a
+				} : {
+					folder: i,
+					path: j(i, a),
+					long: !1,
+					fullName: a
+				};
+			}
+			async existing(e) {
+				let t = await this.storage.stat(e.path);
+				if (!t) return null;
+				if (!t.isDir) return "file";
+				let n = (await this.storage.list(e.path)).map((e) => e.name);
+				return n.includes("contents.c9r") ? "file" : n.includes("dir.c9r") ? "dir" : n.includes("symlink.c9r") ? "link" : "unknown";
+			}
+			async startEncryption() {
+				this.requireKeys();
+				let e = x[this.scheme], n = this.scheme === "SIV_GCM", r = T(e.nonce), i = T(32), a = u((/* @__PURE__ */ new Uint8Array(8)).fill(255), i), o;
+				if (n) o = u(r, new Uint8Array(await t.encrypt({
+					name: "AES-GCM",
+					iv: r
+				}, this.keys.gcm, a)));
+				else {
+					let e = new Uint8Array(await t.encrypt({
+						name: "AES-CTR",
+						counter: r,
+						length: 128
+					}, this.keys.ctr, a));
+					o = u(r, e, new Uint8Array(await t.sign("HMAC", this.keys.mac, u(r, e))));
+				}
+				let s = await t.importKey("raw", i, n ? "AES-GCM" : "AES-CTR", !1, ["encrypt"]);
+				a.fill(0), i.fill(0);
+				let c = this.keys;
+				return {
+					header: o,
+					async encryptChunk(i, a) {
+						let o = T(e.nonce);
+						if (n) return u(o, new Uint8Array(await t.encrypt({
+							name: "AES-GCM",
+							iv: o,
+							additionalData: u(d(i), r)
+						}, s, a)));
+						let l = new Uint8Array(await t.encrypt({
+							name: "AES-CTR",
+							counter: o,
+							length: 128
+						}, s, a));
+						return u(o, l, new Uint8Array(await t.sign("HMAC", c.mac, u(r, d(i), o, l))));
+					}
+				};
+			}
+			encryptedSize(e) {
+				let t = x[this.scheme];
+				return t.header + e + Math.ceil(e / b) * t.overhead;
+			}
+			async encryptContents(e, t) {
+				let n = await this.startEncryption(), r = Math.ceil(e.length / b), i = new Uint8Array(this.encryptedSize(e.length));
+				i.set(n.header);
+				for (let a = 0, o = n.header.length; a < r; a++) {
+					let s = await n.encryptChunk(a, e.subarray(a * b, Math.min((a + 1) * b, e.length)));
+					i.set(s, o), o += s.length, t && t(a + 1, r);
+				}
+				return i;
+			}
+			async *encryptedParts(e, t, n) {
+				let r = await this.startEncryption(), i = 32 * b, a = [r.header], o = r.header.length;
+				for (let s = 0, c = 0; s < e.size; s += i) {
+					let l = await e.read(s, Math.min(s + i, e.size));
+					for (let e = 0; e < l.length; e += b, c++) {
+						let n = await r.encryptChunk(c, l.subarray(e, Math.min(e + b, l.length)));
+						a.push(n), o += n.length, o >= t && (yield u(...a), a = [], o = 0);
+					}
+					n?.(Math.min(s + i, e.size), e.size);
+				}
+				o > 0 && (yield u(...a));
+			}
+			async checkStoredStream(e, t, n) {
+				let r = x[this.scheme], a = this.encryptedSize(t.size), o = await this.storage.stat(e);
+				if (!o || o.size !== a) throw new i("corrupt", "the stored file has " + (o?.size ?? "no") + " bytes, not " + a);
+				let s = await this.storage.readRange(e, 0, r.header), c = s.subarray(0, r.nonce), l = await this.decryptHeader(s, c), u = b + r.overhead, d = Math.ceil(t.size / b);
+				for (let o = 0; o < d; o += 32) {
+					let s = Math.min(o + 32, d), p = r.header + o * u, m = await this.storage.readRange(e, p, Math.min(r.header + s * u, a)), h = await t.read(o * b, Math.min(s * b, t.size));
+					for (let e = o; e < s; e++) {
+						let t = (e - o) * u, n = await this.decryptChunk(m.subarray(t, Math.min(t + u, m.length)), e, c, l);
+						if (!f(n, h.subarray((e - o) * b, (e - o) * b + n.length))) throw new i("corrupt", "the stored file differs from the one written (chunk " + e + ")");
+					}
+					n?.(Math.min(s * b, t.size), t.size);
+				}
+			}
+			async writeFileStream(e, t, r, a = {}) {
+				this.requireWritable();
+				let { replace: o = !1, onProgress: s, partSize: c = 10485760 } = a, l = (e) => (t, n) => s?.(e, t, n), u = k(t), d = await this.entryPath(e, u), f = await this.existing(d);
+				if (f !== null && (f !== "file" || !o)) throw new i(f === "file" ? "exists" : "exists-other", u);
+				let p = this.encryptedSize(r.size), m = d.long ? j(d.path, "contents.c9r") : d.path, h = this.stagingPath(), g = d.long && f === null, _ = g ? j(h, "contents.c9r") : h;
+				try {
+					g && (await this.storage.mkdir(h), await this.storage.write(j(h, "name.c9s"), n.encode(d.fullName), { create: !0 })), await this.storage.writeParts(_, p, this.encryptedParts(r, c, l("upload")), { create: !0 }), await this.checkStoredStream(_, r, l("verify")), g ? await this.storage.move(h, d.path) : await this.storage.move(h, m, { overwrite: f !== null });
+				} catch (e) {
+					throw await this.storage.remove(h).catch(() => {}), e;
+				}
+				return {
+					name: u,
+					path: m,
+					size: r.size
+				};
+			}
+			async readFileStream(e, t, n) {
+				for await (let r of this.decryptedPieces(e, n)) await t(r);
+			}
+			async *decryptedPieces(e, t) {
+				this.requireKeys();
+				let n = x[this.scheme], r = await this.storage.stat(e.path);
+				if (!r || r.size === 0) return;
+				if (r.size < n.header) throw new i("corrupt", "file header too short");
+				let a = await this.storage.readRange(e.path, 0, n.header), o = a.subarray(0, n.nonce), s = await this.decryptHeader(a, o), c = b + n.overhead, l = S(this.scheme, r.size), d = Math.ceil((r.size - n.header) / c);
+				for (let i = 0; i < d; i += 64) {
+					let a = Math.min(i + 64, d), f = await this.storage.readRange(e.path, n.header + i * c, Math.min(n.header + a * c, r.size)), p = [];
+					for (let e = i; e < a; e++) {
+						let t = (e - i) * c;
+						p.push(await this.decryptChunk(f.subarray(t, Math.min(t + c, f.length)), e, o, s));
+					}
+					yield u(...p), t?.(Math.min(a * b, l), l);
+				}
+			}
+			async openFile(e) {
+				this.requireKeys();
+				let t = x[this.scheme], n = await this.storage.stat(e.path);
+				if (!n) throw new i("not-found", e.path);
+				if (n.size > 0 && n.size < t.header) throw new i("corrupt", "file header too short");
+				let r = S(this.scheme, n.size), a = b + t.overhead, o = /* @__PURE__ */ new Map(), s = (e, t) => {
+					o.delete(e), o.set(e, t);
+				}, c = null, l = () => (c ??= this.storage.readRange(e.path, 0, t.header).then(async (e) => {
+					let n = e.subarray(0, t.nonce);
+					return {
+						nonce: n,
+						contentKey: await this.decryptHeader(e, n)
+					};
+				}), c.catch(() => {
+					c = null;
+				}), c);
+				return {
+					size: r,
+					read: async (i, c) => {
+						if (i = Math.max(0, i), c = Math.min(c, r), c <= i) return /* @__PURE__ */ new Uint8Array();
+						let u = Math.floor(i / b), d = Math.ceil(c / b), f = u;
+						for (; f < d && o.has(f);) s(f, o.get(f)), f++;
+						if (f < d) {
+							let { nonce: r, contentKey: i } = await l(), o = await this.storage.readRange(e.path, t.header + f * a, Math.min(t.header + d * a, n.size));
+							for (let e = f; e < d; e++) {
+								let t = (e - f) * a;
+								s(e, await this.decryptChunk(o.subarray(t, Math.min(t + a, o.length)), e, r, i));
+							}
+						}
+						let p = new Uint8Array(c - i);
+						for (let e = u; e < d; e++) {
+							let t = o.get(e), n = Math.max(i - e * b, 0), r = Math.min(c - e * b, t.length);
+							p.set(t.subarray(n, r), e * b + n - i);
+						}
+						for (; o.size > 128;) o.delete(o.keys().next().value);
+						return p;
+					}
+				};
+			}
+			stagingPath() {
+				return w + E() + ".tmp";
+			}
+			async removeLeftovers({ olderThan: e = 864e5, now: t = Date.now() } = {}) {
+				if (this.requireKeys(), typeof this.storage.write != "function") return [];
+				let n = [];
+				for (let r of await this.storage.list("")) r.name.startsWith(w) && r.name.endsWith(".tmp") && r.mtime && t - r.mtime.getTime() >= e && (await this.storage.remove(r.name), n.push(r.name));
+				return n;
+			}
+			async stageAndMove(e, t, n) {
+				let r = this.stagingPath();
+				await this.storage.mkdir(r);
+				try {
+					for (let [e, n] of Object.entries(t)) await this.storage.write(j(r, e), n, { create: !0 });
+					n && await n(r), await this.storage.move(r, e.path);
+				} catch (e) {
+					throw await this.storage.remove(r).catch(() => {}), e;
+				}
+			}
+			async checkStored(e, t, n) {
+				let r = await this.storage.read(e, n), a;
+				try {
+					a = await this.decryptContents(r);
+				} catch (e) {
+					throw new i("corrupt", "the stored file does not decrypt: " + e.message);
+				}
+				if (!f(await ce(a), t)) throw new i("corrupt", "the stored file differs from the one written");
+			}
+			async writeFile(e, t, r, a = {}) {
+				this.requireWritable();
+				let { replace: o = !1, onProgress: s } = a, c = (e) => (t, n) => s?.(e, t, n), l = k(t), u = await this.entryPath(e, l), d = await this.existing(u);
+				if (d !== null && (d !== "file" || !o)) throw new i(d === "file" ? "exists" : "exists-other", l);
+				let p = await ce(r), m = await this.encryptContents(r, c("encrypt"));
+				if (!f(await ce(await this.decryptContents(m)), p)) throw new i("corrupt", "the encryption does not read back");
+				let h = u.long ? j(u.path, "contents.c9r") : u.path;
+				if (u.long && d === null) return await this.stageAndMove(u, {
+					"name.c9s": n.encode(u.fullName),
+					"contents.c9r": m
+				}, (e) => this.checkStored(j(e, "contents.c9r"), p, c("verify"))), {
+					name: l,
+					path: h,
+					size: r.length
+				};
+				let g = this.stagingPath();
+				try {
+					await this.storage.write(g, m, {
+						create: !0,
+						onProgress: c("upload")
+					}), await this.checkStored(g, p, c("verify")), await this.storage.move(g, h, { overwrite: d !== null });
+				} catch (e) {
+					throw await this.storage.remove(g).catch(() => {}), e;
+				}
+				return {
+					name: l,
+					path: h,
+					size: r.length
+				};
+			}
+			async createDirectory(e, t) {
+				this.requireWritable();
+				let r = k(t), a = await this.entryPath(e, r);
+				if (await this.existing(a) !== null) throw new i("exists-other", r);
+				let o = E(), s = await this.dirPath(o);
+				await this.storage.mkdir(s.split("/").slice(0, 2).join("/"), { existsOk: !0 }), await this.storage.mkdir(s);
+				try {
+					await this.storage.write(j(s, "dirid.c9r"), await this.encryptContents(n.encode(o)), { create: !0 });
+					let e = { "dir.c9r": n.encode(o) };
+					a.long && (e["name.c9s"] = n.encode(a.fullName)), await this.stageAndMove(a, e);
+				} catch (e) {
+					throw await this.storage.remove(s).catch(() => {}), e;
+				}
+				let c = (await this.list(e)).find((e) => e.type === "dir" && e.dirId === o);
+				if (!c || c.name !== r) throw new i("corrupt", "the new folder does not read back");
+				return {
+					name: r,
+					dirId: o
+				};
+			}
+			async ensureDirectory(e, t) {
+				this.requireWritable();
+				let n = await this.findEntry(e, t);
+				if (n === null) return {
+					...await this.createDirectory(e, t),
+					created: !0
+				};
+				if (n.kind !== "dir") throw new i("exists-other", n.name);
+				return {
+					name: n.name,
+					dirId: await this.entryDirId(n),
+					created: !1
+				};
+			}
+			async findEntry(e, t) {
+				let n = k(t), r = await this.entryPath(e, n), a = await this.existing(r);
+				if (a === null) return null;
+				if (a === "unknown") throw new i("corrupt", "the entry of " + n + " is neither file, folder nor link");
+				return {
+					...r,
+					name: n,
+					kind: a
+				};
+			}
+			async entryDirId(e) {
+				return r.decode(await this.storage.read(j(e.path, "dir.c9r"))).trim();
+			}
+			async moveEntry(e, t, n, r, a = {}) {
+				this.requireWritable();
+				let o = await this.findEntry(e, t);
+				if (o === null) throw new i("not-found", String(t));
+				let s = k(r ?? o.name);
+				if (e === n && s === o.name) return { name: s };
+				if (o.kind === "dir" && e !== n) {
+					let e = a.ancestors;
+					if (!Array.isArray(e) || e[e.length - 1] !== n) throw new i("invalid-move", "the target's ancestors are not known");
+					let t = await this.entryDirId(o);
+					if (e.includes(t)) throw new i("invalid-move", o.name);
+				}
+				let c = await this.entryPath(n, s);
+				if (await this.existing(c) !== null) throw new i("exists-other", s);
+				return !o.long && !c.long ? (await this.storage.move(o.path, c.path), { name: s }) : (await this.rebuildEntry(o, c), await this.storage.remove(o.path), { name: s });
+			}
+			async rebuildEntry(e, t) {
+				let a = this.stagingPath(), o = {
+					file: "contents.c9r",
+					dir: "dir.c9r",
+					link: "symlink.c9r"
+				}[e.kind], s = e.long || e.kind !== "file" ? j(e.path, o) : e.path, c = t.long || e.kind !== "file" ? j(a, o) : a;
+				try {
+					if (c !== a && await this.storage.mkdir(a), await this.storage.copy(s, c), t.long && await this.storage.write(j(a, "name.c9s"), n.encode(t.fullName), { create: !0 }), e.kind !== "dir") await this.decryptContents(await this.storage.read(c));
+					else if (r.decode(await this.storage.read(c)).trim() !== await this.entryDirId(e)) throw new i("corrupt", "the copied folder entry differs");
+					await this.storage.move(a, t.path);
+				} catch (e) {
+					throw await this.storage.remove(a).catch(() => {}), e;
+				}
+			}
+			async subtree(e) {
+				let t = [e];
+				for (let n of await this.list(e)) if (n.type === "dir") t.push(...await this.subtree(n.dirId));
+				else if (n.type === "broken" && n.path.endsWith(".c9r")) {
+					let e = await this.storage.read(j(n.path, "dir.c9r")).then((e) => r.decode(e).trim(), () => null);
+					e !== null && t.push(...await this.subtree(e));
+				}
+				return t;
+			}
+			async removeEntry(e, t) {
+				this.requireWritable();
+				let n = await this.findEntry(e, t);
+				if (n === null) throw new i("not-found", String(t));
+				if (n.kind !== "dir") return await this.storage.remove(n.path), {
+					name: n.name,
+					folders: 0
+				};
+				let r = await this.subtree(await this.entryDirId(n));
+				await this.storage.remove(n.path);
+				for (let e of r) await this.storage.remove(await this.dirPath(e));
+				return {
+					name: n.name,
+					folders: r.length
+				};
+			}
+			async checkHealth(e) {
+				this.requireKeys();
+				let t = [], n = (e, n, r, i = {}) => t.push({
+					kind: e,
+					severity: n,
+					path: r,
+					fixable: !1,
+					...i
+				}), i = async (e) => {
+					try {
+						return await this.storage.list(e);
+					} catch (e) {
+						if (e?.code === "not-found") return [];
+						throw e;
+					}
+				}, a = /* @__PURE__ */ new Map([["", null]]), o = /* @__PURE__ */ new Map(), s = [];
+				for (let e of (await i("d")).filter((e) => e.isDir)) for (let t of (await i("d/" + e.name)).filter((e) => e.isDir)) {
+					let r = j("d", e.name, t.name), a = await i(r);
+					o.set(r, a.some((e) => !e.isDir && e.name === "dirid.c9r"));
+					for (let e of a) e.isDir ? s.push(j(r, e.name)) : e.name === "dir.c9r" && n("LooseDirFile", "INFO", j(r, e.name), { fixable: !0 });
+				}
+				let c = 0;
+				await se(s, 8, async (t) => {
+					let o = t.split("/").pop(), l = o.endsWith(".c9r"), u = o.endsWith(".c9s"), d = await i(t), f = (e) => d.find((t) => !t.isDir && t.name === e), p = f("dir.c9r");
+					if (p) {
+						let e = j(t, "dir.c9r");
+						if (!l && !u) n("LooseDirFile", "INFO", e, { fixable: !0 });
+						else if (p.size > 36) n("ObeseDirFile", "CRITICAL", e);
+						else if (p.size === 0) n("EmptyDirFile", "CRITICAL", e, { fixable: !0 });
+						else {
+							let t = r.decode(await this.storage.read(e));
+							a.has(t) ? n("DirIdCollision", "CRITICAL", e, {
+								dirId: t,
+								other: a.get(t)
+							}) : a.set(t, e);
+						}
+					}
+					if (l || u) {
+						let e = [
+							p && "DIRECTORY",
+							f("symlink.c9r") && "SYMLINK",
+							u && f("contents.c9r") && "FILE"
+						].filter(Boolean);
+						e.length === 0 ? n("UnknownType", "CRITICAL", t, { fixable: d.length === 0 }) : e.length > 1 && n("AmbiguousType", "CRITICAL", t, { types: e });
+					}
+					u && await this.checkShortened(t, f("name.c9s"), n), e?.(++c, s.length);
+				});
+				for (let [e, t] of a) {
+					let r = await this.dirPath(e);
+					o.has(r) ? (o.get(r) || n("MissingDirIdBackup", "INFO", r, {
+						dirId: e,
+						fixable: !0
+					}), o.delete(r)) : n("MissingContentDir", "WARN", t ?? r, {
+						dirId: e,
+						fixable: !0
+					});
+				}
+				for (let e of o.keys()) n("OrphanContentDir", "WARN", e, { fixable: !0 });
+				let l = {
+					CRITICAL: 0,
+					WARN: 1,
+					INFO: 2
+				};
+				return t.sort((e, t) => l[e.severity] - l[t.severity] || e.kind.localeCompare(t.kind) || e.path.localeCompare(t.path));
+			}
+			async checkShortened(e, i, a) {
+				let s = j(e, "name.c9s");
+				if (!i) {
+					a("MissingLongName", "CRITICAL", e);
+					return;
+				}
+				if (i.size > 10240) {
+					a("ObeseNameFile", "CRITICAL", s);
+					return;
+				}
+				let c = r.decode(await this.storage.read(s)), l = c.indexOf(".c9r");
+				if (l === -1 || !/^[A-Za-z0-9_-]*={0,2}$/.test(c.slice(0, l)) || c.slice(0, l).length % 4 != 0) {
+					a("NotDecodableLongName", "CRITICAL", s);
+					return;
+				}
+				if (c.length > l + 4) {
+					a("TrailingBytesInNameFile", "WARN", s, {
+						longName: c,
+						fixable: !0
+					});
+					return;
+				}
+				let u = o(new Uint8Array(await t.digest("SHA-1", n.encode(c))), !0) + ".c9s";
+				e.split("/").pop() !== u && a("LongShortNamesMismatch", "WARN", e, {
+					expected: u,
+					fixable: !0
+				});
+			}
+			async repair(e) {
+				this.requireWritable();
+				let t = (e) => e.split("/").slice(0, -1).join("/");
+				switch (e.kind) {
+					case "LooseDirFile":
+						await this.storage.remove(e.path);
+						return;
+					case "EmptyDirFile":
+						await this.storage.remove(e.path), (await this.storage.list(t(e.path))).length === 0 && await this.storage.remove(t(e.path));
+						return;
+					case "MissingContentDir":
+					case "MissingDirIdBackup": {
+						let r = await this.dirPath(e.dirId);
+						await this.storage.mkdir(t(r), { existsOk: !0 }), await this.storage.mkdir(r, { existsOk: !0 }), await this.storage.write(j(r, "dirid.c9r"), await this.encryptContents(n.encode(e.dirId)), { create: !0 });
+						return;
+					}
+					case "LongShortNamesMismatch":
+						await this.storage.move(e.path, j(t(e.path), e.expected));
+						return;
+					case "TrailingBytesInNameFile":
+						await this.storage.write(e.path, n.encode(e.longName.slice(0, e.longName.indexOf(".c9r") + 4)));
+						return;
+					case "UnknownType":
+						await this.storage.remove(e.path);
+						return;
+					case "OrphanContentDir":
+						await this.adoptOrphan(e.path);
+						return;
+					default: throw new i("not-repairable", e.kind);
+				}
+			}
+			async adoptOrphan(e) {
+				let a = j(await this.dirPath(""), await this.encryptedName("LOST+FOUND", "")), s = j(a, "dir.c9r");
+				if (await this.storage.stat(s)) {
+					if (r.decode(await this.storage.read(s)) !== C) throw new i("exists-other", "/LOST+FOUND");
+				} else await this.storage.mkdir(a, { existsOk: !0 }), await this.storage.write(s, n.encode(C), { create: !0 });
+				let c = await this.ensureContentDir(C);
+				if (c === e) return;
+				let l = j(c, await this.encryptedName(e.split("/").slice(1).join(""), C)), u = j(l, "dir.c9r"), d;
+				await this.storage.stat(u) ? d = r.decode(await this.storage.read(u)) : (d = E(), await this.storage.mkdir(l, { existsOk: !0 }), await this.storage.write(u, n.encode(d), { create: !0 }));
+				let f = await this.ensureContentDir(d), p = null;
+				try {
+					p = r.decode(await this.decryptContents(await this.storage.read(j(e, "dirid.c9r"))));
+				} catch {}
+				let m = Math.floor(Math.random() * 65536).toString(32), h = {
+					file: 0,
+					directory: 0,
+					symlink: 0
+				}, g = "_withVeryLongName".repeat(11), _ = await this.storage.list(e);
+				for (let i of _) {
+					if (i.name.length < 28 || !(i.name.endsWith(".c9r") || i.name.endsWith(".c9s"))) continue;
+					let a = i.name.endsWith(".c9s"), s = j(e, i.name), c = null;
+					if (p !== null) try {
+						let e = a ? r.decode(await this.storage.read(j(s, "name.c9s"))) : i.name;
+						c = await this.decryptName(e, p);
+					} catch {}
+					if (c === null) {
+						let e = i.isDir ? await this.storage.list(s) : [], t = e.some((e) => e.name === "dir.c9r") ? "directory" : e.some((e) => e.name === "symlink.c9r") ? "symlink" : "file";
+						c = t + ++h[t] + "_" + m + (a ? g : "");
+					}
+					let l = await this.encryptedName(c, d);
+					if (a) {
+						let e = o(new Uint8Array(await t.digest("SHA-1", n.encode(l))), !0) + ".c9s";
+						await this.storage.move(s, j(f, e)), await this.storage.write(j(f, e, "name.c9s"), n.encode(l));
+					} else await this.storage.move(s, j(f, l));
+				}
+				await this.storage.remove(j(e, "dirid.c9r"));
+				for (let t of await this.storage.list(e)) await this.storage.move(j(e, t.name), j(f, t.name));
+				await this.storage.remove(e);
+			}
+			async encryptedName(e, t) {
+				return o(await this.siv.encrypt(n.encode(e), [n.encode(t)]), !0) + ".c9r";
+			}
+			async ensureContentDir(e) {
+				let t = await this.dirPath(e);
+				return await this.storage.mkdir(t.split("/").slice(0, 2).join("/"), { existsOk: !0 }), await this.storage.mkdir(t, { existsOk: !0 }), await this.storage.stat(j(t, "dirid.c9r")) || await this.storage.write(j(t, "dirid.c9r"), await this.encryptContents(n.encode(e)), { create: !0 }), t;
+			}
+		}
+		return {
+			Vault: M,
+			VaultError: i,
+			cleartextSize: S,
+			checkName: k,
+			scrypt: te,
+			Siv: ae,
+			Cmac: re,
+			base32Encode: l,
+			base64UrlEncode: o,
+			base64Decode: a,
+			encodeRecoveryKey: xe,
+			decodeRecoveryKey: D,
+			VAULT_CONFIG: Ce,
+			STAGING_PREFIX: w
+		};
+	});
+})))()), re = "cryptomator_vaults";
+function y(e, t) {
+	return ee(re, e, t, void 0, { escape: !1 });
 }
-var Vr = Hr();
-const zn = /* @__PURE__ */ Tr(Vr), Ln = "cryptomator_vaults";
-function c(e, n) {
-  return Ir(Ln, e, n, void 0, { escape: !1 });
+function ie(e, t, n, r) {
+	return ne(re, e, t, n, r, { escape: !1 });
 }
-function Ct(e, n, r, s) {
-  return Nr(Ln, e, n, r, s, { escape: !1 });
+// src/stream.js
+var ae = new URL(s("cryptomator_vaults", "js", "stream-worker.js"), window.location.href).href, b = new URL("stream/", ae).href, x = 1e4, S = 1e4, oe = 18e5, C = /* @__PURE__ */ new Map(), se = null, w = null, T = null;
+function E() {
+	return se ??= ce().catch(() => !1), se;
 }
-const zt = new URL(Fn("cryptomator_vaults", "js", "stream-worker.js"), window.location.href).href, ot = new URL("stream/", zt).href, fn = 1e4, Kr = 1e4, Br = 1800 * 1e3, ge = /* @__PURE__ */ new Map();
-let mn = null, Nt = null, rt = null;
-function Lt() {
-  return mn ??= Wr().catch(() => !1), mn;
+async function ce() {
+	return !window.isSecureContext || !("serviceWorker" in navigator) ? !1 : (navigator.serviceWorker.addEventListener("message", pe), navigator.serviceWorker.startMessages(), w = await navigator.serviceWorker.register(ae, { scope: b }), await le(ue(w), x), le(de(), x));
 }
-async function Wr() {
-  return !window.isSecureContext || !("serviceWorker" in navigator) ? !1 : (navigator.serviceWorker.addEventListener("message", Gr), navigator.serviceWorker.startMessages(), Nt = await navigator.serviceWorker.register(zt, { scope: ot }), await wn(jr(Nt), fn), wn(qr(), fn));
+var le = (e, t) => Promise.race([e, new Promise((e, n) => setTimeout(() => n(/* @__PURE__ */ Error("timeout")), t))]);
+function ue(e) {
+	if (e.active) return Promise.resolve();
+	let t = e.installing || e.waiting;
+	return new Promise((e, n) => {
+		t.addEventListener("statechange", () => {
+			t.state === "activated" ? e() : t.state === "redundant" && n(/* @__PURE__ */ Error("the stream worker did not start"));
+		});
+	});
 }
-const wn = (e, n) => Promise.race([e, new Promise((r, s) => setTimeout(() => s(new Error("timeout")), n))]);
-function jr(e) {
-  if (e.active)
-    return Promise.resolve();
-  const n = e.installing || e.waiting;
-  return new Promise((r, s) => {
-    n.addEventListener("statechange", () => {
-      n.state === "activated" ? r() : n.state === "redundant" && s(new Error("the stream worker did not start"));
-    });
-  });
+function de() {
+	return new Promise((e) => {
+		let t = fe(b + "probe");
+		t.addEventListener("load", () => {
+			let n = !1;
+			try {
+				n = t.contentDocument?.documentElement?.getAttribute("data-cryptomator-stream") === "ok";
+			} catch {}
+			t.remove(), e(n);
+		}), document.body.append(t);
+	});
 }
-function qr() {
-  return new Promise((e) => {
-    const n = Un(ot + "probe");
-    n.addEventListener("load", () => {
-      let r = !1;
-      try {
-        r = n.contentDocument?.documentElement?.getAttribute("data-cryptomator-stream") === "ok";
-      } catch {
-      }
-      n.remove(), e(r);
-    }), document.body.append(n);
-  });
+function fe(e) {
+	let t = document.createElement("iframe");
+	return t.hidden = !0, t.setAttribute("aria-hidden", "true"), t.src = e, t;
 }
-function Un(e) {
-  const n = document.createElement("iframe");
-  return n.hidden = !0, n.setAttribute("aria-hidden", "true"), n.src = e, n;
+function pe(e) {
+	let t = e.ports?.[0];
+	if (e.data?.type !== "cryptomator-stream" || !t || e.source?.scriptURL !== ae) return;
+	let n = C.get(e.data.id);
+	n ? e.data.op === "info" ? t.postMessage({
+		size: n.file.size,
+		type: n.type,
+		name: n.name,
+		kind: n.kind
+	}) : e.data.op === "read" && (n.read = Date.now(), n.file.read(e.data.start, e.data.end).then((r) => {
+		t.postMessage({ bytes: r }, [r.buffer]), n.kind === "download" && e.data.end >= n.file.size && setTimeout(() => he(e.data.id), 6e4);
+	}, (e) => t.postMessage({ error: e?.message || String(e) }))) : t.postMessage({ unknown: !0 });
 }
-function Gr(e) {
-  const n = e.ports?.[0];
-  if (e.data?.type !== "cryptomator-stream" || !n || e.source?.scriptURL !== zt)
-    return;
-  const r = ge.get(e.data.id);
-  if (!r) {
-    n.postMessage({ unknown: !0 });
-    return;
-  }
-  e.data.op === "info" ? n.postMessage({ size: r.file.size, type: r.type, name: r.name, kind: r.kind }) : e.data.op === "read" && (r.read = Date.now(), r.file.read(e.data.start, e.data.end).then((s) => {
-    n.postMessage({ bytes: s }, [s.buffer]), r.kind === "download" && e.data.end >= r.file.size && setTimeout(() => qe(e.data.id), 6e4);
-  }, (s) => n.postMessage({ error: s?.message || String(s) })));
+function me(e, t, n, r) {
+	let i = Array.from(crypto.getRandomValues(/* @__PURE__ */ new Uint8Array(16)), (e) => e.toString(16).padStart(2, "0")).join("");
+	return C.set(i, {
+		file: e,
+		name: t,
+		type: n,
+		kind: r,
+		read: Date.now()
+	}), T ??= setInterval(() => {
+		let e = Date.now();
+		for (let [t, n] of C) n.kind === "download" && e - n.read > oe && he(t);
+		w?.active?.postMessage({ type: "cryptomator-keepalive" });
+	}, S), {
+		id: i,
+		frame: b + i + "/frame",
+		url: b + i + "/file"
+	};
 }
-function Hn(e, n, r, s) {
-  const d = Array.from(crypto.getRandomValues(new Uint8Array(16)), (o) => o.toString(16).padStart(2, "0")).join("");
-  return ge.set(d, { file: e, name: n, type: r, kind: s, read: Date.now() }), rt ??= setInterval(() => {
-    const o = Date.now();
-    for (const [p, u] of ge)
-      u.kind === "download" && o - u.read > Br && qe(p);
-    Nt?.active?.postMessage({ type: "cryptomator-keepalive" });
-  }, Kr), { id: d, frame: ot + d + "/frame", url: ot + d + "/file" };
+function he(e) {
+	let t = C.get(e);
+	C.delete(e), t?.frame?.remove(), C.size === 0 && T && (clearInterval(T), T = null);
 }
-function qe(e) {
-  const n = ge.get(e);
-  ge.delete(e), n?.frame?.remove(), ge.size === 0 && rt && (clearInterval(rt), rt = null);
+function ge() {
+	for (let e of [...C.keys()]) he(e);
 }
-function Yr() {
-  for (const e of [...ge.keys()])
-    qe(e);
+function _e(e, t) {
+	let { id: n, url: r } = me(e, t, "application/octet-stream", "download"), i = fe(r + "?download");
+	C.get(n).frame = i, document.body.append(i), e.size === 0 && setTimeout(() => he(n), 6e4);
 }
-function Vn(e, n) {
-  const { id: r, url: s } = Hn(e, n, "application/octet-stream", "download"), d = Un(s + "?download");
-  ge.get(r).frame = d, document.body.append(d), e.size === 0 && setTimeout(() => qe(r), 6e4);
+// src/dialogs.js
+var ve = 104857600, ye = 5242880, be = [
+	"video",
+	"audio",
+	"pdf"
+], xe = /* @__PURE__ */ new Set();
+function D(e, t, n) {
+	let r = document.createElement(e);
+	for (let [e, n] of Object.entries(t || {})) n != null && n !== !1 && (e === "class" ? r.className = n : e.startsWith("on") ? r.addEventListener(e.slice(2), n) : r.setAttribute(e, n === !0 ? "" : n));
+	for (let e of [].concat(n ?? [])) e != null && e !== !1 && r.append(e instanceof Node ? e : document.createTextNode(String(e)));
+	return r;
 }
-const Jr = 100 * 1024 * 1024, Xr = 5 * 1024 * 1024, Kn = 1024 * 1024 * 1024, $r = ["video", "audio", "pdf"], Dt = /* @__PURE__ */ new Set();
-function g(e, n, r) {
-  const s = document.createElement(e);
-  for (const [d, o] of Object.entries(n || {}))
-    o == null || o === !1 || (d === "class" ? s.className = o : d.startsWith("on") ? s.addEventListener(d.slice(2), o) : s.setAttribute(d, o === !0 ? "" : o));
-  for (const d of [].concat(r ?? []))
-    d != null && d !== !1 && s.append(d instanceof Node ? d : document.createTextNode(String(d)));
-  return s;
+function Se(e) {
+	if (window.OC?.Util?.humanFileSize) return window.OC.Util.humanFileSize(e);
+	let t = [
+		"B",
+		"KB",
+		"MB",
+		"GB",
+		"TB"
+	], n = e, r = 0;
+	for (; n >= 1024 && r < t.length - 1;) n /= 1024, r++;
+	return (r === 0 ? n : n.toFixed(1)) + " " + t[r];
 }
-function Ke(e) {
-  if (window.OC?.Util?.humanFileSize)
-    return window.OC.Util.humanFileSize(e);
-  const n = ["B", "KB", "MB", "GB", "TB"];
-  let r = e, s = 0;
-  for (; r >= 1024 && s < n.length - 1; )
-    r /= 1024, s++;
-  return (s === 0 ? r : r.toFixed(1)) + " " + n[s];
+function O(e, t) {
+	let n = URL.createObjectURL(new Blob([e], { type: t }));
+	return xe.add(n), n;
 }
-function Re(e, n) {
-  const r = URL.createObjectURL(new Blob([e], { type: n }));
-  return Dt.add(r), r;
+function k() {
+	for (let e of xe) URL.revokeObjectURL(e);
+	xe.clear(), j(), ge();
 }
-function Zr() {
-  for (const e of Dt)
-    URL.revokeObjectURL(e);
-  Dt.clear(), q(), Yr();
+function Ce(e, t) {
+	let n = D("a", {
+		href: O(t, "application/octet-stream"),
+		download: e
+	});
+	document.body.append(n), n.click(), n.remove();
 }
-function Bn(e, n) {
-  const r = g("a", { href: Re(n, "application/octet-stream"), download: e });
-  document.body.append(r), r.click(), r.remove();
+var A = null;
+function j() {
+	if (A) {
+		let { dialog: e, onClose: t } = A;
+		A = null, e.remove(), t?.();
+	}
 }
-let ue = null;
-function q() {
-  if (ue) {
-    const { dialog: e, onClose: n } = ue;
-    ue = null, e.remove(), n?.();
-  }
+function M(e, t, n) {
+	j();
+	let r = D("div", {
+		class: "cryptomator-dialog",
+		role: "dialog",
+		"aria-modal": "true",
+		"aria-label": e,
+		onkeydown: (e) => {
+			e.key === "Escape" && j();
+		},
+		onclick: (e) => {
+			e.target === r && j();
+		}
+	}, D("div", { class: "cryptomator-dialog__panel" }, t));
+	return A = {
+		dialog: r,
+		onClose: n
+	}, document.body.append(r), r;
 }
-function he(e, n, r) {
-  q();
-  const s = g("div", {
-    class: "cryptomator-dialog",
-    role: "dialog",
-    "aria-modal": "true",
-    "aria-label": e,
-    onkeydown: (d) => {
-      d.key === "Escape" && q();
-    },
-    onclick: (d) => {
-      d.target === s && q();
-    }
-  }, g("div", { class: "cryptomator-dialog__panel" }, n));
-  return ue = { dialog: s, onClose: r }, document.body.append(s), s;
+function N(e, t) {
+	return D("p", {
+		class: "cryptomator-notice" + (t ? " cryptomator-notice--" + t : ""),
+		role: t === "error" ? "alert" : null
+	}, e);
 }
-function z(e, n) {
-  return g("p", { class: "cryptomator-notice" + (n ? " cryptomator-notice--" + n : ""), role: n === "error" ? "alert" : null }, e);
+function we(e, t, n) {
+	return new Promise((r) => {
+		let i = !1, a = D("input", {
+			type: "text",
+			name: "username",
+			autocomplete: "username",
+			readonly: !0,
+			class: "cryptomator-unlock__account",
+			"aria-label": y("Vault")
+		});
+		a.value = n;
+		let o = D("input", {
+			type: "password",
+			name: "password",
+			autocomplete: "current-password",
+			required: !0,
+			"aria-label": y("Password")
+		}), s = D("div", { "aria-live": "polite" }), c = D("button", {
+			type: "submit",
+			class: "primary"
+		}, y("Unlock"));
+		M(e, [
+			D("h2", {}, y("Unlock {vault}", { vault: e })),
+			N(y("The password and the vault's keys stay in this browser tab: the server only sends the encrypted files.")),
+			D("form", {
+				class: "cryptomator-unlock",
+				name: "cryptomator-unlock",
+				method: "post",
+				action: "#",
+				autocomplete: "on",
+				onsubmit: async (e) => {
+					e.preventDefault(), c.disabled = !0, s.replaceChildren(N(y("Unlocking …"))), await new Promise((e) => setTimeout(e, 30));
+					try {
+						await t(o.value), o.value = "", i = !0, j(), r(!0);
+					} catch (e) {
+						c.disabled = !1, s.replaceChildren(N(e.message, "error")), o.select();
+					}
+				}
+			}, [
+				D("label", {}, [y("Vault"), a]),
+				D("label", {}, [y("Password"), o]),
+				c,
+				D("button", {
+					type: "button",
+					onclick: j
+				}, y("Cancel"))
+			]),
+			s
+		], () => {
+			o.value = "", i || r(!1);
+		}), o.focus();
+	});
 }
-function Qr(e, n, r) {
-  return new Promise((s) => {
-    let d = !1;
-    const o = g("input", {
-      type: "text",
-      name: "username",
-      autocomplete: "username",
-      readonly: !0,
-      class: "cryptomator-unlock__account",
-      "aria-label": c("Vault")
-    });
-    o.value = r;
-    const p = g("input", { type: "password", name: "password", autocomplete: "current-password", required: !0, "aria-label": c("Password") }), u = g("div", { "aria-live": "polite" }), m = g("button", { type: "submit", class: "primary" }, c("Unlock"));
-    he(e, [
-      g("h2", {}, c("Unlock {vault}", { vault: e })),
-      z(c("The password and the vault's keys stay in this browser tab: the server only sends the encrypted files.")),
-      g("form", {
-        class: "cryptomator-unlock",
-        name: "cryptomator-unlock",
-        method: "post",
-        action: "#",
-        autocomplete: "on",
-        onsubmit: async (v) => {
-          v.preventDefault(), m.disabled = !0, u.replaceChildren(z(c("Unlocking …"))), await new Promise((x) => setTimeout(x, 30));
-          try {
-            await n(p.value), p.value = "", d = !0, q(), s(!0);
-          } catch (x) {
-            m.disabled = !1, u.replaceChildren(z(x.message, "error")), p.select();
-          }
-        }
-      }, [
-        g("label", {}, [c("Vault"), o]),
-        g("label", {}, [c("Password"), p]),
-        m,
-        g("button", { type: "button", onclick: q }, c("Cancel"))
-      ]),
-      u
-    ], () => {
-      p.value = "", d || s(!1);
-    }), p.focus();
-  });
+var Te = [
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"webp",
+	"avif",
+	"bmp",
+	"svg"
+], Ee = {
+	mp4: "video/mp4",
+	m4v: "video/mp4",
+	webm: "video/webm",
+	mov: "video/quicktime",
+	ogv: "video/ogg",
+	mkv: "video/x-matroska",
+	"3gp": "video/3gpp"
+}, De = {
+	mp3: "audio/mpeg",
+	m4a: "audio/mp4",
+	m4b: "audio/mp4",
+	aac: "audio/aac",
+	ogg: "audio/ogg",
+	oga: "audio/ogg",
+	opus: "audio/ogg",
+	weba: "audio/webm",
+	wav: "audio/wav",
+	flac: "audio/flac"
+}, Oe = /* @__PURE__ */ "txt.csv.tsv.json.log.xml.yml.yaml.ini.conf.cfg.toml.js.ts.py.sh.php.java.go.rs.c.h.css.html.htm.vcf.ics.tex".split(".");
+function ke(e) {
+	return Ae(e).kind !== "none";
 }
-const ea = ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "svg"], yn = {
-  mp4: "video/mp4",
-  m4v: "video/mp4",
-  webm: "video/webm",
-  mov: "video/quicktime",
-  ogv: "video/ogg",
-  mkv: "video/x-matroska",
-  "3gp": "video/3gpp"
-}, gn = {
-  mp3: "audio/mpeg",
-  m4a: "audio/mp4",
-  m4b: "audio/mp4",
-  aac: "audio/aac",
-  ogg: "audio/ogg",
-  oga: "audio/ogg",
-  opus: "audio/ogg",
-  weba: "audio/webm",
-  wav: "audio/wav",
-  flac: "audio/flac"
-}, ta = [
-  "txt",
-  "csv",
-  "tsv",
-  "json",
-  "log",
-  "xml",
-  "yml",
-  "yaml",
-  "ini",
-  "conf",
-  "cfg",
-  "toml",
-  "js",
-  "ts",
-  "py",
-  "sh",
-  "php",
-  "java",
-  "go",
-  "rs",
-  "c",
-  "h",
-  "css",
-  "html",
-  "htm",
-  "vcf",
-  "ics",
-  "tex"
-];
-function na(e) {
-  return Wn(e).kind !== "none";
-}
-function Wn(e) {
-  const n = (/\.([^.]+)$/.exec(e)?.[1] ?? "").toLowerCase();
-  return ea.includes(n) ? { kind: "image", type: n === "svg" ? "image/svg+xml" : "image/" + (n === "jpg" ? "jpeg" : n) } : n === "pdf" ? { kind: "pdf", type: "application/pdf" } : n in yn ? { kind: "video", type: yn[n] } : n in gn ? { kind: "audio", type: gn[n] } : ta.includes(n) ? { kind: "text", type: "text/plain" } : n === "docx" ? { kind: "docx" } : ["pptx", "odp", "odt"].includes(n) ? { kind: n } : ["md", "markdown"].includes(n) ? { kind: "markdown" } : n === "zip" ? { kind: "zip" } : ["heic", "heif"].includes(n) ? { kind: "heic" } : ["xlsx", "xls", "ods"].includes(n) ? { kind: "sheet" } : { kind: "none" };
-}
-const jn = {
-  docx: async (e) => (await import("./cryptomator_vaults-documents-BmbF22j6.mjs")).docxPage(e),
-  sheet: async (e) => (await import("./cryptomator_vaults-documents-BmbF22j6.mjs")).sheetPage(e),
-  pptx: async (e) => (await import("./cryptomator_vaults-office-BeiGiX41.mjs")).pptxPage(e),
-  odp: async (e) => (await import("./cryptomator_vaults-office-BeiGiX41.mjs")).odpPage(e),
-  odt: async (e) => (await import("./cryptomator_vaults-office-BeiGiX41.mjs")).odtPage(e),
-  markdown: async (e) => (await import("./cryptomator_vaults-previews-CexgEx4s.mjs")).markdownPage(e),
-  zip: async (e) => (await import("./cryptomator_vaults-previews-CexgEx4s.mjs")).zipPage(e)
-};
-function ra(e) {
-  return e in jn || e === "heic";
-}
-async function aa(e, n, r) {
-  if (e.kind === "heic") {
-    const d = await (await import("./cryptomator_vaults-previews-CexgEx4s.mjs")).heicToPng(n);
-    return g("img", { class: "cryptomator-preview", src: Re(d, "image/png"), alt: r });
-  }
-  const s = await jn[e.kind](n);
-  return g("iframe", { class: "cryptomator-preview cryptomator-preview--frame cryptomator-preview--document", sandbox: "", referrerpolicy: "no-referrer", title: r, srcdoc: s });
-}
-function oa(e, n, r) {
-  switch (e.kind) {
-    case "image":
-      return g("img", { class: "cryptomator-preview", src: Re(n, e.type), alt: r });
-    case "pdf":
-      return g("iframe", { class: "cryptomator-preview cryptomator-preview--frame", src: Re(n, e.type), title: r });
-    case "video":
-      return g("video", { class: "cryptomator-preview", src: Re(n, e.type), controls: !0 });
-    case "audio":
-      return g("audio", { class: "cryptomator-preview", src: Re(n, e.type), controls: !0 });
-    case "text":
-      return g("pre", { class: "cryptomator-preview cryptomator-preview--text" }, new TextDecoder("utf-8").decode(n));
-    default:
-      return z(c("No preview for this file. Download it to open it."));
-  }
-}
-async function ia(e, n, r, s, d) {
-  const o = Wn(e);
-  if (d && $r.includes(o.kind) && await Lt())
-    return sa(e, n, o, d, s);
-  const p = o.kind !== "none" && n <= (o.kind === "text" ? Xr : Jr);
-  if (!p && n > Kn && !window.confirm(c("This file is {size}. Your browser holds it twice while decrypting. Continue?", { size: Ke(n) })))
-    return;
-  const u = g("progress", { max: 1, value: 0 }), m = g("div", { class: "cryptomator-dialog__body" }, [z(c("Decrypting …")), u]), v = g("button", { type: "button", disabled: !0 }, c("Download")), x = he(e, [
-    g("div", { class: "cryptomator-dialog__head" }, [
-      g("h2", {}, e),
-      g("span", { class: "cryptomator-dialog__meta" }, Ke(n)),
-      v,
-      g("button", { type: "button", class: "cryptomator-dialog__close", onclick: q }, c("Close"))
-    ]),
-    m
-  ]);
-  x.querySelector(".cryptomator-dialog__close").focus();
-  try {
-    const A = await r((C, M) => {
-      u.value = 0.5 + C / M / 2;
-    }, (C, M) => {
-      u.value = C / M / 2;
-    });
-    if (ue?.dialog !== x)
-      return;
-    if (v.disabled = !1, v.addEventListener("click", () => Bn(e, A)), !p)
-      m.replaceChildren(z(c("No preview for this file. Download it to open it.")));
-    else if (ra(o.kind)) {
-      m.replaceChildren(z(c("Preparing the preview …")));
-      try {
-        const C = await aa(o, A, e);
-        ue?.dialog === x && m.replaceChildren(C);
-      } catch (C) {
-        ue?.dialog === x && m.replaceChildren(z(c("This document cannot be previewed: {detail}. Download it to open it.", { detail: C.message }), "error"));
-      }
-    } else
-      m.replaceChildren(oa(o, A, e));
-  } catch (A) {
-    ue?.dialog === x && m.replaceChildren(z(s(A), "error"));
-  }
-}
-async function sa(e, n, r, s, d) {
-  let o = null;
-  const p = g("div", { class: "cryptomator-dialog__body" }, z(c("Decrypting …"))), u = g("button", { type: "button", disabled: !0 }, c("Download")), m = he(e, [
-    g("div", { class: "cryptomator-dialog__head" }, [
-      g("h2", {}, e),
-      g("span", { class: "cryptomator-dialog__meta" }, Ke(n)),
-      u,
-      g("button", { type: "button", class: "cryptomator-dialog__close", onclick: q }, c("Close"))
-    ]),
-    p
-  ], () => o && qe(o.id));
-  m.querySelector(".cryptomator-dialog__close").focus();
-  try {
-    const v = await s();
-    if (ue?.dialog !== m)
-      return;
-    if (o = Hn(v, e, r.type, r.kind), u.disabled = !1, u.addEventListener("click", () => Vn(v, e)), r.kind === "pdf") {
-      p.replaceChildren(g("iframe", { class: "cryptomator-preview cryptomator-preview--frame", src: o.url, title: e }));
-      return;
-    }
-    const x = g("div", { "aria-live": "polite" }), A = g("iframe", {
-      class: "cryptomator-preview cryptomator-preview--frame cryptomator-preview--stream cryptomator-preview--" + r.kind,
-      src: o.frame,
-      title: e,
-      allow: "autoplay; fullscreen",
-      allowfullscreen: !0,
-      onload: () => ca(A, r.kind, x)
-    });
-    p.replaceChildren(x, A);
-  } catch (v) {
-    ue?.dialog === m && p.replaceChildren(z(d(v), "error"));
-  }
-}
-function ca(e, n, r) {
-  const s = e.contentDocument?.querySelector(n);
-  if (!s)
-    return;
-  const d = () => r.replaceChildren(z(c("Your browser cannot play this file. Download it to open it."), "error"));
-  if (s.addEventListener("error", d), s.error && d(), n === "video") {
-    const o = () => {
-      s.videoWidth === 0 && !s.error && r.replaceChildren(z(c("Your browser plays only the sound of this video. Download it to watch it.")));
-    };
-    s.readyState >= 1 ? o() : s.addEventListener("loadedmetadata", o, { once: !0 });
-  }
-}
-function qn(e, n, r, { initial: s = "", action: d = c("Create") } = {}) {
-  return new Promise((o) => {
-    let p = !1;
-    const u = g("input", { type: "text", required: !0, "aria-label": n, autocomplete: "off" });
-    u.value = s;
-    const m = g("div", { "aria-live": "polite" });
-    he(e, [
-      g("h2", {}, e),
-      g("form", {
-        class: "cryptomator-unlock",
-        onsubmit: (x) => {
-          x.preventDefault();
-          const A = r(u.value);
-          if (A) {
-            m.replaceChildren(z(A, "error"));
-            return;
-          }
-          p = !0;
-          const C = u.value;
-          q(), o(C);
-        }
-      }, [
-        g("label", {}, [n, u]),
-        g("button", { type: "submit", class: "primary" }, d),
-        g("button", { type: "button", onclick: q }, c("Cancel"))
-      ]),
-      m
-    ], () => {
-      p || o(null);
-    }), u.focus();
-    const v = s.lastIndexOf(".");
-    u.setSelectionRange(0, v > 0 ? v : s.length);
-  });
-}
-function la(e, n, r) {
-  return new Promise((s) => {
-    let d = !1;
-    he(e, [
-      g("h2", {}, e),
-      z(n),
-      g("div", { class: "cryptomator-choices" }, [
-        g("button", { type: "button", class: "error primary", onclick: () => {
-          d = !0, q();
-        } }, r),
-        g("button", { type: "button", onclick: q }, c("Cancel"))
-      ])
-    ], () => s(d)), document.querySelector(".cryptomator-dialog button:last-child")?.focus();
-  });
-}
-function da(e, n, r, s, d) {
-  return new Promise((o) => {
-    let p = null, u = [{ name: n, dirId: "" }];
-    const m = g("ol", { class: "cryptomator-crumbs" }), v = g("ul", { class: "cryptomator-folders" }), x = g("button", { type: "button", class: "primary", onclick: () => {
-      p = { dirId: u[u.length - 1].dirId, ancestors: u.map((C) => C.dirId) }, q();
-    } }, d), A = async () => {
-      m.replaceChildren(...u.map((C, M) => g("li", {}, M === u.length - 1 ? g("span", { "aria-current": "page" }, C.name) : g("button", { type: "button", onclick: () => {
-        u = u.slice(0, M + 1), A();
-      } }, C.name)))), v.replaceChildren(z(c("Loading …")));
-      try {
-        const C = (await r(u[u.length - 1].dirId)).sort((M, D) => M.name.localeCompare(D.name));
-        v.replaceChildren(...C.length ? C.map((M) => g("li", {}, g("button", {
-          type: "button",
-          class: "cryptomator-folders__item",
-          disabled: s.has(M.dirId),
-          onclick: () => {
-            u = [...u, M], A();
-          }
-        }, M.name))) : [z(c("No folders in here."))]);
-      } catch (C) {
-        v.replaceChildren(z(C.message, "error"));
-      }
-    };
-    he(e, [
-      g("h2", {}, e),
-      g("nav", {}, m),
-      g("div", { class: "cryptomator-dialog__body" }, v),
-      g("div", { class: "cryptomator-choices" }, [x, g("button", { type: "button", onclick: q }, c("Cancel"))])
-    ], () => o(p)), A();
-  });
-}
-function Gn(e) {
-  const n = g("ul", { class: "cryptomator-uploads" }), r = g("progress", { max: 1, value: 0 }), s = g("div", { "aria-live": "polite" }), d = g("div", { class: "cryptomator-question", hidden: !0 });
-  let o = !1;
-  const p = g("button", { type: "button", onclick: () => {
-    o = !0, p.disabled = !0, p.textContent = c("Stopping after this file …");
-  } }, c("Stop")), u = g("button", { type: "button", class: "primary", hidden: !0, onclick: q }, c("Close"));
-  return he(e, [
-    g("div", { class: "cryptomator-dialog__head" }, [g("h2", {}, e), p, u]),
-    r,
-    d,
-    g("div", { class: "cryptomator-dialog__body" }, n),
-    s
-  ]), {
-    get stopped() {
-      return o;
-    },
-    file(m) {
-      const v = g("span", { class: "cryptomator-dialog__meta" }, c("Waiting")), x = g("progress", { max: 1, value: 0 });
-      return n.append(g("li", {}, [g("span", { class: "cryptomator-uploads__name" }, m), v, x])), {
-        phase(A, C) {
-          v.textContent = A, x.value = C;
-        },
-        done(A, C) {
-          v.textContent = A, v.classList.toggle("cryptomator-notice--error", !!C), x.value = 1;
-        }
-      };
-    },
-    /**
-     * What to do with a taken name: 'replace', 'skip', 'replace-all', 'skip-all' or
-     * 'cancel'; text and cancel tell what replacing does and what stops.
-     */
-    ask(m, v, { text: x, cancel: A } = {}) {
-      return new Promise((C) => {
-        const M = (D) => () => {
-          d.hidden = !0, d.replaceChildren(), C(D);
-        };
-        d.replaceChildren(
-          g("h3", {}, c("“{name}” already exists", { name: m })),
-          z(x || c("Replace the file in the vault with the one you chose? The vault keeps no copy of the old one; Nextcloud's versions keep its encrypted file.")),
-          g("div", { class: "cryptomator-choices" }, [
-            g("button", { type: "button", class: "primary", onclick: M("replace") }, c("Replace")),
-            g("button", { type: "button", onclick: M("skip") }, c("Skip")),
-            v > 1 ? g("button", { type: "button", onclick: M("replace-all") }, c("Replace all")) : null,
-            v > 1 ? g("button", { type: "button", onclick: M("skip-all") }, c("Skip all")) : null,
-            g("button", { type: "button", onclick: M("cancel") }, A || c("Cancel upload"))
-          ])
-        ), d.hidden = !1, d.querySelector("button").focus();
-      });
-    },
-    progress(m) {
-      r.value = m;
-    },
-    finish(m, v) {
-      r.value = 1, p.hidden = !0, u.hidden = !1, s.replaceChildren(z(m, v ? "error" : void 0)), u.focus();
-    }
-  };
-}
-function Ge({ title: e, intro: n, fields: r, action: s, working: d, run: o }) {
-  return new Promise((p) => {
-    let u = null;
-    const m = {}, v = g("div", { "aria-live": "polite" }), x = g("button", { type: "submit", class: "primary" }, s), A = r.map((C) => {
-      const M = C.type === "textarea" ? g("textarea", { name: C.name, rows: 4, required: !0, spellcheck: "false", autocomplete: "off", class: "cryptomator-form__words" }) : g("input", {
-        type: C.type ?? "text",
-        name: C.name,
-        autocomplete: C.autocomplete ?? "off",
-        required: !C.readonly && !C.optional,
-        readonly: C.readonly || null,
-        class: C.account ? "cryptomator-unlock__account" : null
-      });
-      return M.value = C.value ?? "", m[C.name] = M, g("label", {}, [C.label, M]);
-    });
-    he(e, [
-      g("h2", {}, e),
-      ...n ? [].concat(n).map((C) => z(C)) : [],
-      g("form", {
-        class: "cryptomator-unlock cryptomator-form",
-        method: "post",
-        action: "#",
-        autocomplete: "on",
-        onsubmit: async (C) => {
-          C.preventDefault(), x.disabled = !0, v.replaceChildren(z(d ?? c("Working …"))), await new Promise((M) => setTimeout(M, 30));
-          try {
-            u = await o(Object.fromEntries(Object.entries(m).map(([M, D]) => [M, D.value]))), q();
-          } catch (M) {
-            x.disabled = !1, v.replaceChildren(z(M.message, "error"));
-          }
-        }
-      }, [...A, g("div", { class: "cryptomator-choices" }, [x, g("button", { type: "button", onclick: q }, c("Cancel"))])]),
-      v
-    ], () => {
-      for (const C of Object.values(m))
-        (C.type === "password" || C.tagName === "TEXTAREA") && (C.value = "");
-      p(u);
-    }), Object.values(m).find((C) => !C.readOnly)?.focus();
-  });
-}
-function Yn(e, n, { created: r = !1 } = {}) {
-  return new Promise((s) => {
-    const d = g("div", { class: "cryptomator-recovery-key", tabindex: "0" }, n), o = g("span", { class: "cryptomator-dialog__meta", "aria-live": "polite" });
-    he(c("Recovery key"), [
-      g("h2", {}, r ? c("{vault} is ready", { vault: e }) : c("Recovery key of {vault}", { vault: e })),
-      z(c("With this recovery key you can set a new password if you forget the one you have, here or in Cryptomator. Anyone who has it can open the vault: keep it on paper or in your password manager, not in this cloud.")),
-      d,
-      g("div", { class: "cryptomator-choices" }, [
-        g("button", { type: "button", onclick: async () => {
-          try {
-            await navigator.clipboard.writeText(n), o.textContent = c("Copied");
-          } catch {
-            o.textContent = c("Copying is not allowed here: select the words and copy them.");
-          }
-        } }, c("Copy")),
-        o,
-        g("button", { type: "button", class: "primary", onclick: q }, c("Done"))
-      ])
-    ], () => {
-      d.textContent = "", s();
-    }), d.focus();
-  });
-}
-function ua(e, { check: n, describe: r, repair: s }) {
-  const d = g("div", { class: "cryptomator-dialog__body" }), o = g("div", { "aria-live": "polite" }), p = g("progress", { max: 1, value: 0 }), u = { CRITICAL: c("Damaged"), WARN: c("Needs repair"), INFO: c("Note") }, m = async () => {
-    d.replaceChildren(), p.hidden = !1, p.value = 0, o.replaceChildren(z(c("Checking the vault …")));
-    let v;
-    try {
-      v = await n((C, M) => {
-        p.value = M ? C / M : 1;
-      });
-    } catch (C) {
-      p.hidden = !0, o.replaceChildren(z(C.message, "error"));
-      return;
-    }
-    if (p.hidden = !0, v.length === 0) {
-      o.replaceChildren(z(c("The vault is healthy: the check found nothing to repair.")));
-      return;
-    }
-    d.append(g("ul", { class: "cryptomator-findings" }, v.map((C) => g("li", {}, [
-      g("span", { class: "cryptomator-findings__severity cryptomator-findings__severity--" + C.severity.toLowerCase() }, u[C.severity]),
-      g("span", {}, r(C)),
-      g("code", { class: "cryptomator-dialog__meta" }, C.path)
-    ]))));
-    const x = v.filter((C) => C.fixable), A = [];
-    x.length && A.push(g("button", { type: "button", class: "primary", onclick: async (C) => {
-      C.target.disabled = !0, o.replaceChildren(z(c("Repairing …")));
-      try {
-        await s(x);
-      } catch (M) {
-        o.replaceChildren(z(M.message, "error"));
-        return;
-      }
-      await m();
-    } }, c("Repair {count}", { count: x.length }))), o.replaceChildren(
-      z(x.length === v.length ? c("Each of these can be repaired, as Cryptomator's health check repairs it.") : c("{count} of these can be repaired, as Cryptomator's health check repairs them; the others need Cryptomator or a backup.", { count: x.length })),
-      g("div", { class: "cryptomator-choices" }, A)
-    );
-  };
-  he(c("Health check"), [
-    g("div", { class: "cryptomator-dialog__head" }, [
-      g("h2", {}, c("Health check of {vault}", { vault: e })),
-      g("button", { type: "button", onclick: q }, c("Close"))
-    ]),
-    p,
-    d,
-    o
-  ]), m();
-}
-const { VaultError: X } = zn, At = "DAV:", ha = "http://owncloud.org/ns", Et = "http://nextcloud.org/ns", vn = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns"><d:prop><d:resourcetype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><oc:permissions/><nc:upload_time/></d:prop></d:propfind>', pa = 20 * 1024 * 1024, bn = 10 * 1024 * 1024;
-function fa() {
-  return window.OC && window.OC.requestToken || document.head.dataset.requesttoken || "";
-}
-function ie(e) {
-  return { requesttoken: fa(), "X-Requested-With": "XMLHttpRequest", ...e || {} };
-}
-function ve() {
-  return Dr()?.uid ?? "";
-}
-function at(e) {
-  return e.split("/").filter((n) => n !== "").map(encodeURIComponent).join("/");
-}
-function ma(e) {
-  const n = at(e);
-  return lt("dav") + "/files/" + encodeURIComponent(ve()) + "/" + (n ? n + "/" : "");
-}
-function Be(e) {
-  const n = new DOMParser().parseFromString(e, "application/xml");
-  return Array.from(n.getElementsByTagNameNS(At, "response")).map((r) => {
-    const s = (u, m = At) => r.getElementsByTagNameNS(m, u)[0], d = s("getcontentlength"), o = s("getlastmodified"), p = Number(s("upload_time", Et)?.textContent) || 0;
-    return {
-      href: s("href").textContent,
-      isDir: r.getElementsByTagNameNS(At, "collection").length > 0,
-      size: d ? Number(d.textContent) : 0,
-      mtime: o ? new Date(o.textContent) : void 0,
-      uploadTime: p ? new Date(p * 1e3) : void 0,
-      etag: s("getetag")?.textContent || void 0,
-      permissions: s("permissions", ha)?.textContent ?? "",
-      originalLocation: s("trashbin-original-location", Et)?.textContent,
-      deletionTime: Number(s("trashbin-deletion-time", Et)?.textContent) || 0
-    };
-  });
-}
-function wa(e) {
-  const n = e.replace(/\/+$/, "").split("/");
-  return decodeURIComponent(n[n.length - 1]);
-}
-function ye(e, n, r) {
-  return e === 0 ? new X("network", (r ? r + ": " : "") + "redirected (signed out?)") : e === 404 ? new X("not-found", n) : e === 412 || e === 405 ? new X("exists", n) : e === 507 ? new X("quota", n) : new X("network", (r ? r + ": " : "") + "HTTP " + e);
-}
-function De(e, n) {
-  return e >= 200 && e < 300 && !n;
-}
-function kn(e, n, r, s, d) {
-  return new Promise((o, p) => {
-    const u = new XMLHttpRequest();
-    u.open(e, n);
-    for (const [m, v] of Object.entries(ie(r)))
-      u.setRequestHeader(m, v);
-    d && u.upload.addEventListener("progress", (m) => d(m.loaded, m.total)), u.addEventListener("load", () => o(new URL(u.responseURL, n).href === new URL(n, window.location.href).href ? u.status : 0)), u.addEventListener("error", () => p(new X("network", e + " failed"))), u.addEventListener("abort", () => p(new X("network", e + " aborted"))), u.send(s ?? null);
-  });
-}
-async function He(e, n, r, s, d = []) {
-  const o = await fetch(n, { method: e, headers: ie(r), credentials: "same-origin" });
-  if (!De(o.status, o.redirected) && !d.includes(o.status))
-    throw ye(o.redirected ? 0 : o.status, s, e);
-  return o;
-}
-function le(e) {
-  const n = ma(e), r = (o) => n + at(o);
-  async function s(o, p, u, m, v) {
-    const x = lt("dav") + "/uploads/" + encodeURIComponent(ve()) + "/cryptomator-vaults-" + crypto.randomUUID(), A = new URL(r(o), window.location.href).href, C = { Destination: A, "OC-Total-Length": String(p) };
-    await He("MKCOL", x, { Destination: A }, o);
-    try {
-      let M = 0, D = 1;
-      for await (const G of u) {
-        const V = await kn(
-          "PUT",
-          x + "/" + String(D).padStart(5, "0"),
-          C,
-          G,
-          (L) => v?.(M + L, p)
-        );
-        if (!De(V, !1))
-          throw ye(V, o, "PUT (part " + D + ")");
-        M += G.length, D++;
-      }
-      const j = await fetch(x + "/.file", {
-        method: "MOVE",
-        headers: ie({ ...C, Overwrite: m ? "F" : "T" }),
-        credentials: "same-origin"
-      });
-      if (!De(j.status, j.redirected))
-        throw ye(j.redirected ? 0 : j.status, o, "MOVE (assembling the parts)");
-    } catch (M) {
-      throw await fetch(x, { method: "DELETE", headers: ie(), credentials: "same-origin" }).catch(() => {
-      }), M;
-    }
-  }
-  function* d(o) {
-    for (let p = 0; p < o.length; p += bn)
-      yield o.subarray(p, Math.min(p + bn, o.length));
-  }
-  return {
-    async read(o, p) {
-      const u = await fetch(n + at(o), { headers: ie(), credentials: "same-origin" });
-      if (u.status === 404)
-        throw new X("not-found", o);
-      if (!u.ok)
-        throw new X("network", "GET: HTTP " + u.status);
-      const m = Number(u.headers.get("Content-Length")) || 0;
-      if (!p || !u.body || m === 0)
-        return new Uint8Array(await u.arrayBuffer());
-      const v = new Uint8Array(m), x = u.body.getReader();
-      let A = 0;
-      for (; ; ) {
-        const { done: C, value: M } = await x.read();
-        if (C)
-          break;
-        v.set(M, A), A += M.length, p(A, m);
-      }
-      return v.subarray(0, A);
-    },
-    async stat(o) {
-      const p = await fetch(r(o), {
-        method: "PROPFIND",
-        headers: ie({ Depth: "0", "Content-Type": "application/xml; charset=utf-8" }),
-        credentials: "same-origin",
-        body: vn
-      });
-      if (p.status === 404)
-        return null;
-      if (p.status !== 207)
-        throw ye(p.status, o, "PROPFIND");
-      const [u] = Be(await p.text());
-      return { isDir: u.isDir, size: u.size, etag: u.etag, permissions: u.permissions };
-    },
-    /** Stores a file whole; create: refused (VaultError 'exists') if the name is taken. */
-    async write(o, p, { create: u = !1, onProgress: m } = {}) {
-      if (p.length >= pa)
-        return s(o, p.length, d(p), u, m);
-      const v = await kn("PUT", r(o), u ? { "If-None-Match": "*" } : {}, p, m);
-      if (!De(v, !1))
-        throw ye(v, o, "PUT");
-    },
-    /** A file too large to hold, from its parts in turn (chunked upload); complete or absent. */
-    async writeParts(o, p, u, { create: m = !1, onProgress: v } = {}) {
-      return s(o, p, u, m, v);
-    },
-    /** Bytes start to end (exclusive) of a stored file. */
-    async readRange(o, p, u) {
-      if (u <= p)
-        return new Uint8Array(0);
-      const m = await fetch(r(o), {
-        headers: ie({ Range: "bytes=" + p + "-" + (u - 1) }),
-        credentials: "same-origin"
-      });
-      if (m.status === 404)
-        throw new X("not-found", o);
-      if (m.status === 206)
-        return new Uint8Array(await m.arrayBuffer());
-      if (m.status === 200)
-        return new Uint8Array(await m.arrayBuffer()).slice(p, u);
-      throw new X("network", "GET (range): HTTP " + m.status);
-    },
-    async mkdir(o, { existsOk: p = !1 } = {}) {
-      const u = await fetch(r(o), { method: "MKCOL", headers: ie(), credentials: "same-origin" });
-      if (!(De(u.status, u.redirected) || u.status === 405 && p))
-        throw ye(u.status, o, "MKCOL");
-    },
-    /** Moves in one step; refused (VaultError 'exists') if the target is taken, unless overwrite. */
-    async move(o, p, { overwrite: u = !1 } = {}) {
-      await He("MOVE", r(o), { Destination: new URL(r(p), window.location.href).href, Overwrite: u ? "T" : "F" }, p);
-    },
-    /** Copies on the server; refused (VaultError 'exists') if the target is taken. */
-    async copy(o, p) {
-      await He("COPY", r(o), { Destination: new URL(r(p), window.location.href).href, Overwrite: "F" }, p);
-    },
-    async remove(o) {
-      await He("DELETE", r(o), {}, o, [404]);
-    },
-    /**
-     * Deletes a file or folder only as it was (its ETag): VaultError 'changed' if it
-     * changed meanwhile (a folder: anything inside it), 'not-found' if it is gone.
-     * A file's DELETE carries If-Match; Nextcloud refuses that on folders, so a
-     * folder's ETag is compared just before.
-     */
-    async removeUnchanged(o, p, { isDir: u = !1 } = {}) {
-      if (u) {
-        const v = await this.stat(o);
-        if (v === null)
-          throw new X("not-found", o);
-        if (v.etag !== p)
-          throw new X("changed", o);
-      }
-      const m = await fetch(r(o), { method: "DELETE", headers: ie(u ? {} : { "If-Match": p }), credentials: "same-origin" });
-      if (m.status === 412)
-        throw new X("changed", o);
-      if (!De(m.status, m.redirected))
-        throw ye(m.redirected ? 0 : m.status, o, "DELETE");
-    },
-    async list(o) {
-      const p = await fetch(n + (o ? at(o) + "/" : ""), {
-        method: "PROPFIND",
-        headers: ie({ Depth: "1", "Content-Type": "application/xml; charset=utf-8" }),
-        credentials: "same-origin",
-        body: vn
-      });
-      if (p.status === 404)
-        throw new X("not-found", o);
-      if (!p.ok)
-        throw new X("network", "PROPFIND: HTTP " + p.status);
-      return Be(await p.text()).slice(1).map((u) => ({ name: wa(u.href), isDir: u.isDir, size: u.size, mtime: u.mtime, uploadTime: u.uploadTime, etag: u.etag, permissions: u.permissions }));
-    }
-  };
-}
-async function Jn(e) {
-  const n = ve(), r = (o) => o.replace(/&/g, "&amp;").replace(/</g, "&lt;"), s = await fetch(lt("dav") + "/", {
-    method: "SEARCH",
-    headers: ie({ "Content-Type": "text/xml; charset=utf-8" }),
-    credentials: "same-origin",
-    body: '<?xml version="1.0" encoding="UTF-8"?><d:searchrequest xmlns:d="DAV:"><d:basicsearch><d:select><d:prop><d:displayname/></d:prop></d:select><d:from><d:scope><d:href>/files/' + r(n) + "</d:href><d:depth>infinity</d:depth></d:scope></d:from><d:where><d:like><d:prop><d:displayname/></d:prop><d:literal>" + r(e) + "</d:literal></d:like></d:where></d:basicsearch></d:searchrequest>"
-  });
-  if (!s.ok)
-    throw new Error("HTTP " + s.status);
-  const d = "/files/" + n + "/";
-  return Be(await s.text()).map((o) => decodeURIComponent(o.href)).filter((o) => o.endsWith("/" + e) && o.includes(d)).map((o) => "/" + o.slice(o.indexOf(d) + d.length, -("/" + e).length)).map((o) => o.replace(/\/+$/, "") || "/").sort((o, p) => o.localeCompare(p));
-}
-function ya() {
-  return Jn("vault.cryptomator");
-}
-function ga(e) {
-  return Jn(e);
-}
-async function va(e, n) {
-  const r = [];
-  for (const s of n) {
-    const d = s.replace(/^\/+|\/+$/g, ""), o = d.split("/").pop(), p = await e.stat(d);
-    if (p === null)
-      throw new X("not-found", d);
-    const u = { path: d, name: o, isDir: p.isDir, etag: p.etag, permissions: p.permissions, files: [], folders: [] };
-    if (!p.isDir)
-      u.files.push({ path: d, name: o, size: p.size, etag: p.etag, dirs: [] });
-    else {
-      const m = async (v, x) => {
-        u.folders.push(x);
-        const A = await e.list(v);
-        if (A.some((C) => !C.isDir && C.name === "vault.cryptomator"))
-          throw new X("contains-vault", v);
-        for (const C of A) {
-          const M = v + "/" + C.name;
-          C.isDir ? await m(M, [...x, C.name]) : u.files.push({ path: M, name: C.name, size: C.size, etag: C.etag, dirs: x });
-        }
-      };
-      await m(d, [o]);
-    }
-    r.push(u);
-  }
-  return r;
-}
-async function ba(e) {
-  return (await Rt([e])).has(e.replace(/^\/+|\/+$/g, ""));
-}
-async function Rt(e, { onlyEmpty: n = !1 } = {}) {
-  const r = e.map((m) => m.replace(/^\/+|\/+$/g, "")), s = lt("dav") + "/trashbin/" + encodeURIComponent(ve()) + "/trash/", d = (m) => fetch(m, {
-    method: "PROPFIND",
-    headers: ie({ Depth: "1", "Content-Type": "application/xml; charset=utf-8" }),
-    credentials: "same-origin",
-    body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns"><d:prop><d:resourcetype/><nc:trashbin-original-location/><nc:trashbin-deletion-time/></d:prop></d:propfind>'
-  }), o = await d(s);
-  if (o.status === 404 || o.status === 405)
-    return new Set(r);
-  if (o.status !== 207)
-    throw ye(o.status, r[0] ?? "", "PROPFIND (deleted files)");
-  const p = Be(await o.text()).slice(1), u = /* @__PURE__ */ new Set();
-  for (const m of r) {
-    const [v] = p.filter((A) => A.originalLocation === m).sort((A, C) => C.deletionTime - A.deletionTime);
-    if (!v)
-      continue;
-    const x = new URL(v.href, window.location.href).href;
-    if (n && v.isDir) {
-      const A = await d(x);
-      if (A.status !== 207 || Be(await A.text()).length > 1)
-        continue;
-    }
-    await He("DELETE", x, {}, m, [404]), u.add(m);
-  }
-  return u;
-}
-const Fe = ".cryptomator-inbox.json", Xn = 1, ka = 64 * 1024, xa = 120 * 1e3;
 function Ae(e) {
-  if (typeof e != "string")
-    return null;
-  const n = e.normalize("NFC").split("/").filter((r) => r !== "");
-  return n.some((r) => r === "." || r === "..") ? null : "/" + n.join("/");
+	let t = (/\.([^.]+)$/.exec(e)?.[1] ?? "").toLowerCase();
+	return Te.includes(t) ? {
+		kind: "image",
+		type: t === "svg" ? "image/svg+xml" : "image/" + (t === "jpg" ? "jpeg" : t)
+	} : t === "pdf" ? {
+		kind: "pdf",
+		type: "application/pdf"
+	} : t in Ee ? {
+		kind: "video",
+		type: Ee[t]
+	} : t in De ? {
+		kind: "audio",
+		type: De[t]
+	} : Oe.includes(t) ? {
+		kind: "text",
+		type: "text/plain"
+	} : t === "docx" ? { kind: "docx" } : [
+		"pptx",
+		"odp",
+		"odt"
+	].includes(t) ? { kind: t } : ["md", "markdown"].includes(t) ? { kind: "markdown" } : t === "zip" ? { kind: "zip" } : ["heic", "heif"].includes(t) ? { kind: "heic" } : [
+		"xlsx",
+		"xls",
+		"ods"
+	].includes(t) ? { kind: "sheet" } : { kind: "none" };
 }
-function Ft(e) {
-  return e.split("/").filter(Boolean);
+var je = {
+	docx: async (e) => (await import("./cryptomator_vaults-documents-DnZ4HaxO.mjs")).docxPage(e),
+	sheet: async (e) => (await import("./cryptomator_vaults-documents-DnZ4HaxO.mjs")).sheetPage(e),
+	pptx: async (e) => (await import("./cryptomator_vaults-office-DCu7W88h.mjs")).pptxPage(e),
+	odp: async (e) => (await import("./cryptomator_vaults-office-DCu7W88h.mjs")).odpPage(e),
+	odt: async (e) => (await import("./cryptomator_vaults-office-DCu7W88h.mjs")).odtPage(e),
+	markdown: async (e) => (await import("./cryptomator_vaults-previews-C8BtV61t.mjs")).markdownPage(e),
+	zip: async (e) => (await import("./cryptomator_vaults-previews-C8BtV61t.mjs")).zipPage(e)
+};
+function Me(e) {
+	return e in je || e === "heic";
 }
-function it(e, n) {
-  return e === n || n === "/" || e.startsWith(n + "/");
+async function Ne(e, t, n) {
+	return e.kind === "heic" ? D("img", {
+		class: "cryptomator-preview",
+		src: O(await (await import("./cryptomator_vaults-previews-C8BtV61t.mjs")).heicToPng(t), "image/png"),
+		alt: n
+	}) : D("iframe", {
+		class: "cryptomator-preview cryptomator-preview--frame cryptomator-preview--document",
+		sandbox: "",
+		referrerpolicy: "no-referrer",
+		title: n,
+		srcdoc: await je[e.kind](t)
+	});
 }
-function Ca(e, n) {
-  let r;
-  try {
-    r = JSON.parse(e);
-  } catch {
-    return { problem: "invalid" };
-  }
-  if (r === null || typeof r != "object" || Array.isArray(r))
-    return { problem: "invalid" };
-  const { version: s } = r;
-  if (!Number.isInteger(s) || s < 1)
-    return { problem: "invalid" };
-  const d = Ae(r.vault);
-  if (s > Xn)
-    return { problem: "version", version: s, vault: d, folder: n };
-  const o = r.target === void 0 ? "/" : Ae(r.target);
-  return d === null || o === null || r.from !== void 0 && typeof r.from != "string" ? { problem: "invalid" } : it(n, d) || it(d, n) ? { problem: "loop", vault: d, folder: n } : { inbox: { folder: n, vault: d, target: o, from: (r.from ?? "").trim() } };
+function Pe(e, t, n) {
+	switch (e.kind) {
+		case "image": return D("img", {
+			class: "cryptomator-preview",
+			src: O(t, e.type),
+			alt: n
+		});
+		case "pdf": return D("iframe", {
+			class: "cryptomator-preview cryptomator-preview--frame",
+			src: O(t, e.type),
+			title: n
+		});
+		case "video": return D("video", {
+			class: "cryptomator-preview",
+			src: O(t, e.type),
+			controls: !0
+		});
+		case "audio": return D("audio", {
+			class: "cryptomator-preview",
+			src: O(t, e.type),
+			controls: !0
+		});
+		case "text": return D("pre", { class: "cryptomator-preview cryptomator-preview--text" }, new TextDecoder("utf-8").decode(t));
+		default: return N(y("No preview for this file. Download it to open it."));
+	}
 }
-function Aa({ vault: e, target: n, from: r }) {
-  const s = { version: Xn, vault: e, target: n };
-  return r && (s.from = r), JSON.stringify(s, null, "	") + `
-`;
+async function Fe(e, t, n, r, i) {
+	let a = Ae(e);
+	if (i && be.includes(a.kind) && await E()) return Ie(e, t, a, i, r);
+	let o = a.kind !== "none" && t <= (a.kind === "text" ? ye : ve);
+	if (!o && t > 1073741824 && !window.confirm(y("This file is {size}. Your browser holds it twice while decrypting. Continue?", { size: Se(t) }))) return;
+	let s = D("progress", {
+		max: 1,
+		value: 0
+	}), c = D("div", { class: "cryptomator-dialog__body" }, [N(y("Decrypting …")), s]), l = D("button", {
+		type: "button",
+		disabled: !0
+	}, y("Download")), u = M(e, [D("div", { class: "cryptomator-dialog__head" }, [
+		D("h2", {}, e),
+		D("span", { class: "cryptomator-dialog__meta" }, Se(t)),
+		l,
+		D("button", {
+			type: "button",
+			class: "cryptomator-dialog__close",
+			onclick: j
+		}, y("Close"))
+	]), c]);
+	u.querySelector(".cryptomator-dialog__close").focus();
+	try {
+		let t = await n((e, t) => {
+			s.value = .5 + e / t / 2;
+		}, (e, t) => {
+			s.value = e / t / 2;
+		});
+		if (A?.dialog !== u) return;
+		if (l.disabled = !1, l.addEventListener("click", () => Ce(e, t)), !o) c.replaceChildren(N(y("No preview for this file. Download it to open it.")));
+		else if (Me(a.kind)) {
+			c.replaceChildren(N(y("Preparing the preview …")));
+			try {
+				let n = await Ne(a, t, e);
+				A?.dialog === u && c.replaceChildren(n);
+			} catch (e) {
+				A?.dialog === u && c.replaceChildren(N(y("This document cannot be previewed: {detail}. Download it to open it.", { detail: e.message }), "error"));
+			}
+		} else c.replaceChildren(Pe(a, t, e));
+	} catch (e) {
+		A?.dialog === u && c.replaceChildren(N(r(e), "error"));
+	}
 }
-function Ea(e, n = Date.now()) {
-  const r = [e.mtime, e.uploadTime].filter((s) => s instanceof Date && !Number.isNaN(s.getTime()));
-  return r.length === 0 ? !1 : n - Math.max(...r.map((s) => s.getTime())) >= xa;
+async function Ie(e, t, n, r, i) {
+	let a = null, o = D("div", { class: "cryptomator-dialog__body" }, N(y("Decrypting …"))), s = D("button", {
+		type: "button",
+		disabled: !0
+	}, y("Download")), c = M(e, [D("div", { class: "cryptomator-dialog__head" }, [
+		D("h2", {}, e),
+		D("span", { class: "cryptomator-dialog__meta" }, Se(t)),
+		s,
+		D("button", {
+			type: "button",
+			class: "cryptomator-dialog__close",
+			onclick: j
+		}, y("Close"))
+	]), o], () => a && he(a.id));
+	c.querySelector(".cryptomator-dialog__close").focus();
+	try {
+		let t = await r();
+		if (A?.dialog !== c) return;
+		if (a = me(t, e, n.type, n.kind), s.disabled = !1, s.addEventListener("click", () => _e(t, e)), n.kind === "pdf") {
+			o.replaceChildren(D("iframe", {
+				class: "cryptomator-preview cryptomator-preview--frame",
+				src: a.url,
+				title: e
+			}));
+			return;
+		}
+		let i = D("div", { "aria-live": "polite" }), l = D("iframe", {
+			class: "cryptomator-preview cryptomator-preview--frame cryptomator-preview--stream cryptomator-preview--" + n.kind,
+			src: a.frame,
+			title: e,
+			allow: "autoplay; fullscreen",
+			allowfullscreen: !0,
+			onload: () => Le(l, n.kind, i)
+		});
+		o.replaceChildren(i, l);
+	} catch (e) {
+		A?.dialog === c && o.replaceChildren(N(i(e), "error"));
+	}
 }
-function Sa(e, n) {
-  if (n < 2)
-    return e;
-  const r = e.lastIndexOf(".");
-  return r > 0 ? e.slice(0, r) + " (" + n + ")" + e.slice(r) : e + " (" + n + ")";
+function Le(e, t, n) {
+	let r = e.contentDocument?.querySelector(t);
+	if (!r) return;
+	let i = () => n.replaceChildren(N(y("Your browser cannot play this file. Download it to open it."), "error"));
+	if (r.addEventListener("error", i), r.error && i(), t === "video") {
+		let e = () => {
+			r.videoWidth === 0 && !r.error && n.replaceChildren(N(y("Your browser plays only the sound of this video. Download it to watch it.")));
+		};
+		r.readyState >= 1 ? e() : r.addEventListener("loadedmetadata", e, { once: !0 });
+	}
 }
-async function Ma(e, n, r = Date.now()) {
-  const s = e.folder.replace(/^\/+/, ""), d = Ft(e.target), o = { ready: [], recent: [], skipped: [], folders: [] }, p = async (u) => {
-    const m = [s, ...u].filter(Boolean).join("/"), v = await n(m);
-    if (u.length > 0 && v.some((x) => !x.isDir && (x.name === Fe || x.name === "vault.cryptomator")))
-      return o.skipped.push(u), !1;
-    for (const x of v) {
-      const A = m ? m + "/" + x.name : x.name;
-      if (x.isDir)
-        await p([...u, x.name]) && o.folders.push([...u, x.name]);
-      else {
-        if (u.length === 0 && x.name === Fe)
-          continue;
-        Ea(x, r) ? o.ready.push({ path: A, name: x.name, size: x.size, etag: x.etag, permissions: x.permissions ?? "", inner: u, dirs: [...d, ...u] }) : o.recent.push({ path: A, name: x.name });
-      }
-    }
-    return !0;
-  };
-  return await p([]), o;
+function Re(e, t, n, { initial: r = "", action: i = y("Create") } = {}) {
+	return new Promise((a) => {
+		let o = !1, s = D("input", {
+			type: "text",
+			required: !0,
+			"aria-label": t,
+			autocomplete: "off"
+		});
+		s.value = r;
+		let c = D("div", { "aria-live": "polite" });
+		M(e, [
+			D("h2", {}, e),
+			D("form", {
+				class: "cryptomator-unlock",
+				onsubmit: (e) => {
+					e.preventDefault();
+					let t = n(s.value);
+					if (t) {
+						c.replaceChildren(N(t, "error"));
+						return;
+					}
+					o = !0;
+					let r = s.value;
+					j(), a(r);
+				}
+			}, [
+				D("label", {}, [t, s]),
+				D("button", {
+					type: "submit",
+					class: "primary"
+				}, i),
+				D("button", {
+					type: "button",
+					onclick: j
+				}, y("Cancel"))
+			]),
+			c
+		], () => {
+			o || a(null);
+		}), s.focus();
+		let l = r.lastIndexOf(".");
+		s.setSelectionRange(0, l > 0 ? l : r.length);
+	});
 }
-const { Vault: Ye, VaultError: Ve, checkName: Ut } = zn;
-let St = null;
-function Pe() {
-  return St || (document.head.append(g("link", { rel: "stylesheet", href: Fn("cryptomator_vaults", "css", "cryptomator_vaults-files.css") })), St = import("./cryptomator_vaults-dialogs-BvyC8ZNZ.mjs")), St;
+function ze(e, t, n) {
+	return new Promise((r) => {
+		let i = !1;
+		M(e, [
+			D("h2", {}, e),
+			N(t),
+			D("div", { class: "cryptomator-choices" }, [D("button", {
+				type: "button",
+				class: "error primary",
+				onclick: () => {
+					i = !0, j();
+				}
+			}, n), D("button", {
+				type: "button",
+				onclick: j
+			}, y("Cancel"))])
+		], () => r(i)), document.querySelector(".cryptomator-dialog button:last-child")?.focus();
+	});
 }
-function W(e) {
-  Pe().then(({ showError: n }) => n(e));
+function Be(e, t, n, r, i) {
+	return new Promise((a) => {
+		let o = null, s = [{
+			name: t,
+			dirId: ""
+		}], c = D("ol", { class: "cryptomator-crumbs" }), l = D("ul", { class: "cryptomator-folders" }), u = D("button", {
+			type: "button",
+			class: "primary",
+			onclick: () => {
+				o = {
+					dirId: s[s.length - 1].dirId,
+					ancestors: s.map((e) => e.dirId)
+				}, j();
+			}
+		}, i), d = async () => {
+			c.replaceChildren(...s.map((e, t) => D("li", {}, t === s.length - 1 ? D("span", { "aria-current": "page" }, e.name) : D("button", {
+				type: "button",
+				onclick: () => {
+					s = s.slice(0, t + 1), d();
+				}
+			}, e.name)))), l.replaceChildren(N(y("Loading …")));
+			try {
+				let e = (await n(s[s.length - 1].dirId)).sort((e, t) => e.name.localeCompare(t.name));
+				l.replaceChildren(...e.length ? e.map((e) => D("li", {}, D("button", {
+					type: "button",
+					class: "cryptomator-folders__item",
+					disabled: r.has(e.dirId),
+					onclick: () => {
+						s = [...s, e], d();
+					}
+				}, e.name))) : [N(y("No folders in here."))]);
+			} catch (e) {
+				l.replaceChildren(N(e.message, "error"));
+			}
+		};
+		M(e, [
+			D("h2", {}, e),
+			D("nav", {}, c),
+			D("div", { class: "cryptomator-dialog__body" }, l),
+			D("div", { class: "cryptomator-choices" }, [u, D("button", {
+				type: "button",
+				onclick: j
+			}, y("Cancel"))])
+		], () => a(o)), d();
+	});
 }
-function ze(e) {
-  Pe().then(({ showInfo: n }) => n(e));
+function Ve(e) {
+	let t = D("ul", { class: "cryptomator-uploads" }), n = D("progress", {
+		max: 1,
+		value: 0
+	}), r = D("div", { "aria-live": "polite" }), i = D("div", {
+		class: "cryptomator-question",
+		hidden: !0
+	}), a = !1, o = D("button", {
+		type: "button",
+		onclick: () => {
+			a = !0, o.disabled = !0, o.textContent = y("Stopping after this file …");
+		}
+	}, y("Stop")), s = D("button", {
+		type: "button",
+		class: "primary",
+		hidden: !0,
+		onclick: j
+	}, y("Close"));
+	return M(e, [
+		D("div", { class: "cryptomator-dialog__head" }, [
+			D("h2", {}, e),
+			o,
+			s
+		]),
+		n,
+		i,
+		D("div", { class: "cryptomator-dialog__body" }, t),
+		r
+	]), {
+		get stopped() {
+			return a;
+		},
+		file(e) {
+			let n = D("span", { class: "cryptomator-dialog__meta" }, y("Waiting")), r = D("progress", {
+				max: 1,
+				value: 0
+			});
+			return t.append(D("li", {}, [
+				D("span", { class: "cryptomator-uploads__name" }, e),
+				n,
+				r
+			])), {
+				phase(e, t) {
+					n.textContent = e, r.value = t;
+				},
+				done(e, t) {
+					n.textContent = e, n.classList.toggle("cryptomator-notice--error", !!t), r.value = 1;
+				}
+			};
+		},
+		ask(e, t, { text: n, cancel: r } = {}) {
+			return new Promise((a) => {
+				let o = (e) => () => {
+					i.hidden = !0, i.replaceChildren(), a(e);
+				};
+				i.replaceChildren(D("h3", {}, y("“{name}” already exists", { name: e })), N(n || y("Replace the file in the vault with the one you chose? The vault keeps no copy of the old one; Nextcloud's versions keep its encrypted file.")), D("div", { class: "cryptomator-choices" }, [
+					D("button", {
+						type: "button",
+						class: "primary",
+						onclick: o("replace")
+					}, y("Replace")),
+					D("button", {
+						type: "button",
+						onclick: o("skip")
+					}, y("Skip")),
+					t > 1 ? D("button", {
+						type: "button",
+						onclick: o("replace-all")
+					}, y("Replace all")) : null,
+					t > 1 ? D("button", {
+						type: "button",
+						onclick: o("skip-all")
+					}, y("Skip all")) : null,
+					D("button", {
+						type: "button",
+						onclick: o("cancel")
+					}, r || y("Cancel upload"))
+				])), i.hidden = !1, i.querySelector("button").focus();
+			});
+		},
+		progress(e) {
+			n.value = e;
+		},
+		finish(e, t) {
+			n.value = 1, o.hidden = !0, s.hidden = !1, r.replaceChildren(N(e, t ? "error" : void 0)), s.focus();
+		}
+	};
 }
-const Ht = "cryptomator-vaults", Je = "/cryptomator-vaults", Vt = window.location.origin + "/apps/cryptomator_vaults" + Je, Ta = Rr("cryptomator_vaults", "file.svg"), Ot = 15, $n = "cryptomator_vaults.added", Kt = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-1v1h-3v-1H8v1H5v-1H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm0 2v13h16V5zm8 2.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM5.5 8h1.5v7H5.5z"/></svg>', Ia = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 8a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-12.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>', Na = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>', Zn = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9V6zm9 14H6V10h12v10z"/></svg>', Qn = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>', er = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>', Da = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>', Ra = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg>', Fa = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>', Oa = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6a5 5 0 0 0-9.9-1l1.95.45A3 3 0 0 1 15 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm0 12H6V10h12v10z"/></svg>', _a = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4h-2v4H6V4h7v5h5v1h2V8l-6-6H6zm12 10v3h-4v2h4v3l4-4-4-4z"/></svg>', Bt = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v6h2V4h7v5h5v11H6v-4H4v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM10 11v3H2v2h8v3l4-4-4-4z"/></svg>', Pa = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2zm5 9h-2v2h-2v-2H9v-2h2V9h2v2h2v2z"/></svg>', Z = /* @__PURE__ */ new Map();
-let Mt = null, We = null, se = { kind: "vaults" };
-async function _t(e, n) {
-  const r = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(e)));
-  return Array.from(r, (s) => s.toString(16).padStart(2, "0")).join("").slice(0, n);
+function He({ title: e, intro: t, fields: n, action: r, working: i, run: a }) {
+	return new Promise((o) => {
+		let s = null, c = {}, l = D("div", { "aria-live": "polite" }), u = D("button", {
+			type: "submit",
+			class: "primary"
+		}, r), d = n.map((e) => {
+			let t = e.type === "textarea" ? D("textarea", {
+				name: e.name,
+				rows: 4,
+				required: !0,
+				spellcheck: "false",
+				autocomplete: "off",
+				class: "cryptomator-form__words"
+			}) : D("input", {
+				type: e.type ?? "text",
+				name: e.name,
+				autocomplete: e.autocomplete ?? "off",
+				required: !e.readonly && !e.optional,
+				readonly: e.readonly || null,
+				class: e.account ? "cryptomator-unlock__account" : null
+			});
+			return t.value = e.value ?? "", c[e.name] = t, D("label", {}, [e.label, t]);
+		});
+		M(e, [
+			D("h2", {}, e),
+			...t ? [].concat(t).map((e) => N(e)) : [],
+			D("form", {
+				class: "cryptomator-unlock cryptomator-form",
+				method: "post",
+				action: "#",
+				autocomplete: "on",
+				onsubmit: async (e) => {
+					e.preventDefault(), u.disabled = !0, l.replaceChildren(N(i ?? y("Working …"))), await new Promise((e) => setTimeout(e, 30));
+					try {
+						s = await a(Object.fromEntries(Object.entries(c).map(([e, t]) => [e, t.value]))), j();
+					} catch (e) {
+						u.disabled = !1, l.replaceChildren(N(e.message, "error"));
+					}
+				}
+			}, [...d, D("div", { class: "cryptomator-choices" }, [u, D("button", {
+				type: "button",
+				onclick: j
+			}, y("Cancel"))])]),
+			l
+		], () => {
+			for (let e of Object.values(c)) (e.type === "password" || e.tagName === "TEXTAREA") && (e.value = "");
+			o(s);
+		}), Object.values(c).find((e) => !e.readOnly)?.focus();
+	});
 }
-const za = "r000000000001", tr = 2 ** 52;
-function nr(e) {
-  return tr + parseInt(e.slice(1, 13), 16);
+function Ue(e, t, { created: n = !1 } = {}) {
+	return new Promise((r) => {
+		let i = D("div", {
+			class: "cryptomator-recovery-key",
+			tabindex: "0"
+		}, t), a = D("span", {
+			class: "cryptomator-dialog__meta",
+			"aria-live": "polite"
+		});
+		M(y("Recovery key"), [
+			D("h2", {}, y(n ? "{vault} is ready" : "Recovery key of {vault}", { vault: e })),
+			N(y("With this recovery key you can set a new password if you forget the one you have, here or in Cryptomator. Anyone who has it can open the vault: keep it on paper or in your password manager, not in this cloud.")),
+			i,
+			D("div", { class: "cryptomator-choices" }, [
+				D("button", {
+					type: "button",
+					onclick: async () => {
+						try {
+							await navigator.clipboard.writeText(t), a.textContent = y("Copied");
+						} catch {
+							a.textContent = y("Copying is not allowed here: select the words and copy them.");
+						}
+					}
+				}, y("Copy")),
+				a,
+				D("button", {
+					type: "button",
+					class: "primary",
+					onclick: j
+				}, y("Done"))
+			])
+		], () => {
+			i.textContent = "", r();
+		}), i.focus();
+	});
 }
-function rr() {
-  try {
-    const e = JSON.parse(window.localStorage.getItem($n) || "[]");
-    return Array.isArray(e) ? e.filter((n) => typeof n == "string") : [];
-  } catch {
-    return [];
-  }
+function We(e, { check: t, describe: n, repair: r }) {
+	let i = D("div", { class: "cryptomator-dialog__body" }), a = D("div", { "aria-live": "polite" }), o = D("progress", {
+		max: 1,
+		value: 0
+	}), s = {
+		CRITICAL: y("Damaged"),
+		WARN: y("Needs repair"),
+		INFO: y("Note")
+	}, c = async () => {
+		i.replaceChildren(), o.hidden = !1, o.value = 0, a.replaceChildren(N(y("Checking the vault …")));
+		let e;
+		try {
+			e = await t((e, t) => {
+				o.value = t ? e / t : 1;
+			});
+		} catch (e) {
+			o.hidden = !0, a.replaceChildren(N(e.message, "error"));
+			return;
+		}
+		if (o.hidden = !0, e.length === 0) {
+			a.replaceChildren(N(y("The vault is healthy: the check found nothing to repair.")));
+			return;
+		}
+		i.append(D("ul", { class: "cryptomator-findings" }, e.map((e) => D("li", {}, [
+			D("span", { class: "cryptomator-findings__severity cryptomator-findings__severity--" + e.severity.toLowerCase() }, s[e.severity]),
+			D("span", {}, n(e)),
+			D("code", { class: "cryptomator-dialog__meta" }, e.path)
+		]))));
+		let l = e.filter((e) => e.fixable), u = [];
+		l.length && u.push(D("button", {
+			type: "button",
+			class: "primary",
+			onclick: async (e) => {
+				e.target.disabled = !0, a.replaceChildren(N(y("Repairing …")));
+				try {
+					await r(l);
+				} catch (e) {
+					a.replaceChildren(N(e.message, "error"));
+					return;
+				}
+				await c();
+			}
+		}, y("Repair {count}", { count: l.length }))), a.replaceChildren(N(l.length === e.length ? y("Each of these can be repaired, as Cryptomator's health check repairs it.") : y("{count} of these can be repaired, as Cryptomator's health check repairs them; the others need Cryptomator or a backup.", { count: l.length })), D("div", { class: "cryptomator-choices" }, u));
+	};
+	M(y("Health check"), [
+		D("div", { class: "cryptomator-dialog__head" }, [D("h2", {}, y("Health check of {vault}", { vault: e })), D("button", {
+			type: "button",
+			onclick: j
+		}, y("Close"))]),
+		o,
+		i,
+		a
+	]), c();
 }
-function ar(e) {
-  try {
-    window.localStorage.setItem($n, JSON.stringify([.../* @__PURE__ */ new Set([e, ...rr()])]));
-  } catch {
-  }
+// src/storage.js
+var { VaultError: P } = v.default, Ge = "DAV:", Ke = "http://owncloud.org/ns", qe = "http://nextcloud.org/ns", Je = "<?xml version=\"1.0\"?><d:propfind xmlns:d=\"DAV:\" xmlns:oc=\"http://owncloud.org/ns\" xmlns:nc=\"http://nextcloud.org/ns\"><d:prop><d:resourcetype/><d:getcontentlength/><d:getlastmodified/><d:getetag/><oc:permissions/><nc:upload_time/></d:prop></d:propfind>", Ye = 20971520, Xe = 10485760;
+function Ze() {
+	return window.OC && window.OC.requestToken || document.head.dataset.requesttoken || "";
 }
-function La(e) {
-  return e.split("/").filter(Boolean).pop() || c("All files");
+function F(e) {
+	return {
+		requesttoken: Ze(),
+		"X-Requested-With": "XMLHttpRequest",
+		...e || {}
+	};
 }
-async function Wt(e) {
-  const n = "v" + await _t("vault:" + e, 12);
-  return Z.has(n) || Z.set(n, { seg: n, folder: e, name: La(e), vault: null, dirs: /* @__PURE__ */ new Map(), entries: /* @__PURE__ */ new Map(), nodes: /* @__PURE__ */ new Set() }), Z.get(n);
+function I() {
+	return c()?.uid ?? "";
 }
-function dt() {
-  return Mt || (Mt = (async () => {
-    let e = [];
-    try {
-      e = await ya();
-    } catch (n) {
-      W(c("The search for vaults failed: {detail}", { detail: n.message }));
-    }
-    for (const n of [.../* @__PURE__ */ new Set([...e, ...rr()])])
-      await Wt(n);
-  })()), Mt;
+function Qe(e) {
+	return e.split("/").filter((e) => e !== "").map(encodeURIComponent).join("/");
 }
-function Ce(e, n, r, s, d = !0) {
-  const o = e.split("/").filter(Boolean).pop() || za, p = new _n({
-    id: nr(o),
-    source: Vt + e,
-    root: Je,
-    owner: ve(),
-    displayname: n,
-    permissions: Pt.READ,
-    mtime: s?.mtime,
-    attributes: { cryptomatorVault: r?.seg ?? null, ...s?.attributes }
-  });
-  return d && r?.nodes.add(p), p;
+function $e(e) {
+	let t = Qe(e);
+	return u("dav") + "/files/" + encodeURIComponent(I()) + "/" + (t ? t + "/" : "");
 }
-function Ua(e, n, r) {
-  const s = e.split("/").pop(), d = new Lr({
-    id: nr(s),
-    source: Vt + e,
-    root: Je,
-    owner: ve(),
-    displayname: n.name,
-    mime: "application/octet-stream",
-    size: n.size ?? 0,
-    mtime: n.mtime,
-    permissions: Pt.READ,
-    attributes: { "has-preview": !0, previewUrl: Ta, cryptomatorVault: r.seg, cryptomatorType: n.type }
-  });
-  return r.nodes.add(d), d;
+function et(e) {
+	let t = new DOMParser().parseFromString(e, "application/xml");
+	return Array.from(t.getElementsByTagNameNS(Ge, "response")).map((e) => {
+		let t = (t, n = Ge) => e.getElementsByTagNameNS(n, t)[0], n = t("getcontentlength"), r = t("getlastmodified"), i = Number(t("upload_time", qe)?.textContent) || 0;
+		return {
+			href: t("href").textContent,
+			isDir: e.getElementsByTagNameNS(Ge, "collection").length > 0,
+			size: n ? Number(n.textContent) : 0,
+			mtime: r ? new Date(r.textContent) : void 0,
+			uploadTime: i ? /* @__PURE__ */ new Date(i * 1e3) : void 0,
+			etag: t("getetag")?.textContent || void 0,
+			permissions: t("permissions", Ke)?.textContent ?? "",
+			originalLocation: t("trashbin-original-location", qe)?.textContent,
+			deletionTime: Number(t("trashbin-deletion-time", qe)?.textContent) || 0
+		};
+	});
 }
-function H(e) {
-  switch (e?.code) {
-    case "exists":
-    case "exists-other":
-      return c("“{name}” already exists in this folder.", { name: e.message });
-    case "invalid-name":
-      return c("“{name}” cannot be a name in a vault.", { name: e.message });
-    case "quota":
-      return c("Your storage is full.");
-    case "read-only":
-      return c("This vault cannot be written to.");
-    case "invalid-move":
-      return c("A folder cannot be moved into itself or into a folder inside it.");
-    case "wrong-password":
-      return c("Wrong password.");
-    case "unsupported-format":
-      return c("This vault has a format the app cannot read (only vault format 8, Cryptomator 1.6 and later).");
-    case "unsupported-key":
-      return c("This vault keeps its key on a Cryptomator Hub, which the app does not support.");
-    case "not-found":
-      return c("There is no Cryptomator vault in this folder.");
-    case "corrupt":
-      return c("The vault is damaged: {detail}", { detail: e.message });
-    case "locked":
-      return c("The vault is locked.");
-    case "invalid-recovery-key":
-      return c("This is not the vault's recovery key: {detail}.", { detail: e.message });
-    case "changed":
-      return c("“{name}” changed meanwhile: it was kept, and the vault may not hold its latest state.", { name: e.message.split("/").pop() });
-    case "contains-vault":
-      return c("“{name}” holds a Cryptomator vault, which cannot go into a vault.", { name: e.message.split("/").pop() });
-    default:
-      return c("Something went wrong: {detail}", { detail: e?.message || String(e) });
-  }
+function tt(e) {
+	let t = e.replace(/\/+$/, "").split("/");
+	return decodeURIComponent(t[t.length - 1]);
 }
-function Oe(e) {
-  window.OCP.Files.Router.goToRoute(null, { view: Ht }, { dir: e });
+function L(e, t, n) {
+	return e === 0 ? new P("network", (n ? n + ": " : "") + "redirected (signed out?)") : e === 404 ? new P("not-found", t) : e === 412 || e === 405 ? new P("exists", t) : e === 507 ? new P("quota", t) : new P("network", (n ? n + ": " : "") + "HTTP " + e);
 }
-function jt() {
-  return window.OCP?.Files?.Router?.query?.dir || "/";
+function nt(e, t) {
+	return e >= 200 && e < 300 && !t;
 }
-async function qt(e) {
-  if (e.vault?.unlocked)
-    return !0;
-  try {
-    e.vault = e.vault || await Ye.open(le(e.folder));
-  } catch (r) {
-    return W(H(r)), !1;
-  }
-  const n = await Qr(e.name, async (r) => {
-    try {
-      await e.vault.unlock(r);
-    } catch (s) {
-      throw new Error(H(s));
-    }
-  }, e.folder);
-  return n && (ht(), Lt(), e.vault.removeLeftovers().catch(() => {
-  }), oo(e)), n;
+function rt(e, t, n, r, i) {
+	return new Promise((a, o) => {
+		let s = new XMLHttpRequest();
+		s.open(e, t);
+		for (let [e, t] of Object.entries(F(n))) s.setRequestHeader(e, t);
+		i && s.upload.addEventListener("progress", (e) => i(e.loaded, e.total)), s.addEventListener("load", () => a(new URL(s.responseURL, t).href === new URL(t, window.location.href).href ? s.status : 0)), s.addEventListener("error", () => o(new P("network", e + " failed"))), s.addEventListener("abort", () => o(new P("network", e + " aborted"))), s.send(r ?? null);
+	});
 }
-async function xn() {
-  se = { kind: "vaults" };
-  const e = Ce("/", c("Vaults"), null), n = [...Z.values()].sort((r, s) => r.name.localeCompare(s.name)).map((r) => Ce("/" + r.seg, r.name, r, { attributes: { cryptomatorVaultRoot: !0, cryptomatorFolder: r.folder } }, !1));
-  return { folder: e, contents: n };
+async function it(e, t, n, r, i = []) {
+	let a = await fetch(t, {
+		method: e,
+		headers: F(n),
+		credentials: "same-origin"
+	});
+	if (!nt(a.status, a.redirected) && !i.includes(a.status)) throw L(a.redirected ? 0 : a.status, r, e);
+	return a;
 }
-const Le = window.isSecureContext && !!window.crypto?.subtle;
-async function Ha(e) {
-  if (Jt(), !Le)
-    return se = { kind: "insecure" }, { folder: new _n({ id: tr + 1, source: Vt + "/", root: Je, owner: ve(), permissions: Pt.READ }), contents: [] };
-  await dt();
-  const n = e.split("/").filter(Boolean);
-  if (n.length === 0)
-    return xn();
-  const r = Z.get(n[0]);
-  if (!r)
-    return Oe("/"), xn();
-  if (!r.vault?.unlocked && !await qt(r))
-    return se = { kind: "locked", vault: r }, { folder: Ce(e, r.name, r, { attributes: { cryptomatorVaultRoot: n.length === 1 } }, !1), contents: [] };
-  let s = "", d = r.name;
-  if (n.length > 1) {
-    const u = r.dirs.get(n[n.length - 1]);
-    if (!u)
-      return Oe("/" + r.seg), { folder: Ce(e, r.name, r), contents: [] };
-    s = u.dirId, d = u.name;
-  }
-  const o = await r.vault.list(s), p = [];
-  for (const u of o)
-    if (u.type === "dir") {
-      const m = "d" + await _t(r.seg + ":dir:" + u.dirId, 12);
-      r.dirs.set(m, { dirId: u.dirId, name: u.name }), p.push(Ce(e + "/" + m, u.name, r, { mtime: u.mtime }));
-    } else {
-      const m = "f" + await _t(r.seg + ":file:" + u.path, 12);
-      r.entries.set(m, u), p.push(Ua(e + "/" + m, u, r));
-    }
-  return se = { kind: "folder", vault: r, dirId: s, path: e }, { folder: Ce(e, d, r, void 0, n.length > 1), contents: p };
+function R(e) {
+	let t = $e(e), n = (e) => t + Qe(e);
+	async function r(e, t, r, i, a) {
+		let o = u("dav") + "/uploads/" + encodeURIComponent(I()) + "/cryptomator-vaults-" + crypto.randomUUID(), s = new URL(n(e), window.location.href).href, c = {
+			Destination: s,
+			"OC-Total-Length": String(t)
+		};
+		await it("MKCOL", o, { Destination: s }, e);
+		try {
+			let n = 0, s = 1;
+			for await (let i of r) {
+				let r = await rt("PUT", o + "/" + String(s).padStart(5, "0"), c, i, (e) => a?.(n + e, t));
+				if (!nt(r, !1)) throw L(r, e, "PUT (part " + s + ")");
+				n += i.length, s++;
+			}
+			let l = await fetch(o + "/.file", {
+				method: "MOVE",
+				headers: F({
+					...c,
+					Overwrite: i ? "F" : "T"
+				}),
+				credentials: "same-origin"
+			});
+			if (!nt(l.status, l.redirected)) throw L(l.redirected ? 0 : l.status, e, "MOVE (assembling the parts)");
+		} catch (e) {
+			throw await fetch(o, {
+				method: "DELETE",
+				headers: F(),
+				credentials: "same-origin"
+			}).catch(() => {}), e;
+		}
+	}
+	function* i(e) {
+		for (let t = 0; t < e.length; t += Xe) yield e.subarray(t, Math.min(t + Xe, e.length));
+	}
+	return {
+		async read(e, n) {
+			let r = await fetch(t + Qe(e), {
+				headers: F(),
+				credentials: "same-origin"
+			});
+			if (r.status === 404) throw new P("not-found", e);
+			if (!r.ok) throw new P("network", "GET: HTTP " + r.status);
+			let i = Number(r.headers.get("Content-Length")) || 0;
+			if (!n || !r.body || i === 0) return new Uint8Array(await r.arrayBuffer());
+			let a = new Uint8Array(i), o = r.body.getReader(), s = 0;
+			for (;;) {
+				let { done: e, value: t } = await o.read();
+				if (e) break;
+				a.set(t, s), s += t.length, n(s, i);
+			}
+			return a.subarray(0, s);
+		},
+		async stat(e) {
+			let t = await fetch(n(e), {
+				method: "PROPFIND",
+				headers: F({
+					Depth: "0",
+					"Content-Type": "application/xml; charset=utf-8"
+				}),
+				credentials: "same-origin",
+				body: Je
+			});
+			if (t.status === 404) return null;
+			if (t.status !== 207) throw L(t.status, e, "PROPFIND");
+			let [r] = et(await t.text());
+			return {
+				isDir: r.isDir,
+				size: r.size,
+				etag: r.etag,
+				permissions: r.permissions
+			};
+		},
+		async write(e, t, { create: a = !1, onProgress: o } = {}) {
+			if (t.length >= Ye) return r(e, t.length, i(t), a, o);
+			let s = await rt("PUT", n(e), a ? { "If-None-Match": "*" } : {}, t, o);
+			if (!nt(s, !1)) throw L(s, e, "PUT");
+		},
+		async writeParts(e, t, n, { create: i = !1, onProgress: a } = {}) {
+			return r(e, t, n, i, a);
+		},
+		async readRange(e, t, r) {
+			if (r <= t) return /* @__PURE__ */ new Uint8Array();
+			let i = await fetch(n(e), {
+				headers: F({ Range: "bytes=" + t + "-" + (r - 1) }),
+				credentials: "same-origin"
+			});
+			if (i.status === 404) throw new P("not-found", e);
+			if (i.status === 206) return new Uint8Array(await i.arrayBuffer());
+			if (i.status === 200) return new Uint8Array(await i.arrayBuffer()).slice(t, r);
+			throw new P("network", "GET (range): HTTP " + i.status);
+		},
+		async mkdir(e, { existsOk: t = !1 } = {}) {
+			let r = await fetch(n(e), {
+				method: "MKCOL",
+				headers: F(),
+				credentials: "same-origin"
+			});
+			if (!(nt(r.status, r.redirected) || r.status === 405 && t)) throw L(r.status, e, "MKCOL");
+		},
+		async move(e, t, { overwrite: r = !1 } = {}) {
+			await it("MOVE", n(e), {
+				Destination: new URL(n(t), window.location.href).href,
+				Overwrite: r ? "T" : "F"
+			}, t);
+		},
+		async copy(e, t) {
+			await it("COPY", n(e), {
+				Destination: new URL(n(t), window.location.href).href,
+				Overwrite: "F"
+			}, t);
+		},
+		async remove(e) {
+			await it("DELETE", n(e), {}, e, [404]);
+		},
+		async removeUnchanged(e, t, { isDir: r = !1 } = {}) {
+			if (r) {
+				let n = await this.stat(e);
+				if (n === null) throw new P("not-found", e);
+				if (n.etag !== t) throw new P("changed", e);
+			}
+			let i = await fetch(n(e), {
+				method: "DELETE",
+				headers: F(r ? {} : { "If-Match": t }),
+				credentials: "same-origin"
+			});
+			if (i.status === 412) throw new P("changed", e);
+			if (!nt(i.status, i.redirected)) throw L(i.redirected ? 0 : i.status, e, "DELETE");
+		},
+		async list(e) {
+			let n = await fetch(t + (e ? Qe(e) + "/" : ""), {
+				method: "PROPFIND",
+				headers: F({
+					Depth: "1",
+					"Content-Type": "application/xml; charset=utf-8"
+				}),
+				credentials: "same-origin",
+				body: Je
+			});
+			if (n.status === 404) throw new P("not-found", e);
+			if (!n.ok) throw new P("network", "PROPFIND: HTTP " + n.status);
+			return et(await n.text()).slice(1).map((e) => ({
+				name: tt(e.href),
+				isDir: e.isDir,
+				size: e.size,
+				mtime: e.mtime,
+				uploadTime: e.uploadTime,
+				etag: e.etag,
+				permissions: e.permissions
+			}));
+		}
+	};
 }
-function Va(e) {
-  if (e)
-    if (e.replaceChildren(), e.classList.add("cryptomator-empty"), se.kind === "insecure")
-      e.append(z(c("Vaults can only be opened over HTTPS: the browser provides its encryption only there."), "error"));
-    else if (se.kind === "locked") {
-      const n = se.vault;
-      e.append(
-        g("h2", {}, c("{vault} is locked", { vault: n.name })),
-        z(c("Its files are decrypted in this browser tab once you enter its password.")),
-        g("button", {
-          type: "button",
-          class: "primary",
-          onclick: async () => {
-            await qt(n) && Ue(n.name);
-          }
-        }, c("Unlock"))
-      );
-    } else se.kind === "folder" ? e.append(g("h2", {}, c("This folder is empty."))) : e.append(
-      g("h2", {}, c("No vaults found")),
-      z(c("Vaults in your files appear here. Open a vault's folder to add one.")),
-      g("button", { type: "button", class: "primary", onclick: or }, c("Open a vault folder …"))
-    );
+async function at(e) {
+	let t = I(), n = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;"), r = await fetch(u("dav") + "/", {
+		method: "SEARCH",
+		headers: F({ "Content-Type": "text/xml; charset=utf-8" }),
+		credentials: "same-origin",
+		body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><d:searchrequest xmlns:d=\"DAV:\"><d:basicsearch><d:select><d:prop><d:displayname/></d:prop></d:select><d:from><d:scope><d:href>/files/" + n(t) + "</d:href><d:depth>infinity</d:depth></d:scope></d:from><d:where><d:like><d:prop><d:displayname/></d:prop><d:literal>" + n(e) + "</d:literal></d:like></d:where></d:basicsearch></d:searchrequest>"
+	});
+	if (!r.ok) throw Error("HTTP " + r.status);
+	let i = "/files/" + t + "/";
+	return et(await r.text()).map((e) => decodeURIComponent(e.href)).filter((t) => t.endsWith("/" + e) && t.includes(i)).map((t) => "/" + t.slice(t.indexOf(i) + i.length, -("/" + e).length)).map((e) => e.replace(/\/+$/, "") || "/").sort((e, t) => e.localeCompare(t));
 }
-function Ue(e) {
-  Pn("files:node:updated", Ce(jt(), e, null));
-}
-function ut(e) {
-  if (e.vault?.unlocked) {
-    if (ee && se.vault === e) {
-      ze(c("The vault locks when the change being made has finished."));
-      const n = setInterval(() => {
-        ee || (clearInterval(n), ut(e));
-      }, 500);
-      return;
-    }
-    e.vault.lock();
-    for (const n of e.nodes)
-      Pn("files:node:deleted", n);
-    e.nodes.clear(), e.dirs.clear(), e.entries.clear(), e.inbox = null, Zr(), Ee(de?.folder), jt().startsWith("/" + e.seg) && Oe("/"), [...Z.values()].some((n) => n.vault?.unlocked) || (clearTimeout(We), We = null);
-  }
-}
-function Gt(e) {
-  let n = !1;
-  for (const r of Z.values())
-    r.vault?.unlocked && (ut(r), n = !0);
-  n && e && ze(e);
-}
-function ht() {
-  clearTimeout(We), We = setTimeout(
-    () => Gt(c("Locked after {minutes} minutes without use.", { minutes: Ot })),
-    Ot * 60 * 1e3
-  );
-}
-function Ka() {
-  We !== null && ht();
-}
-async function Yt(e) {
-  try {
-    await Ye.open(le(e));
-  } catch (r) {
-    W(H(r));
-    return;
-  }
-  ar(e), await dt();
-  const n = await Wt(e);
-  Oe("/" + n.seg);
-}
-async function or() {
-  let e;
-  try {
-    const { getFilePickerBuilder: r } = await Pe();
-    e = await r(c("Choose a vault")).startAt("/").setMultiSelect(!1).allowDirectories(!0).setFilter((s) => s.type === ce.Folder || s.basename === "vault.cryptomator").addButton({ label: c("Open vault"), variant: "primary", callback: () => {
-    } }).build().pick();
-  } catch {
-    return;
-  }
-  const n = "/" + String(e).replace(/^\/+|\/+$/g, "");
-  await Yt(n.endsWith("/vault.cryptomator") ? n.slice(0, -18) || "/" : n);
-}
-function te(e) {
-  return e?.id === Ht;
-}
-const Ba = /* @__PURE__ */ new Set([
-  "cryptomator-vaults-open",
-  "cryptomator-vaults-download",
-  "cryptomator-vaults-lock",
-  "cryptomator-vaults-open-vault",
-  "cryptomator-vaults-rename",
-  "cryptomator-vaults-move",
-  "cryptomator-vaults-export",
-  "cryptomator-vaults-delete",
-  "cryptomator-vaults-change-password",
-  "cryptomator-vaults-recovery-key",
-  "cryptomator-vaults-reset-password",
-  "cryptomator-vaults-health",
-  "cryptomator-vaults-make-inbox"
-]), Cn = /* @__PURE__ */ new WeakSet();
-let An = 0;
-function Jt() {
-  const e = zr();
-  if (e.length !== An) {
-    An = e.length;
-    for (const n of e) {
-      if (Ba.has(n.id) || Cn.has(n))
-        continue;
-      const r = n.enabled;
-      try {
-        Object.defineProperty(n, "enabled", {
-          configurable: !0,
-          enumerable: !0,
-          writable: !0,
-          value: (s) => !te(s?.view) && !(s?.nodes ?? []).some((d) => d?.root === Je) && (r ? r.call(n, s) : !0)
-        }), Cn.add(n);
-      } catch {
-      }
-    }
-  }
-}
-function ir(e) {
-  const n = Z.get(e.attributes?.cryptomatorVault), r = n?.entries.get(e.basename);
-  return { vault: n, entry: r };
-}
-me({
-  id: "cryptomator-vaults-open",
-  displayName: ({ nodes: e }) => e[0]?.type === ce.Folder ? c("Open") : c("View"),
-  iconSvgInline: () => Ia,
-  enabled: ({ nodes: e, view: n }) => (Jt(), te(n) && e.length === 1),
-  async exec({ nodes: e }) {
-    const n = e[0];
-    if (n.type === ce.Folder)
-      return Oe(n.path), null;
-    const { vault: r, entry: s } = ir(n);
-    return !r?.vault?.unlocked || !s ? (W(c("The vault is locked.")), null) : (s.type === "link" ? ze(c("A link to {target}", { target: s.target })) : s.type === "broken" ? W(c("This entry cannot be read: {detail}", { detail: s.error })) : s.size >= _e && !na(s.name) ? await sr(r, s) : await ia(
-      s.name,
-      s.size,
-      (d, o) => r.vault.readFile(s, d, o),
-      H,
-      () => r.vault.openFile(s)
-    ), null);
-  },
-  default: Fr.DEFAULT,
-  order: -1e3
-});
-async function sr(e, n) {
-  if (n.size >= _e && typeof window.showSaveFilePicker == "function") {
-    let r;
-    try {
-      r = await (await window.showSaveFilePicker({ suggestedName: n.name })).createWritable();
-    } catch {
-      return;
-    }
-    try {
-      await e.vault.readFileStream(n, (s) => r.write(s)), await r.close();
-    } catch (s) {
-      await r.abort().catch(() => {
-      }), W(H(s));
-    }
-    return;
-  }
-  if (n.size >= _e && await Lt()) {
-    try {
-      Vn(await e.vault.openFile(n), n.name);
-    } catch (r) {
-      W(H(r));
-    }
-    return;
-  }
-  if (!(n.size > Kn && !window.confirm(c("This file is {size}. Your browser holds it twice while decrypting. Continue?", { size: Ke(n.size) }))))
-    try {
-      Bn(n.name, await e.vault.readFile(n));
-    } catch (r) {
-      W(H(r));
-    }
-}
-async function En(e) {
-  const { vault: n, entry: r } = ir(e);
-  return !n?.vault?.unlocked || !r ? (W(c("The vault is locked.")), null) : (await sr(n, r), null);
-}
-me({
-  id: "cryptomator-vaults-download",
-  displayName: () => c("Download"),
-  iconSvgInline: () => Na,
-  enabled: ({ nodes: e, view: n }) => te(n) && e.length > 0 && e.every((r) => r.type === ce.File && r.attributes?.cryptomatorType === "file"),
-  exec: ({ nodes: e }) => En(e[0]),
-  async execBatch({ nodes: e }) {
-    const n = [];
-    for (const r of e)
-      n.push(await En(r));
-    return n;
-  },
-  order: -900
-});
-me({
-  id: "cryptomator-vaults-lock",
-  displayName: () => c("Lock"),
-  iconSvgInline: () => Zn,
-  enabled: ({ nodes: e, view: n }) => te(n) && e.length === 1 && e[0].attributes?.cryptomatorVaultRoot === !0 && Z.get(e[0].attributes.cryptomatorVault)?.vault?.unlocked === !0,
-  async exec({ nodes: e }) {
-    return ut(Z.get(e[0].attributes.cryptomatorVault)), null;
-  },
-  order: -800
-});
-me({
-  id: "cryptomator-vaults-open-vault",
-  displayName: () => c("Open vault"),
-  iconSvgInline: () => Kt,
-  enabled: ({ nodes: e, view: n }) => n?.id === "files" && e.length === 1 && e[0].root?.startsWith("/files/") && (e[0].basename === "vault.cryptomator" || e[0].type === ce.Folder && [...Z.values()].some((r) => r.folder === e[0].path)),
-  async exec({ nodes: e }) {
-    const n = e[0];
-    return await Yt(n.type === ce.Folder ? n.path : n.dirname), null;
-  },
-  order: 50
-});
-const pt = /* @__PURE__ */ new Set();
-let xe = null;
-function Wa(e) {
-  return pt.has(e) || [...Z.values()].some((n) => n.folder === e);
+function ot() {
+	return at("vault.cryptomator");
 }
 function st(e) {
-  if (!xe)
-    return;
-  xe.folder = e;
-  const n = e?.path;
-  if (!n || !Wa(n)) {
-    xe.el.replaceChildren();
-    return;
-  }
-  xe.el.replaceChildren(g("div", { class: "cryptomator-banner", role: "note" }, [
-    g("span", { class: "cryptomator-banner__icon", "aria-hidden": "true" }),
-    g(
-      "span",
-      { class: "cryptomator-banner__text" },
-      c("This folder is a Cryptomator vault: its files are encrypted. Open it to see them, decrypted in this browser.")
-    ),
-    g("button", { type: "button", class: "primary", onclick: () => Yt(n) }, c("Open vault"))
-  ])), xe.el.querySelector(".cryptomator-banner__icon").innerHTML = Kt;
+	return at(e);
 }
-let de = null;
-function Ee(e) {
-  if (!de)
-    return;
-  de.folder = e;
-  const n = Z.get(e?.attributes?.cryptomatorVault);
-  if (!n?.vault?.unlocked) {
-    de.el.replaceChildren();
-    return;
-  }
-  de.el.replaceChildren(g("div", { class: "cryptomator-banner cryptomator-banner--unlocked", role: "status" }, [
-    g("span", { class: "cryptomator-banner__icon", "aria-hidden": "true" }),
-    g(
-      "span",
-      { class: "cryptomator-banner__text" },
-      c("{vault} is unlocked in this browser. It locks after {minutes} minutes without use.", { vault: n.name, minutes: Ot })
-    ),
-    g("button", { type: "button", class: "cryptomator-banner__lock", onclick: () => ut(n) }, c("Lock"))
-  ]), ...ao(n)), de.el.querySelector(".cryptomator-banner__icon").innerHTML = Oa;
+async function ct(e, t) {
+	let n = [];
+	for (let r of t) {
+		let t = r.replace(/^\/+|\/+$/g, ""), i = t.split("/").pop(), a = await e.stat(t);
+		if (a === null) throw new P("not-found", t);
+		let o = {
+			path: t,
+			name: i,
+			isDir: a.isDir,
+			etag: a.etag,
+			permissions: a.permissions,
+			files: [],
+			folders: []
+		};
+		if (!a.isDir) o.files.push({
+			path: t,
+			name: i,
+			size: a.size,
+			etag: a.etag,
+			dirs: []
+		});
+		else {
+			let n = async (t, r) => {
+				o.folders.push(r);
+				let i = await e.list(t);
+				if (i.some((e) => !e.isDir && e.name === "vault.cryptomator")) throw new P("contains-vault", t);
+				for (let e of i) {
+					let i = t + "/" + e.name;
+					e.isDir ? await n(i, [...r, e.name]) : o.files.push({
+						path: i,
+						name: e.name,
+						size: e.size,
+						etag: e.etag,
+						dirs: r
+					});
+				}
+			};
+			await n(t, [i]);
+		}
+		n.push(o);
+	}
+	return n;
 }
-On({
-  id: "cryptomator-vaults-unlocked",
-  order: 4,
-  enabled: (e, n) => Le && te(n),
-  render(e, n) {
-    de = { el: e, folder: n }, Ee(n);
-  },
-  updated(e) {
-    Ee(e);
-  }
-});
-On({
-  id: "cryptomator-vaults-banner",
-  order: 5,
-  enabled: (e, n) => Le && n?.id === "files",
-  render(e, n) {
-    xe = { el: e, folder: n }, st(n);
-  },
-  updated(e) {
-    st(e);
-  }
-});
-Or("files:list:updated", ({ view: e, folder: n, contents: r }) => {
-  e?.id !== "files" || !n?.path || ((r || []).some((s) => s.type === ce.File && s.basename === "vault.cryptomator") && pt.add(n.path), st(n));
-});
-function ne() {
-  const e = se.kind === "folder" ? se : null;
-  return e?.vault?.vault?.unlocked && jt() === e.path ? e : null;
+async function lt(e) {
+	return (await ut([e])).has(e.replace(/^\/+|\/+$/g, ""));
 }
-let ee = !1;
-const _e = 16 * 1024 * 1024, ja = 1e3;
-function Xt(e, n) {
-  const r = {
-    size: e.size,
-    read: async (s, d) => new Uint8Array(await e.slice(s, d).arrayBuffer()),
-    all: async () => new Uint8Array(await e.arrayBuffer())
-  };
-  return { name: e.name, size: e.size, dirs: n, source: r };
+async function ut(e, { onlyEmpty: t = !1 } = {}) {
+	let n = e.map((e) => e.replace(/^\/+|\/+$/g, "")), r = u("dav") + "/trashbin/" + encodeURIComponent(I()) + "/trash/", i = (e) => fetch(e, {
+		method: "PROPFIND",
+		headers: F({
+			Depth: "1",
+			"Content-Type": "application/xml; charset=utf-8"
+		}),
+		credentials: "same-origin",
+		body: "<?xml version=\"1.0\"?><d:propfind xmlns:d=\"DAV:\" xmlns:nc=\"http://nextcloud.org/ns\"><d:prop><d:resourcetype/><nc:trashbin-original-location/><nc:trashbin-deletion-time/></d:prop></d:propfind>"
+	}), a = await i(r);
+	if (a.status === 404 || a.status === 405) return new Set(n);
+	if (a.status !== 207) throw L(a.status, n[0] ?? "", "PROPFIND (deleted files)");
+	let o = et(await a.text()).slice(1), s = /* @__PURE__ */ new Set();
+	for (let e of n) {
+		let [n] = o.filter((t) => t.originalLocation === e).sort((e, t) => t.deletionTime - e.deletionTime);
+		if (!n) continue;
+		let r = new URL(n.href, window.location.href).href;
+		if (t && n.isDir) {
+			let e = await i(r);
+			if (e.status !== 207 || et(await e.text()).length > 1) continue;
+		}
+		await it("DELETE", r, {}, e, [404]), s.add(e);
+	}
+	return s;
 }
-function cr(e, n) {
-  const r = {
-    size: n.size,
-    read: (s, d) => e.readRange(n.path, s, d),
-    all: () => e.read(n.path),
-    remote: !0
-  };
-  return { name: n.name, size: n.size, dirs: n.dirs, source: r, origin: n };
+// src/inbox.mjs
+var dt = ".cryptomator-inbox.json", ft = 12e4;
+function z(e) {
+	if (typeof e != "string") return null;
+	let t = e.normalize("NFC").split("/").filter((e) => e !== "");
+	return t.some((e) => e === "." || e === "..") ? null : "/" + t.join("/");
 }
-async function je(e, n = [], r = {}) {
-  const s = r.into ?? ne();
-  if (!s || e.length === 0 && n.length === 0)
-    return;
-  if (ee) {
-    W(c("Another change to the vault is still running."));
-    return;
-  }
-  ee = !0;
-  const { vault: d } = s.vault, o = Gn(r.title || c("Uploading to {vault}", { vault: s.vault.name }));
-  let p = null, u = 0;
-  const m = [], v = [];
-  let x = "";
-  const A = /* @__PURE__ */ new Map([["", s.dirId]]), C = async (M) => {
-    let D = "";
-    for (const j of M) {
-      const G = D ? D + "/" + j : j;
-      A.has(G) || A.set(G, (await d.ensureDirectory(A.get(D), j)).dirId), D = G;
-    }
-    return A.get(D);
-  };
-  try {
-    for (const M of n)
-      try {
-        await C(M);
-      } catch (D) {
-        v.push(M.join("/")), o.file(M.join("/") + "/").done(H(D), !0);
-      }
-    for (const [M, D] of e.entries()) {
-      const { dirs: j } = D, G = [...j, D.name].join("/"), V = o.file(G);
-      if (o.stopped) {
-        V.done(c("Not uploaded"));
-        continue;
-      }
-      let L = p === "replace-all", K = D.name;
-      const ae = async () => {
-        const B = await C(j), J = { encrypt: c("Encrypting"), upload: c("Uploading"), verify: c("Checking") }, Q = D.size >= _e, be = Q ? { upload: [0, 0.7], verify: [0.7, 0.3] } : { encrypt: [0, 0.2], upload: [0.2, 0.6], verify: [0.8, 0.2] }, pe = (F, fe, oe) => {
-          const [we, wt] = be[F];
-          V.phase(F === "upload" && Q ? c("Encrypting and uploading") : J[F], we + wt * (oe ? fe / oe : 1));
-        };
-        let $ = null;
-        Q || (D.source.remote && V.phase(c("Reading"), 0), $ = await D.source.all());
-        for (let F = 1; ; F++) {
-          K = r.keepBoth ? Sa(D.name, F) : D.name;
-          try {
-            Q ? await d.writeFileStream(B, K, D.source, { replace: L, onProgress: pe }) : await d.writeFile(B, K, $, { replace: L, onProgress: pe });
-            break;
-          } catch (fe) {
-            if (!r.keepBoth || !["exists", "exists-other"].includes(fe?.code) || F >= ja)
-              throw fe;
-          }
-        }
-        await r.check?.(D);
-      };
-      try {
-        try {
-          await ae();
-        } catch (B) {
-          if (B?.code !== "exists" || p === "skip-all" || r.keepBoth)
-            throw B;
-          const J = p === "replace-all" ? "replace" : await o.ask(G, e.length);
-          if (J === "cancel") {
-            V.done(c("Not uploaded"));
-            break;
-          }
-          if (J.endsWith("-all") && (p = J), J.startsWith("skip")) {
-            V.done(c("Skipped"));
-            continue;
-          }
-          L = !0, await ae();
-        }
-        u++, m.push(D), V.done(K === D.name ? r.written || c("Uploaded and checked") : c("Encrypted and checked as “{name}”", { name: K }));
-      } catch (B) {
-        B?.code === "exists" && p === "skip-all" ? V.done(c("Skipped")) : (v.push(G), V.done(H(B), !0));
-      }
-      o.progress((M + 1) / e.length);
-    }
-    r.after && (x = await r.after(m, o));
-  } finally {
-    ee = !1, o.finish((v.length ? c("{written} uploaded, {failed} failed. The vault is unchanged where an upload failed.", { written: u, failed: v.length }) : c("{written} uploaded and checked.", { written: u })) + (x ? " " + x : ""), v.length > 0), Ue(s.vault.name);
-  }
+function pt(e) {
+	return e.split("/").filter(Boolean);
 }
-function lr(e = !1) {
-  const n = g("input", { type: "file", multiple: !0, hidden: !0, webkitdirectory: e || null });
-  n.addEventListener("change", () => {
-    const r = [...n.files].map((s) => Xt(s, (s.webkitRelativePath || s.name).split("/").slice(0, -1)));
-    n.remove(), je(r);
-  }), document.body.append(n), n.click();
+function mt(e, t) {
+	return e === t || t === "/" || e.startsWith(t + "/");
 }
-async function qa(e) {
-  const n = [], r = [], s = async (d, o) => {
-    if (d.isFile)
-      n.push(Xt(await new Promise((p, u) => d.file(p, u)), o));
-    else if (d.isDirectory) {
-      const p = [...o, d.name];
-      r.push(p);
-      const u = d.createReader();
-      for (; ; ) {
-        const m = await new Promise((v, x) => u.readEntries(v, x));
-        if (m.length === 0)
-          break;
-        for (const v of m)
-          await s(v, p);
-      }
-    }
-  };
-  for (const d of e)
-    await s(d, []);
-  return { files: n, folders: r };
+function ht(e, t) {
+	let n;
+	try {
+		n = JSON.parse(e);
+	} catch {
+		return { problem: "invalid" };
+	}
+	if (typeof n != "object" || !n || Array.isArray(n)) return { problem: "invalid" };
+	let { version: r } = n;
+	if (!Number.isInteger(r) || r < 1) return { problem: "invalid" };
+	let i = z(n.vault);
+	if (r > 1) return {
+		problem: "version",
+		version: r,
+		vault: i,
+		folder: t
+	};
+	let a = n.target === void 0 ? "/" : z(n.target);
+	return i === null || a === null || n.from !== void 0 && typeof n.from != "string" ? { problem: "invalid" } : mt(t, i) || mt(i, t) ? {
+		problem: "loop",
+		vault: i,
+		folder: t
+	} : { inbox: {
+		folder: t,
+		vault: i,
+		target: a,
+		from: (n.from ?? "").trim()
+	} };
 }
-async function Ga() {
-  const e = ne();
-  if (!e)
-    return;
-  const n = await qn(c("New folder"), c("Folder name"), (r) => {
-    try {
-      return Ut(r), null;
-    } catch (s) {
-      return H(s);
-    }
-  });
-  if (n !== null)
-    try {
-      await e.vault.vault.createDirectory(e.dirId, n), Ue(e.vault.name);
-    } catch (r) {
-      W(H(r));
-    }
+function gt({ vault: e, target: t, from: n }) {
+	let r = {
+		version: 1,
+		vault: e,
+		target: t
+	};
+	return n && (r.from = n), JSON.stringify(r, null, "	") + "\n";
 }
-async function $t(e, n) {
-  if (ee) {
-    W(c("Another change to the vault is still running."));
-    return;
-  }
-  ee = !0;
-  try {
-    await n();
-  } finally {
-    ee = !1, Ue(e.vault.name);
-  }
+function _t(e, t = Date.now()) {
+	let n = [e.mtime, e.uploadTime].filter((e) => e instanceof Date && !Number.isNaN(e.getTime()));
+	return n.length !== 0 && t - Math.max(...n.map((e) => e.getTime())) >= ft;
 }
-function ft(e, n) {
-  return e?.code === "not-found" ? c("“{name}” is no longer there.", { name: n }) : H(e);
+function vt(e, t) {
+	if (t < 2) return e;
+	let n = e.lastIndexOf(".");
+	return n > 0 ? e.slice(0, n) + " (" + t + ")" + e.slice(n) : e + " (" + t + ")";
 }
-function mt(e, n) {
-  const r = te(n) ? ne() : null;
-  return r !== null && e.length > 0 && e.every((s) => s.attributes?.cryptomatorVault === r.vault.seg);
+async function yt(e, t, n = Date.now()) {
+	let r = e.folder.replace(/^\/+/, ""), i = pt(e.target), a = {
+		ready: [],
+		recent: [],
+		skipped: [],
+		folders: []
+	}, o = async (e) => {
+		let s = [r, ...e].filter(Boolean).join("/"), c = await t(s);
+		if (e.length > 0 && c.some((e) => !e.isDir && (e.name === ".cryptomator-inbox.json" || e.name === "vault.cryptomator"))) return a.skipped.push(e), !1;
+		for (let t of c) {
+			let r = s ? s + "/" + t.name : t.name;
+			if (t.isDir) await o([...e, t.name]) && a.folders.push([...e, t.name]);
+			else if (e.length === 0 && t.name === ".cryptomator-inbox.json") continue;
+			else _t(t, n) ? a.ready.push({
+				path: r,
+				name: t.name,
+				size: t.size,
+				etag: t.etag,
+				permissions: t.permissions ?? "",
+				inner: e,
+				dirs: [...i, ...e]
+			}) : a.recent.push({
+				path: r,
+				name: t.name
+			});
+		}
+		return !0;
+	};
+	return await o([]), a;
 }
-async function Ya(e) {
-  const n = ne(), r = e.displayname, s = await qn(c("Rename"), c("New name"), (d) => {
-    try {
-      return Ut(d), null;
-    } catch (o) {
-      return H(o);
-    }
-  }, { initial: r, action: c("Rename") });
-  s === null || s.normalize("NFC") === r || await $t(n, async () => {
-    try {
-      await n.vault.vault.moveEntry(n.dirId, r, n.dirId, s);
-    } catch (d) {
-      W(ft(d, r));
-    }
-  });
+// src/files.js
+var { Vault: bt, VaultError: xt, checkName: St } = v.default, Ct = null;
+function wt() {
+	return Ct ||= (document.head.append(D("link", {
+		rel: "stylesheet",
+		href: s("cryptomator_vaults", "css", "cryptomator_vaults-files.css")
+	})), import("./cryptomator_vaults-dialogs-h85zBqst.mjs").then((e) => e.t)), Ct;
 }
-async function Sn(e) {
-  const n = ne(), { vault: r } = n.vault, s = new Set(e.filter((o) => o.type === ce.Folder).map((o) => n.vault.dirs.get(o.basename)?.dirId).filter(Boolean)), d = await da(
-    e.length === 1 ? c("Move “{name}” to …", { name: e[0].displayname }) : c("Move {count} items to …", { count: e.length }),
-    n.vault.name,
-    async (o) => (await r.list(o)).filter((p) => p.type === "dir").map((p) => ({ name: p.name, dirId: p.dirId })),
-    s,
-    c("Move here")
-  );
-  d === null || d.dirId === n.dirId || await $t(n, async () => {
-    const o = [];
-    for (const p of e)
-      try {
-        await r.moveEntry(n.dirId, p.displayname, d.dirId, void 0, { ancestors: d.ancestors });
-      } catch (u) {
-        o.push(p.displayname + ": " + ft(u, p.displayname));
-      }
-    o.length && W(o.join(`
-`));
-  });
+function B(e) {
+	wt().then(({ showError: t }) => t(e));
 }
-async function Mn(e) {
-  const n = ne(), r = e.filter((o) => o.type === ce.Folder).length, s = e.length === 1 ? c("Delete “{name}”?", { name: e[0].displayname }) : c("Delete {count} items?", { count: e.length }), d = (r ? c("Folders are deleted with everything in them.") + " " : "") + c("The encrypted files go to Nextcloud's deleted files.");
-  await la(s, d, c("Delete")) && await $t(n, async () => {
-    const o = [];
-    for (const p of e)
-      try {
-        await n.vault.vault.removeEntry(n.dirId, p.displayname);
-      } catch (u) {
-        o.push(p.displayname + ": " + ft(u, p.displayname));
-      }
-    o.length && W(o.join(`
-`));
-  });
+function Tt(e) {
+	wt().then(({ showInfo: t }) => t(e));
 }
-const Tt = 10 * 1024 * 1024;
-function Se(e) {
-  return [...pt, ...[...Z.values()].map((r) => r.folder)].some((r) => e === r || e.startsWith(r.replace(/\/+$/, "") + "/"));
+var Et = "cryptomator-vaults", Dt = "/cryptomator-vaults", Ot = window.location.origin + "/apps/cryptomator_vaults/cryptomator-vaults", kt = n("cryptomator_vaults", "file.svg"), At = 15, jt = "cryptomator_vaults.added", Mt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M4 3h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-1v1h-3v-1H8v1H5v-1H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm0 2v13h16V5zm8 2.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM5.5 8h1.5v7H5.5z\"/></svg>", Nt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 8a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-12.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z\"/></svg>", Pt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z\"/></svg>", Ft = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9V6zm9 14H6V10h12v10z\"/></svg>", It = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z\"/></svg>", Lt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z\"/></svg>", Rt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z\"/></svg>", zt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z\"/></svg>", Bt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z\"/></svg>", Vt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6a5 5 0 0 0-9.9-1l1.95.45A3 3 0 0 1 15 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zm0 12H6V10h12v10z\"/></svg>", Ht = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4h-2v4H6V4h7v5h5v1h2V8l-6-6H6zm12 10v3h-4v2h4v3l4-4-4-4z\"/></svg>", Ut = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M14 2H6a2 2 0 0 0-2 2v6h2V4h7v5h5v11H6v-4H4v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM10 11v3H2v2h8v3l4-4-4-4z\"/></svg>", Wt = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2zm5 9h-2v2h-2v-2H9v-2h2V9h2v2h2v2z\"/></svg>", V = /* @__PURE__ */ new Map(), Gt = null, Kt = null, H = { kind: "vaults" };
+async function qt(e, t) {
+	let n = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(e)));
+	return Array.from(n, (e) => e.toString(16).padStart(2, "0")).join("").slice(0, t);
 }
-function Tn(e) {
-  const n = new Uint8Array(e.reduce((s, d) => s + d.length, 0));
-  let r = 0;
-  for (const s of e)
-    n.set(s, r), r += s.length;
-  return n;
+var Jt = "r000000000001", Yt = 2 ** 52;
+function Xt(e) {
+	return Yt + parseInt(e.slice(1, 13), 16);
 }
-async function* Ja(e, n) {
-  let r = [], s = 0;
-  for await (const d of e)
-    for (r.push(d), s += d.length; s >= n; ) {
-      const o = Tn(r);
-      yield o.subarray(0, n), r = s > n ? [o.subarray(n)] : [], s -= n;
-    }
-  s > 0 && (yield Tn(r));
-}
-async function tt(e) {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", e));
-}
-function In(e, n) {
-  return e.length === n.length && e.every((r, s) => r === n[s]);
-}
-function Xa(e) {
-  const n = Z.get(e.attributes?.cryptomatorVault);
-  if (e.type === ce.Folder) {
-    const r = n?.dirs.get(e.basename);
-    return r ? { type: "dir", name: r.name, dirId: r.dirId } : null;
-  }
-  return n?.entries.get(e.basename) ?? null;
-}
-async function $a() {
-  const e = ne();
-  if (!e)
-    return;
-  let n = null, r;
-  try {
-    const { getFilePickerBuilder: o } = await Pe();
-    r = await o(c("Copy or move into the vault")).setMultiSelect(!0).allowDirectories(!0).setFilter((p) => !Se(p.path)).setButtonFactory((p) => [
-      { label: c("Copy into the vault"), variant: "secondary", disabled: p.length === 0, callback: () => {
-        n = "copy";
-      } },
-      { label: c("Move into the vault"), variant: "primary", disabled: p.length === 0, callback: () => {
-        n = "move";
-      } }
-    ]).build().pick();
-  } catch {
-    return;
-  }
-  if (r = [].concat(r || []), n === null || r.length === 0)
-    return;
-  const s = le("");
-  let d;
-  try {
-    d = await va(s, r);
-  } catch (o) {
-    W(H(o));
-    return;
-  }
-  await je(d.flatMap((o) => o.files.map((p) => cr(s, p))), d.flatMap((o) => o.folders), {
-    title: n === "move" ? c("Moving into {vault}", { vault: e.vault.name }) : c("Copying into {vault}", { vault: e.vault.name }),
-    written: c("Encrypted and checked"),
-    // A file that changed while it was read may be in the vault half old, half new.
-    async check(o) {
-      if ((await s.stat(o.origin.path))?.etag !== o.origin.etag)
-        throw new Ve("changed", o.origin.path);
-    },
-    after: n === "move" ? (o, p) => Za(s, d, o, p) : void 0
-  });
-}
-async function Za(e, n, r, s) {
-  const d = new Set(r.map((p) => p.origin));
-  let o = 0;
-  for (const p of n) {
-    const u = s.file(p.isDir ? p.name + "/" : p.name);
-    if (!p.files.every((m) => d.has(m))) {
-      u.done(c("Original kept: not all of it is in the vault"), !0);
-      continue;
-    }
-    if (!p.permissions.includes("D") || p.permissions.includes("S")) {
-      u.done(c("Original kept: it is shared with you"), !0);
-      continue;
-    }
-    try {
-      await e.removeUnchanged(p.path, p.etag, { isDir: p.isDir }), o++, u.done(await ba(p.path) ? c("Original deleted for good") : c("Original deleted; it may still be in the deleted files"));
-    } catch (m) {
-      u.done(H(m), !0);
-    }
-  }
-  return o ? c("Originals deleted for good: {removed}.", { removed: o }) : "";
-}
-async function Nn(e, n, r, s, d, o) {
-  if (r.size < _e) {
-    o("decrypt", 0, 1);
-    const m = await e.readFile(r);
-    if (await n.write(s, m, { create: !d, onProgress: (v, x) => o("upload", v, x) }), o("verify", 0, 1), !In(await tt(await n.read(s)), await tt(m)))
-      throw new Ve("network", "the stored copy differs from the decrypted file");
-    return;
-  }
-  const p = [];
-  async function* u(m) {
-    for await (const v of m)
-      p.push(await tt(v)), yield v;
-  }
-  if (await n.writeParts(
-    s,
-    r.size,
-    u(Ja(e.decryptedPieces(r), Tt)),
-    { create: !d, onProgress: (m, v) => o("upload", m, v) }
-  ), (await n.stat(s))?.size !== r.size)
-    throw new Ve("network", "the stored copy has another size than the decrypted file");
-  for (const [m, v] of p.entries()) {
-    const x = m * Tt;
-    if (!In(await tt(await n.readRange(s, x, Math.min(x + Tt, r.size))), v))
-      throw new Ve("network", "the stored copy differs from the decrypted file");
-    o("verify", m + 1, p.length);
-  }
-}
-async function Dn(e) {
-  const n = ne();
-  if (!n)
-    return;
-  let r = null, s = null;
-  try {
-    const { getFilePickerBuilder: D } = await Pe();
-    await D(e.length === 1 ? c("Export “{name}” decrypted to …", { name: e[0].displayname }) : c("Export {count} items decrypted to …", { count: e.length })).setMultiSelect(!1).allowDirectories(!0).setMimeTypeFilter(["httpd/unix-directory"]).setFilter((j) => j.type === ce.Folder && !Se(j.path)).setButtonFactory((j, G) => [
-      { label: c("Copy here"), variant: "secondary", callback: () => {
-        r = "copy", s = G;
-      } },
-      { label: c("Move here"), variant: "primary", callback: () => {
-        r = "move", s = G;
-      } }
-    ]).build().pick();
-  } catch {
-  }
-  if (r === null || s === null)
-    return;
-  if (Se(s)) {
-    W(c("Choose a folder outside the vault."));
-    return;
-  }
-  if (ee) {
-    W(c("Another change to the vault is still running."));
-    return;
-  }
-  ee = !0;
-  const { vault: d } = n.vault, o = le(""), p = (...D) => [s.replace(/^\/+|\/+$/g, ""), ...D].filter(Boolean).join("/"), u = Gn(r === "move" ? c("Moving out of {vault}", { vault: n.vault.name }) : c("Exporting from {vault}", { vault: n.vault.name })), m = { text: c("Replace the file in your files with the one from the vault? Nextcloud keeps the old one among its versions."), cancel: c("Cancel") };
-  let v = null, x = 0, A = 0, C = !1;
-  const M = [];
-  try {
-    const D = [];
-    for (const V of e) {
-      const L = Xa(V), K = { name: V.displayname, files: [], folders: [], complete: L !== null }, ae = async (B, J) => {
-        K.folders.push(J);
-        for (const Q of await d.list(B))
-          Q.type === "dir" ? await ae(Q.dirId, [...J, Q.name]) : Q.type === "file" ? K.files.push({ entry: Q, dirs: J }) : K.complete = !1;
-      };
-      L?.type === "dir" ? await ae(L.dirId, [L.name]) : L?.type === "file" ? K.files.push({ entry: L, dirs: [] }) : K.complete = !1, D.push(K);
-    }
-    const j = D.reduce((V, L) => V + L.files.length, 0);
-    let G = 0;
-    for (const V of D) {
-      for (const L of V.folders)
-        try {
-          await o.mkdir(p(...L), { existsOk: !0 });
-        } catch (K) {
-          V.complete = !1, M.push(L.join("/")), u.file(L.join("/") + "/").done(H(K), !0);
-        }
-      for (const { entry: L, dirs: K } of V.files) {
-        const ae = [...K, L.name].join("/"), B = u.file(ae);
-        if (G++, u.stopped || C) {
-          V.complete = !1, B.done(c("Not exported"));
-          continue;
-        }
-        const J = { decrypt: c("Decrypting"), upload: L.size >= _e ? c("Decrypting and uploading") : c("Uploading"), verify: c("Checking") }, Q = { decrypt: [0, 0.2], upload: [0.2, 0.6], verify: [0.8, 0.2] }, be = ($, F, fe) => B.phase(J[$], Q[$][0] + Q[$][1] * (fe ? F / fe : 1));
-        let pe = v === "replace-all";
-        try {
-          try {
-            await Nn(d, o, L, p(...K, L.name), pe, be);
-          } catch ($) {
-            if ($?.code !== "exists" || v === "skip-all")
-              throw $;
-            const F = v === "replace-all" ? "replace" : await u.ask(ae, j, m);
-            if (F === "cancel")
-              throw C = !0, Object.assign(new Error("cancelled"), { cancelled: !0 });
-            if (F.endsWith("-all") && (v = F), F.startsWith("skip"))
-              throw Object.assign(new Error("skipped"), { skipped: !0 });
-            pe = !0, await Nn(d, o, L, p(...K, L.name), pe, be);
-          }
-          x++, B.done(c("Exported and checked"));
-        } catch ($) {
-          if (V.complete = !1, $?.cancelled) {
-            B.done(c("Not exported"));
-            continue;
-          }
-          $?.skipped || $?.code === "exists" && v === "skip-all" ? B.done(c("Skipped")) : (M.push(ae), B.done(H($), !0));
-        }
-        u.progress(G / Math.max(j, 1));
-      }
-      if (r === "move") {
-        const L = u.file(c("“{name}” in the vault", { name: V.name }));
-        if (!V.complete) {
-          L.done(c("Kept in the vault: not all of it was exported"), !0);
-          continue;
-        }
-        try {
-          await d.removeEntry(n.dirId, V.name), A++, L.done(c("Removed from the vault"));
-        } catch (K) {
-          L.done(ft(K, V.name), !0);
-        }
-      }
-    }
-  } catch (D) {
-    M.push(""), W(H(D));
-  } finally {
-    ee = !1;
-    const D = M.length ? c("{written} exported, {failed} failed.", { written: x, failed: M.length }) : c("{written} exported and checked.", { written: x });
-    u.finish(D + (A ? " " + c("{removed} removed from the vault.", { removed: A }) : ""), M.length > 0), Ue(n.vault.name);
-  }
-}
-me({
-  id: "cryptomator-vaults-rename",
-  displayName: () => c("Rename"),
-  iconSvgInline: () => Da,
-  enabled: ({ nodes: e, view: n }) => mt(e, n) && e.length === 1,
-  async exec({ nodes: e }) {
-    return await Ya(e[0]), null;
-  },
-  order: -700
-});
-me({
-  id: "cryptomator-vaults-move",
-  displayName: () => c("Move …"),
-  iconSvgInline: () => Ra,
-  enabled: ({ nodes: e, view: n }) => mt(e, n),
-  async exec({ nodes: e }) {
-    return await Sn(e), null;
-  },
-  async execBatch({ nodes: e }) {
-    return await Sn(e), e.map(() => null);
-  },
-  order: -690
-});
-me({
-  id: "cryptomator-vaults-export",
-  displayName: () => c("Export to your files …"),
-  iconSvgInline: () => _a,
-  enabled: ({ nodes: e, view: n }) => mt(e, n),
-  async exec({ nodes: e }) {
-    return await Dn(e), null;
-  },
-  async execBatch({ nodes: e }) {
-    return await Dn(e), e.map(() => null);
-  },
-  order: -680
-});
-me({
-  id: "cryptomator-vaults-delete",
-  displayName: () => c("Delete"),
-  iconSvgInline: () => Fa,
-  enabled: ({ nodes: e, view: n }) => mt(e, n),
-  async exec({ nodes: e }) {
-    return await Mn(e), null;
-  },
-  async execBatch({ nodes: e }) {
-    return await Mn(e), e.map(() => null);
-  },
-  destructive: !0,
-  order: 100
-});
-Me({
-  id: "cryptomator-vaults-upload",
-  displayName: () => c("Upload files …"),
-  iconSvgInline: () => Qn,
-  order: -2,
-  enabled: ({ view: e }) => te(e) && ne() !== null,
-  exec: async () => (lr(), null)
-});
-Me({
-  id: "cryptomator-vaults-upload-folder",
-  displayName: () => c("Upload folder …"),
-  iconSvgInline: () => Qn,
-  order: -1.5,
-  enabled: ({ view: e }) => te(e) && ne() !== null,
-  exec: async () => (lr(!0), null)
-});
-Me({
-  id: "cryptomator-vaults-import",
-  displayName: () => c("Add from your files …"),
-  iconSvgInline: () => Bt,
-  order: -1.2,
-  enabled: ({ view: e }) => te(e) && ne() !== null,
-  exec: async () => (await $a(), null)
-});
-Me({
-  id: "cryptomator-vaults-new-folder",
-  displayName: () => c("New folder …"),
-  iconSvgInline: () => er,
-  order: -1,
-  enabled: ({ view: e }) => te(e) && ne() !== null,
-  exec: async () => (await Ga(), null)
-});
-function Qa(e) {
-  ne() && e.dataTransfer?.types?.includes("Files") && (e.preventDefault(), e.stopPropagation(), e.dataTransfer.dropEffect = "copy");
-}
-function eo(e) {
-  if (!ne() || !e.dataTransfer?.files?.length)
-    return;
-  e.preventDefault(), e.stopPropagation();
-  const n = [...e.dataTransfer.items || []].map((r) => r.webkitGetAsEntry?.()).filter(Boolean);
-  if (n.length === 0) {
-    je([...e.dataTransfer.files].map((r) => Xt(r, [])));
-    return;
-  }
-  qa(n).then(({ files: r, folders: s }) => je(r, s), (r) => W(H(r)));
-}
-window.addEventListener("dragover", Qa, !0);
-window.addEventListener("drop", eo, !0);
-const to = 600 * 1e3, no = "cryptomator_vaults.inbox-auto";
-let Ne = null;
-function dr(e = !1) {
-  if (e || !Ne || Date.now() - Ne.at > to) {
-    const n = (async () => {
-      const r = le(""), s = [];
-      for (const d of (await ga(Fe)).map(Ae))
-        try {
-          const o = await r.read(d.slice(1) + "/" + Fe);
-          s.push({ folder: d, ...o.length > ka ? { problem: "invalid" } : Ca(new TextDecoder().decode(o), d) });
-        } catch {
-        }
-      return s;
-    })();
-    Ne = { at: Date.now(), promise: n }, n.catch(() => {
-      Ne?.promise === n && (Ne = null);
-    });
-  }
-  return Ne.promise;
-}
-function ur() {
-  return no + "." + ve();
-}
-function hr() {
-  try {
-    const e = JSON.parse(window.localStorage.getItem(ur()) || "[]");
-    return Array.isArray(e) ? e.filter((n) => typeof n == "string") : [];
-  } catch {
-    return [];
-  }
-}
-function pr(e) {
-  return hr().includes(e.folder);
-}
-function ro(e, n) {
-  try {
-    const r = hr().filter((s) => s !== e.folder);
-    window.localStorage.setItem(ur(), JSON.stringify(n ? [...r, e.folder] : r));
-  } catch {
-  }
-}
-async function ct(e) {
-  const n = [], r = [], s = le(""), d = Ae(e.folder);
-  let o;
-  try {
-    o = (await dr()).filter((u) => (u.inbox?.vault ?? u.vault) === d);
-  } catch (u) {
-    return e.inbox = { items: n, problems: [c("The search for inboxes failed: {detail}", { detail: u.message })] }, e.inbox;
-  }
-  let p = null;
-  for (const u of o) {
-    const m = u.folder;
-    if (u.problem === "version") {
-      r.push(c("The inbox “{inbox}” needs a newer version of this app; it is left alone.", { inbox: m }));
-      continue;
-    }
-    if (u.problem === "loop" || Se(m)) {
-      r.push(c("The inbox “{inbox}” is left alone: it is a vault's folder, inside one or holds one.", { inbox: m }));
-      continue;
-    }
-    if (u.inbox)
-      try {
-        if (p === null) {
-          const x = (await s.stat(d.slice(1)))?.permissions ?? "";
-          p = x.includes("C") && x.includes("K");
-        }
-        if (!p) {
-          r.push(c("The inbox “{inbox}” is left alone: you cannot write to this vault.", { inbox: m }));
-          continue;
-        }
-        const v = await s.stat(m.slice(1));
-        if (v === null || !v.isDir)
-          continue;
-        if (v.permissions.includes("S")) {
-          r.push(c("The inbox “{inbox}” is left alone: it is shared with you, and its files are not yours to delete.", { inbox: m }));
-          continue;
-        }
-        n.push({ inbox: u.inbox, plan: await Ma(u.inbox, (x) => s.list(x)) });
-      } catch (v) {
-        r.push(c("The inbox “{inbox}” cannot be read: {detail}", { inbox: m, detail: H(v) }));
-      }
-  }
-  return e.inbox = { items: n, problems: r }, e.inbox;
-}
-function ao(e) {
-  const r = (e.inbox?.items ?? []).filter((d) => d.plan.ready.length > 0), s = (e.inbox?.problems ?? []).map((d) => g(
-    "div",
-    { class: "cryptomator-banner cryptomator-banner--inbox", role: "note" },
-    g("span", { class: "cryptomator-banner__text cryptomator-notice--error" }, d)
-  ));
-  for (const d of r) {
-    const { inbox: o, plan: p } = d, u = p.ready.length, m = { from: o.from, inbox: o.folder, size: Ke(p.ready.reduce((x, A) => x + A.size, 0)) }, v = (o.from ? Ct("%n file from {from} is waiting in “{inbox}” ({size}).", "%n files from {from} are waiting in “{inbox}” ({size}).", u, m) : Ct("%n file is waiting in “{inbox}” ({size}).", "%n files are waiting in “{inbox}” ({size}).", u, m)) + (p.recent.length ? " " + Ct("%n more is still being written and comes next time.", "%n more are still being written and come next time.", p.recent.length) : "");
-    s.push(g("div", { class: "cryptomator-banner cryptomator-banner--inbox", role: "status" }, [
-      g("span", { class: "cryptomator-banner__icon", "aria-hidden": "true" }),
-      g("span", { class: "cryptomator-banner__text" }, v),
-      g("button", { type: "button", class: "primary", onclick: () => fr(e, [d]) }, c("Move into the vault"))
-    ])), s[s.length - 1].querySelector(".cryptomator-banner__icon").innerHTML = Bt;
-  }
-  if (r.length > 0) {
-    const d = g("input", { type: "checkbox", checked: pr(e), onchange: () => ro(e, d.checked) });
-    s.push(g("label", { class: "cryptomator-inbox-auto" }, [d, c("Move files from inboxes automatically when I unlock")]));
-  }
-  return s;
-}
-async function oo(e) {
-  try {
-    await ct(e);
-  } catch {
-    return;
-  }
-  Ee(de?.folder), pr(e) && e.inbox.items.some((n) => n.plan.ready.length > 0) && await fr(e, e.inbox.items);
-}
-async function fr(e, n) {
-  if (!e.vault?.unlocked)
-    return;
-  if (ee) {
-    W(c("Another change to the vault is still running."));
-    return;
-  }
-  const r = new Set(n.map((o) => o.inbox.folder)), s = (await ct(e)).items.filter((o) => r.has(o.inbox.folder) && o.plan.ready.length > 0);
-  if (Ee(de?.folder), s.length === 0)
-    return;
-  const d = le("");
-  await je(s.flatMap((o) => o.plan.ready.map((p) => cr(d, p))), [], {
-    into: { vault: e, dirId: "" },
-    keepBoth: !0,
-    title: c("Moving from inboxes into {vault}", { vault: e.name }),
-    written: c("Encrypted and checked"),
-    // A file that changed while it was read may be in the vault half old, half new.
-    async check(o) {
-      if ((await d.stat(o.origin.path))?.etag !== o.origin.etag)
-        throw new Ve("changed", o.origin.path);
-    },
-    after: (o, p) => io(d, s, o, p)
-  }), await ct(e).catch(() => {
-  }), Ee(de?.folder);
-}
-async function io(e, n, r, s) {
-  const d = [];
-  for (const m of r.map((v) => v.origin)) {
-    if (!m.permissions.includes("D")) {
-      s.file(m.path).done(c("Plain copy kept: you cannot delete it"), !0);
-      continue;
-    }
-    try {
-      await e.removeUnchanged(m.path, m.etag), d.push(m.path);
-    } catch (v) {
-      s.file(m.path).done(H(v), !0);
-    }
-  }
-  const o = [];
-  for (const m of n)
-    for (const v of m.plan.folders) {
-      const x = [m.inbox.folder.slice(1), ...v].join("/");
-      if (d.some((A) => A.startsWith(x + "/")))
-        try {
-          (await e.list(x)).length === 0 && (await e.remove(x), o.push(x));
-        } catch {
-        }
-    }
-  let p = /* @__PURE__ */ new Set();
-  try {
-    p = await Rt(d), await Rt(o, { onlyEmpty: !0 });
-  } catch (m) {
-    s.file(c("Deleted files")).done(H(m), !0);
-  }
-  const u = d.length - p.size;
-  return (d.length ? c("Plain copies deleted for good: {removed}.", { removed: p.size }) : "") + (u ? " " + c("{count} of them may still be in the deleted files.", { count: u }) : "");
-}
-async function so(e) {
-  const n = Ae(e.folder), r = Ft(n).slice(0, -1), s = await Ge({
-    title: c("Make an inbox for {vault}", { vault: e.name }),
-    intro: [
-      c("Files put into an inbox, by you or by an app such as Harvester, are offered for the vault when you unlock it, and moved into it encrypted. Until then they are ordinary files on the server."),
-      c("The folder in the vault the files go to is written unencrypted into the inbox's marker file, {marker}.", { marker: Fe })
-    ],
-    fields: [
-      { name: "folder", label: c("Inbox folder"), value: "/" + [...r, c("{vault} inbox", { vault: e.name })].join("/") },
-      { name: "target", label: c("Folder in the vault"), value: "/" },
-      { name: "from", label: c("Filled by (optional)"), value: "", optional: !0 }
-    ],
-    action: c("Make the inbox"),
-    working: c("Making the inbox …"),
-    async run({ folder: d, target: o, from: p }) {
-      const u = Ae(d), m = Ae(o);
-      if (u === null || u === "/")
-        throw new Error(c("“{name}” cannot be a folder's name.", { name: d }));
-      if (m === null)
-        throw new Error(c("“{name}” cannot be a name in a vault.", { name: o }));
-      for (const A of Ft(m))
-        try {
-          Ut(A);
-        } catch (C) {
-          throw new Error(H(C));
-        }
-      if (it(u, n) || it(n, u) || Se(u))
-        throw new Error(c("An inbox cannot be a vault's folder, inside one or hold one."));
-      const v = le(""), x = await v.stat(u.slice(1));
-      if (x === null)
-        try {
-          await v.mkdir(u.slice(1));
-        } catch (A) {
-          throw new Error(c("“{folder}” could not be created: {detail}", { folder: u, detail: A.message }));
-        }
-      else if (!x.isDir)
-        throw new Error(c("“{folder}” is a file.", { folder: u }));
-      try {
-        await v.write(u.slice(1) + "/" + Fe, new TextEncoder().encode(Aa({ vault: n, target: m, from: p.trim() })), { create: !0 });
-      } catch (A) {
-        throw new Error(A?.code === "exists" ? c("“{folder}” is an inbox already.", { folder: u }) : H(A));
-      }
-      return u;
-    }
-  });
-  s && (await dr(!0).catch(() => {
-  }), e.vault?.unlocked && (await ct(e).catch(() => {
-  }), Ee(de?.folder)), ze(c("“{folder}” is an inbox of {vault} now.", { folder: s, vault: e.name })));
-}
-const Rn = 8, It = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm5.65-4A6 6 0 1 0 12.65 14H17v4h4v-4h2v-4H12.65z"/></svg>', co = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5A5.5 5.5 0 0 1 7.5 3c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 3 5.5 5.5 0 0 1 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35zM11 7v3H8v2h3v3h2v-3h3v-2h-3V7h-2z"/></svg>';
 function Zt() {
-  return import("./cryptomator_vaults-recovery-words-CHlfZTyo.mjs").then((e) => e.default.split(`
-`));
+	try {
+		let e = JSON.parse(window.localStorage.getItem(jt) || "[]");
+		return Array.isArray(e) ? e.filter((e) => typeof e == "string") : [];
+	} catch {
+		return [];
+	}
 }
-function Qt(e, n) {
-  if (e.length < Rn)
-    throw new Error(c("The password needs at least {count} characters.", { count: Rn }));
-  if (e !== n)
-    throw new Error(c("The two passwords differ."));
+function Qt(e) {
+	try {
+		window.localStorage.setItem(jt, JSON.stringify([.../* @__PURE__ */ new Set([e, ...Zt()])]));
+	} catch {}
 }
-function lo(e) {
-  switch (e.kind) {
-    case "MissingDirIdBackup":
-      return c("A folder's spare copy of its ID is missing. Repairing writes it.");
-    case "MissingContentDir":
-      return c("A folder's contents are missing; it cannot be opened. Repairing creates it anew, empty.");
-    case "OrphanContentDir":
-      return c("Encrypted files that no folder leads to. Repairing moves them into the folder LOST+FOUND.");
-    case "LooseDirFile":
-      return c("A stray folder file outside any folder. Repairing removes it.");
-    case "EmptyDirFile":
-      return c("A folder whose file is empty; it cannot be opened. Repairing removes the broken entry.");
-    case "UnknownType":
-      return e.fixable ? c("An empty entry that is neither file, folder nor link. Repairing removes it.") : c("An entry that is neither file, folder nor link, and not empty. Look at it in Cryptomator.");
-    case "AmbiguousType":
-      return c("An entry that is several kinds at once. Look at it in Cryptomator.");
-    case "LongShortNamesMismatch":
-      return c("An entry with a long name, stored under the wrong short name. Repairing renames it.");
-    case "TrailingBytesInNameFile":
-      return c("A long name with stray bytes after it. Repairing removes them.");
-    case "MissingLongName":
-    case "NotDecodableLongName":
-    case "ObeseNameFile":
-      return c("An entry whose long name is missing or damaged. Look at it in Cryptomator.");
-    case "ObeseDirFile":
-    case "DirIdCollision":
-      return c("A folder whose ID is damaged or used twice. Look at it in Cryptomator.");
-    default:
-      return e.kind;
-  }
+function $t(e) {
+	return e.split("/").filter(Boolean).pop() || y("All files");
 }
-async function uo() {
-  let e = null;
-  try {
-    const { getFilePickerBuilder: d } = await Pe();
-    await d(c("Where should the new vault go?")).startAt("/").setMultiSelect(!1).allowDirectories(!0).setMimeTypeFilter(["httpd/unix-directory"]).setFilter((o) => o.type === ce.Folder && !Se(o.path)).setButtonFactory((o, p) => [{ label: c("Create the vault here"), variant: "primary", callback: () => {
-      e = p;
-    } }]).build().pick();
-  } catch {
-  }
-  if (e === null)
-    return;
-  if (Se(e)) {
-    W(c("A vault cannot be inside a vault."));
-    return;
-  }
-  const n = le(""), r = await Ge({
-    title: c("New vault"),
-    intro: [c("The vault is a folder of encrypted files, which Cryptomator opens too. Its password cannot be recovered without the recovery key shown next.")],
-    fields: [
-      { name: "place", label: c("In"), value: e, readonly: !0 },
-      { name: "name", label: c("Name"), value: c("Vault") },
-      { name: "password", label: c("Password"), type: "password", autocomplete: "new-password" },
-      { name: "repeated", label: c("Password again"), type: "password", autocomplete: "new-password" }
-    ],
-    action: c("Create"),
-    working: c("Creating the vault …"),
-    async run({ name: d, password: o, repeated: p }) {
-      const u = d.trim();
-      if (!u || u === "." || u === ".." || /[/\\]/.test(u))
-        throw new Error(c("“{name}” cannot be a folder's name.", { name: u }));
-      Qt(o, p);
-      const m = (e.replace(/\/+$/, "") + "/" + u).replace(/^\/*/, "/");
-      try {
-        await n.mkdir(m.slice(1));
-      } catch (x) {
-        throw new Error(x?.code === "exists" ? c("A folder “{name}” is there already.", { name: u }) : H(x));
-      }
-      let v;
-      try {
-        v = await Ye.create(le(m), o);
-      } catch (x) {
-        throw await n.remove(m.slice(1)).catch(() => {
-        }), new Error(H(x));
-      }
-      return { folder: m, vault: v, key: await v.recoveryKey(o, await Zt()) };
-    }
-  });
-  if (!r)
-    return;
-  ar(r.folder), pt.add(r.folder), await dt();
-  const s = await Wt(r.folder);
-  s.vault = r.vault, ht(), await Yn(s.name, r.key, { created: !0 }), Oe("/" + s.seg);
+async function en(e) {
+	let t = "v" + await qt("vault:" + e, 12);
+	return V.has(t) || V.set(t, {
+		seg: t,
+		folder: e,
+		name: $t(e),
+		vault: null,
+		dirs: /* @__PURE__ */ new Map(),
+		entries: /* @__PURE__ */ new Map(),
+		nodes: /* @__PURE__ */ new Set()
+	}), V.get(t);
 }
-async function mr(e) {
-  return e.vault ?? await Ye.open(le(e.folder));
+function tn() {
+	return Gt ||= (async () => {
+		let e = [];
+		try {
+			e = await ot();
+		} catch (e) {
+			B(y("The search for vaults failed: {detail}", { detail: e.message }));
+		}
+		for (let t of [.../* @__PURE__ */ new Set([...e, ...Zt()])]) await en(t);
+	})(), Gt;
 }
-async function ho(e) {
-  await Ge({
-    title: c("Change the password of {vault}", { vault: e.name }),
-    intro: [c("The files stay as they are; only the vault's key file gets the new password. Cryptomator on your other devices then needs the new one, too.")],
-    fields: [
-      { name: "account", label: c("Vault"), value: e.folder, readonly: !0, account: !0, autocomplete: "username" },
-      { name: "old", label: c("Current password"), type: "password", autocomplete: "current-password" },
-      { name: "password", label: c("New password"), type: "password", autocomplete: "new-password" },
-      { name: "repeated", label: c("New password again"), type: "password", autocomplete: "new-password" }
-    ],
-    action: c("Change password"),
-    working: c("Changing the password …"),
-    async run({ old: r, password: s, repeated: d }) {
-      Qt(s, d);
-      try {
-        const o = await mr(e);
-        await o.changePassword(r, s), e.vault = o;
-      } catch (o) {
-        throw new Error(H(o));
-      }
-      return !0;
-    }
-  }) && ze(c("The password of {vault} is changed.", { vault: e.name }));
+function U(e, t, n, r, i = !0) {
+	let o = e.split("/").filter(Boolean).pop() || Jt, s = new p({
+		id: Xt(o),
+		source: Ot + e,
+		root: Dt,
+		owner: I(),
+		displayname: t,
+		permissions: a.READ,
+		mtime: r?.mtime,
+		attributes: {
+			cryptomatorVault: n?.seg ?? null,
+			...r?.attributes
+		}
+	});
+	return i && n?.nodes.add(s), s;
 }
-async function po(e) {
-  const n = await Ge({
-    title: c("Recovery key of {vault}", { vault: e.name }),
-    intro: [c("Enter the vault's password to see its recovery key.")],
-    fields: [
-      { name: "account", label: c("Vault"), value: e.folder, readonly: !0, account: !0, autocomplete: "username" },
-      { name: "password", label: c("Password"), type: "password", autocomplete: "current-password" }
-    ],
-    action: c("Show"),
-    working: c("Unlocking …"),
-    async run({ password: r }) {
-      try {
-        return await (await mr(e)).recoveryKey(r, await Zt());
-      } catch (s) {
-        throw new Error(H(s));
-      }
-    }
-  });
-  n && await Yn(e.name, n);
+function nn(e, t, n) {
+	let r = e.split("/").pop(), i = new te({
+		id: Xt(r),
+		source: Ot + e,
+		root: Dt,
+		owner: I(),
+		displayname: t.name,
+		mime: "application/octet-stream",
+		size: t.size ?? 0,
+		mtime: t.mtime,
+		permissions: a.READ,
+		attributes: {
+			"has-preview": !0,
+			previewUrl: kt,
+			cryptomatorVault: n.seg,
+			cryptomatorType: t.type
+		}
+	});
+	return n.nodes.add(i), i;
 }
-async function fo(e) {
-  const n = await Ge({
-    title: c("Reset the password of {vault}", { vault: e.name }),
-    intro: [c("With the vault's recovery key (the words from Cryptomator or from this app) it gets a new password. The files stay as they are.")],
-    fields: [
-      { name: "account", label: c("Vault"), value: e.folder, readonly: !0, account: !0, autocomplete: "username" },
-      { name: "key", label: c("Recovery key"), type: "textarea" },
-      { name: "password", label: c("New password"), type: "password", autocomplete: "new-password" },
-      { name: "repeated", label: c("New password again"), type: "password", autocomplete: "new-password" }
-    ],
-    action: c("Set the new password"),
-    working: c("Setting the new password …"),
-    async run({ key: r, password: s, repeated: d }) {
-      Qt(s, d);
-      try {
-        return await Ye.resetPassword(le(e.folder), r, s, await Zt());
-      } catch (o) {
-        throw new Error(H(o));
-      }
-    }
-  });
-  n && (e.vault = n, ht(), ze(c("{vault} has a new password and is unlocked.", { vault: e.name })));
+function W(e) {
+	switch (e?.code) {
+		case "exists":
+		case "exists-other": return y("“{name}” already exists in this folder.", { name: e.message });
+		case "invalid-name": return y("“{name}” cannot be a name in a vault.", { name: e.message });
+		case "quota": return y("Your storage is full.");
+		case "read-only": return y("This vault cannot be written to.");
+		case "invalid-move": return y("A folder cannot be moved into itself or into a folder inside it.");
+		case "wrong-password": return y("Wrong password.");
+		case "unsupported-format": return y("This vault has a format the app cannot read (only vault format 8, Cryptomator 1.6 and later).");
+		case "unsupported-key": return y("This vault keeps its key on a Cryptomator Hub, which the app does not support.");
+		case "not-found": return y("There is no Cryptomator vault in this folder.");
+		case "corrupt": return y("The vault is damaged: {detail}", { detail: e.message });
+		case "locked": return y("The vault is locked.");
+		case "invalid-recovery-key": return y("This is not the vault's recovery key: {detail}.", { detail: e.message });
+		case "changed": return y("“{name}” changed meanwhile: it was kept, and the vault may not hold its latest state.", { name: e.message.split("/").pop() });
+		case "contains-vault": return y("“{name}” holds a Cryptomator vault, which cannot go into a vault.", { name: e.message.split("/").pop() });
+		default: return y("Something went wrong: {detail}", { detail: e?.message || String(e) });
+	}
 }
-async function mo(e) {
-  !e.vault?.unlocked && !await qt(e) || ua(e.name, {
-    check: (n) => e.vault.checkHealth(n),
-    describe: lo,
-    async repair(n) {
-      if (ee)
-        throw new Error(c("Another change to the vault is still running."));
-      ee = !0;
-      try {
-        for (const r of n)
-          await e.vault.repair(r);
-      } catch (r) {
-        throw new Error(H(r));
-      } finally {
-        ee = !1, Ue(e.name);
-      }
-    }
-  });
+function rn(e) {
+	window.OCP.Files.Router.goToRoute(null, { view: Et }, { dir: e });
 }
-const wo = (e) => Z.get(e[0].attributes.cryptomatorVault), yo = ({ nodes: e, view: n }) => Le && te(n) && e.length === 1 && e[0].attributes?.cryptomatorVaultRoot === !0;
-for (const [e, n, r, s, d] of [
-  ["cryptomator-vaults-change-password", () => c("Change password …"), It, ho, -790],
-  ["cryptomator-vaults-recovery-key", () => c("Show recovery key …"), It, po, -780],
-  ["cryptomator-vaults-reset-password", () => c("Reset password with recovery key …"), It, fo, -770],
-  ["cryptomator-vaults-health", () => c("Check health …"), co, mo, -760],
-  ["cryptomator-vaults-make-inbox", () => c("Make an inbox for this vault …"), Bt, so, -750]
-])
-  me({
-    id: e,
-    displayName: n,
-    iconSvgInline: () => r,
-    enabled: yo,
-    async exec({ nodes: o }) {
-      return await s(wo(o)), null;
-    },
-    order: d
-  });
-Me({
-  id: "cryptomator-vaults-new",
-  displayName: () => c("New vault …"),
-  iconSvgInline: () => er,
-  order: -0.5,
-  enabled: ({ view: e }) => Le && te(e) && se.kind === "vaults",
-  exec: async () => (await uo(), null)
+function an() {
+	return window.OCP?.Files?.Router?.query?.dir || "/";
+}
+async function on(e) {
+	if (e.vault?.unlocked) return !0;
+	try {
+		e.vault = e.vault || await bt.open(R(e.folder));
+	} catch (e) {
+		return B(W(e)), !1;
+	}
+	let t = await we(e.name, async (t) => {
+		try {
+			await e.vault.unlock(t);
+		} catch (e) {
+			throw Error(W(e));
+		}
+	}, e.folder);
+	return t && (mn(), E(), e.vault.removeLeftovers().catch(() => {}), sr(e)), t;
+}
+async function sn() {
+	return H = { kind: "vaults" }, {
+		folder: U("/", y("Vaults"), null),
+		contents: [...V.values()].sort((e, t) => e.name.localeCompare(t.name)).map((e) => U("/" + e.seg, e.name, e, { attributes: {
+			cryptomatorVaultRoot: !0,
+			cryptomatorFolder: e.folder
+		} }, !1))
+	};
+}
+var cn = window.isSecureContext && !!window.crypto?.subtle;
+async function ln(e) {
+	if (xn(), !cn) return H = { kind: "insecure" }, {
+		folder: new p({
+			id: Yt + 1,
+			source: Ot + "/",
+			root: Dt,
+			owner: I(),
+			permissions: a.READ
+		}),
+		contents: []
+	};
+	await tn();
+	let t = e.split("/").filter(Boolean);
+	if (t.length === 0) return sn();
+	let n = V.get(t[0]);
+	if (!n) return rn("/"), sn();
+	if (!n.vault?.unlocked && !await on(n)) return H = {
+		kind: "locked",
+		vault: n
+	}, {
+		folder: U(e, n.name, n, { attributes: { cryptomatorVaultRoot: t.length === 1 } }, !1),
+		contents: []
+	};
+	let r = "", i = n.name;
+	if (t.length > 1) {
+		let a = n.dirs.get(t[t.length - 1]);
+		if (!a) return rn("/" + n.seg), {
+			folder: U(e, n.name, n),
+			contents: []
+		};
+		r = a.dirId, i = a.name;
+	}
+	let o = await n.vault.list(r), s = [];
+	for (let t of o) if (t.type === "dir") {
+		let r = "d" + await qt(n.seg + ":dir:" + t.dirId, 12);
+		n.dirs.set(r, {
+			dirId: t.dirId,
+			name: t.name
+		}), s.push(U(e + "/" + r, t.name, n, { mtime: t.mtime }));
+	} else {
+		let r = "f" + await qt(n.seg + ":file:" + t.path, 12);
+		n.entries.set(r, t), s.push(nn(e + "/" + r, t, n));
+	}
+	return H = {
+		kind: "folder",
+		vault: n,
+		dirId: r,
+		path: e
+	}, {
+		folder: U(e, i, n, void 0, t.length > 1),
+		contents: s
+	};
+}
+function un(e) {
+	if (e) {
+		if (e.replaceChildren(), e.classList.add("cryptomator-empty"), H.kind === "insecure") e.append(N(y("Vaults can only be opened over HTTPS: the browser provides its encryption only there."), "error"));
+		else if (H.kind === "locked") {
+			let t = H.vault;
+			e.append(D("h2", {}, y("{vault} is locked", { vault: t.name })), N(y("Its files are decrypted in this browser tab once you enter its password.")), D("button", {
+				type: "button",
+				class: "primary",
+				onclick: async () => {
+					await on(t) && dn(t.name);
+				}
+			}, y("Unlock")));
+		} else H.kind === "folder" ? e.append(D("h2", {}, y("This folder is empty."))) : e.append(D("h2", {}, y("No vaults found")), N(y("Vaults in your files appear here. Open a vault's folder to add one.")), D("button", {
+			type: "button",
+			class: "primary",
+			onclick: _n
+		}, y("Open a vault folder …")));
+	}
+}
+function dn(e) {
+	d("files:node:updated", U(an(), e, null));
+}
+function fn(e) {
+	if (e.vault?.unlocked) {
+		if (X && H.vault === e) {
+			Tt(y("The vault locks when the change being made has finished."));
+			let t = setInterval(() => {
+				X || (clearInterval(t), fn(e));
+			}, 500);
+		} else {
+			e.vault.lock();
+			for (let t of e.nodes) d("files:node:deleted", t);
+			e.nodes.clear(), e.dirs.clear(), e.entries.clear(), e.inbox = null, k(), J(q?.folder), an().startsWith("/" + e.seg) && rn("/"), [...V.values()].some((e) => e.vault?.unlocked) || (clearTimeout(Kt), Kt = null);
+		}
+	}
+}
+function pn(e) {
+	let t = !1;
+	for (let e of V.values()) e.vault?.unlocked && (fn(e), t = !0);
+	t && e && Tt(e);
+}
+function mn() {
+	clearTimeout(Kt), Kt = setTimeout(() => pn(y("Locked after {minutes} minutes without use.", { minutes: At })), 9e5);
+}
+function hn() {
+	Kt !== null && mn();
+}
+async function gn(e) {
+	try {
+		await bt.open(R(e));
+	} catch (e) {
+		B(W(e));
+		return;
+	}
+	Qt(e), await tn(), rn("/" + (await en(e)).seg);
+}
+async function _n() {
+	let e;
+	try {
+		let { getFilePickerBuilder: t } = await wt();
+		e = await t(y("Choose a vault")).startAt("/").setMultiSelect(!1).allowDirectories(!0).setFilter((e) => e.type === i.Folder || e.basename === "vault.cryptomator").addButton({
+			label: y("Open vault"),
+			variant: "primary",
+			callback: () => {}
+		}).build().pick();
+	} catch {
+		return;
+	}
+	let t = "/" + String(e).replace(/^\/+|\/+$/g, "");
+	await gn(t.endsWith("/vault.cryptomator") ? t.slice(0, -18) || "/" : t);
+}
+function G(e) {
+	return e?.id === Et;
+}
+var vn = /* @__PURE__ */ new Set([
+	"cryptomator-vaults-open",
+	"cryptomator-vaults-download",
+	"cryptomator-vaults-lock",
+	"cryptomator-vaults-open-vault",
+	"cryptomator-vaults-rename",
+	"cryptomator-vaults-move",
+	"cryptomator-vaults-export",
+	"cryptomator-vaults-delete",
+	"cryptomator-vaults-change-password",
+	"cryptomator-vaults-recovery-key",
+	"cryptomator-vaults-reset-password",
+	"cryptomator-vaults-health",
+	"cryptomator-vaults-make-inbox"
+]), yn = /* @__PURE__ */ new WeakSet(), bn = 0;
+function xn() {
+	let e = l();
+	if (e.length !== bn) {
+		bn = e.length;
+		for (let t of e) {
+			if (vn.has(t.id) || yn.has(t)) continue;
+			let e = t.enabled;
+			try {
+				Object.defineProperty(t, "enabled", {
+					configurable: !0,
+					enumerable: !0,
+					writable: !0,
+					value: (n) => !G(n?.view) && !(n?.nodes ?? []).some((e) => e?.root === Dt) && (!e || e.call(t, n))
+				}), yn.add(t);
+			} catch {}
+		}
+	}
+}
+function Sn(e) {
+	let t = V.get(e.attributes?.cryptomatorVault);
+	return {
+		vault: t,
+		entry: t?.entries.get(e.basename)
+	};
+}
+h({
+	id: "cryptomator-vaults-open",
+	displayName: ({ nodes: e }) => e[0]?.type === i.Folder ? y("Open") : y("View"),
+	iconSvgInline: () => Nt,
+	enabled: ({ nodes: e, view: t }) => (xn(), G(t) && e.length === 1),
+	async exec({ nodes: e }) {
+		let t = e[0];
+		if (t.type === i.Folder) return rn(t.path), null;
+		let { vault: n, entry: r } = Sn(t);
+		return !n?.vault?.unlocked || !r ? (B(y("The vault is locked.")), null) : (r.type === "link" ? Tt(y("A link to {target}", { target: r.target })) : r.type === "broken" ? B(y("This entry cannot be read: {detail}", { detail: r.error })) : r.size >= Z && !ke(r.name) ? await Cn(n, r) : await Fe(r.name, r.size, (e, t) => n.vault.readFile(r, e, t), W, () => n.vault.openFile(r)), null);
+	},
+	default: r.DEFAULT,
+	order: -1e3
 });
-Me({
-  id: "cryptomator-vaults-add",
-  displayName: () => c("Open a vault folder …"),
-  iconSvgInline: () => Pa,
-  order: 0,
-  enabled: ({ view: e }) => te(e),
-  exec: async () => (await or(), null)
+async function Cn(e, t) {
+	if (t.size >= Z && typeof window.showSaveFilePicker == "function") {
+		let n;
+		try {
+			n = await (await window.showSaveFilePicker({ suggestedName: t.name })).createWritable();
+		} catch {
+			return;
+		}
+		try {
+			await e.vault.readFileStream(t, (e) => n.write(e)), await n.close();
+		} catch (e) {
+			await n.abort().catch(() => {}), B(W(e));
+		}
+	} else if (t.size >= Z && await E()) try {
+		_e(await e.vault.openFile(t), t.name);
+	} catch (e) {
+		B(W(e));
+	}
+	else if (!(t.size > 1073741824 && !window.confirm(y("This file is {size}. Your browser holds it twice while decrypting. Continue?", { size: Se(t.size) })))) try {
+		Ce(t.name, await e.vault.readFile(t));
+	} catch (e) {
+		B(W(e));
+	}
+}
+async function wn(e) {
+	let { vault: t, entry: n } = Sn(e);
+	return !t?.vault?.unlocked || !n ? (B(y("The vault is locked.")), null) : (await Cn(t, n), null);
+}
+h({
+	id: "cryptomator-vaults-download",
+	displayName: () => y("Download"),
+	iconSvgInline: () => Pt,
+	enabled: ({ nodes: e, view: t }) => G(t) && e.length > 0 && e.every((e) => e.type === i.File && e.attributes?.cryptomatorType === "file"),
+	exec: ({ nodes: e }) => wn(e[0]),
+	async execBatch({ nodes: e }) {
+		let t = [];
+		for (let n of e) t.push(await wn(n));
+		return t;
+	},
+	order: -900
+}), h({
+	id: "cryptomator-vaults-lock",
+	displayName: () => y("Lock"),
+	iconSvgInline: () => Ft,
+	enabled: ({ nodes: e, view: t }) => G(t) && e.length === 1 && e[0].attributes?.cryptomatorVaultRoot === !0 && V.get(e[0].attributes.cryptomatorVault)?.vault?.unlocked === !0,
+	async exec({ nodes: e }) {
+		return fn(V.get(e[0].attributes.cryptomatorVault)), null;
+	},
+	order: -800
+}), h({
+	id: "cryptomator-vaults-open-vault",
+	displayName: () => y("Open vault"),
+	iconSvgInline: () => Mt,
+	enabled: ({ nodes: e, view: t }) => t?.id === "files" && e.length === 1 && e[0].root?.startsWith("/files/") && (e[0].basename === "vault.cryptomator" || e[0].type === i.Folder && [...V.values()].some((t) => t.folder === e[0].path)),
+	async exec({ nodes: e }) {
+		let t = e[0];
+		return await gn(t.type === i.Folder ? t.path : t.dirname), null;
+	},
+	order: 50
 });
-Me({
-  id: "cryptomator-vaults-lock-all",
-  displayName: () => c("Lock all vaults"),
-  iconSvgInline: () => Zn,
-  order: 1,
-  enabled: ({ view: e }) => te(e) && [...Z.values()].some((n) => n.vault?.unlocked),
-  exec: async () => (Gt(), null)
+var Tn = /* @__PURE__ */ new Set(), K = null;
+function En(e) {
+	return Tn.has(e) || [...V.values()].some((t) => t.folder === e);
+}
+function Dn(e) {
+	if (!K) return;
+	K.folder = e;
+	let t = e?.path;
+	!t || !En(t) ? K.el.replaceChildren() : (K.el.replaceChildren(D("div", {
+		class: "cryptomator-banner",
+		role: "note"
+	}, [
+		D("span", {
+			class: "cryptomator-banner__icon",
+			"aria-hidden": "true"
+		}),
+		D("span", { class: "cryptomator-banner__text" }, y("This folder is a Cryptomator vault: its files are encrypted. Open it to see them, decrypted in this browser.")),
+		D("button", {
+			type: "button",
+			class: "primary",
+			onclick: () => gn(t)
+		}, y("Open vault"))
+	])), K.el.querySelector(".cryptomator-banner__icon").innerHTML = Mt);
+}
+var q = null;
+function J(e) {
+	if (!q) return;
+	q.folder = e;
+	let t = V.get(e?.attributes?.cryptomatorVault);
+	t?.vault?.unlocked ? (q.el.replaceChildren(D("div", {
+		class: "cryptomator-banner cryptomator-banner--unlocked",
+		role: "status"
+	}, [
+		D("span", {
+			class: "cryptomator-banner__icon",
+			"aria-hidden": "true"
+		}),
+		D("span", { class: "cryptomator-banner__text" }, y("{vault} is unlocked in this browser. It locks after {minutes} minutes without use.", {
+			vault: t.name,
+			minutes: At
+		})),
+		D("button", {
+			type: "button",
+			class: "cryptomator-banner__lock",
+			onclick: () => fn(t)
+		}, y("Lock"))
+	]), ...or(t)), q.el.querySelector(".cryptomator-banner__icon").innerHTML = Vt) : q.el.replaceChildren();
+}
+_({
+	id: "cryptomator-vaults-unlocked",
+	order: 4,
+	enabled: (e, t) => cn && G(t),
+	render(e, t) {
+		q = {
+			el: e,
+			folder: t
+		}, J(t);
+	},
+	updated(e) {
+		J(e);
+	}
+}), _({
+	id: "cryptomator-vaults-banner",
+	order: 5,
+	enabled: (e, t) => cn && t?.id === "files",
+	render(e, t) {
+		K = {
+			el: e,
+			folder: t
+		}, Dn(t);
+	},
+	updated(e) {
+		Dn(e);
+	}
+}), o("files:list:updated", ({ view: e, folder: t, contents: n }) => {
+	e?.id === "files" && t?.path && ((n || []).some((e) => e.type === i.File && e.basename === "vault.cryptomator") && Tn.add(t.path), Dn(t));
 });
-_r().register(new Pr({
-  id: Ht,
-  name: c("Vaults"),
-  caption: c("Cryptomator vaults, unlocked in this browser"),
-  emptyTitle: c("No vaults found"),
-  emptyCaption: c("Vaults in your files appear here. Open a vault's folder to add one."),
-  emptyView: Va,
-  icon: Kt,
-  order: 90,
-  getContents: Ha
-}));
-Jt();
-for (const e of ["pointerdown", "keydown", "wheel", "touchstart"])
-  document.addEventListener(e, Ka, { passive: !0 });
+function Y() {
+	let e = H.kind === "folder" ? H : null;
+	return e?.vault?.vault?.unlocked && an() === e.path ? e : null;
+}
+var X = !1, Z = 16777216, On = 1e3;
+function kn(e, t) {
+	let n = {
+		size: e.size,
+		read: async (t, n) => new Uint8Array(await e.slice(t, n).arrayBuffer()),
+		all: async () => new Uint8Array(await e.arrayBuffer())
+	};
+	return {
+		name: e.name,
+		size: e.size,
+		dirs: t,
+		source: n
+	};
+}
+function An(e, t) {
+	let n = {
+		size: t.size,
+		read: (n, r) => e.readRange(t.path, n, r),
+		all: () => e.read(t.path),
+		remote: !0
+	};
+	return {
+		name: t.name,
+		size: t.size,
+		dirs: t.dirs,
+		source: n,
+		origin: t
+	};
+}
+async function jn(e, t = [], n = {}) {
+	let r = n.into ?? Y();
+	if (!r || e.length === 0 && t.length === 0) return;
+	if (X) {
+		B(y("Another change to the vault is still running."));
+		return;
+	}
+	X = !0;
+	let { vault: i } = r.vault, a = Ve(n.title || y("Uploading to {vault}", { vault: r.vault.name })), o = null, s = 0, c = [], l = [], u = "", d = /* @__PURE__ */ new Map([["", r.dirId]]), f = async (e) => {
+		let t = "";
+		for (let n of e) {
+			let e = t ? t + "/" + n : n;
+			d.has(e) || d.set(e, (await i.ensureDirectory(d.get(t), n)).dirId), t = e;
+		}
+		return d.get(t);
+	};
+	try {
+		for (let e of t) try {
+			await f(e);
+		} catch (t) {
+			l.push(e.join("/")), a.file(e.join("/") + "/").done(W(t), !0);
+		}
+		for (let [t, r] of e.entries()) {
+			let { dirs: u } = r, d = [...u, r.name].join("/"), p = a.file(d);
+			if (a.stopped) {
+				p.done(y("Not uploaded"));
+				continue;
+			}
+			let m = o === "replace-all", h = r.name, g = async () => {
+				let e = await f(u), t = {
+					encrypt: y("Encrypting"),
+					upload: y("Uploading"),
+					verify: y("Checking")
+				}, a = r.size >= Z, o = a ? {
+					upload: [0, .7],
+					verify: [.7, .3]
+				} : {
+					encrypt: [0, .2],
+					upload: [.2, .6],
+					verify: [.8, .2]
+				}, s = (e, n, r) => {
+					let [i, s] = o[e];
+					p.phase(e === "upload" && a ? y("Encrypting and uploading") : t[e], i + s * (r ? n / r : 1));
+				}, c = null;
+				a || (r.source.remote && p.phase(y("Reading"), 0), c = await r.source.all());
+				for (let t = 1;; t++) {
+					h = n.keepBoth ? vt(r.name, t) : r.name;
+					try {
+						a ? await i.writeFileStream(e, h, r.source, {
+							replace: m,
+							onProgress: s
+						}) : await i.writeFile(e, h, c, {
+							replace: m,
+							onProgress: s
+						});
+						break;
+					} catch (e) {
+						if (!n.keepBoth || !["exists", "exists-other"].includes(e?.code) || t >= On) throw e;
+					}
+				}
+				await n.check?.(r);
+			};
+			try {
+				try {
+					await g();
+				} catch (t) {
+					if (t?.code !== "exists" || o === "skip-all" || n.keepBoth) throw t;
+					let r = o === "replace-all" ? "replace" : await a.ask(d, e.length);
+					if (r === "cancel") {
+						p.done(y("Not uploaded"));
+						break;
+					}
+					if (r.endsWith("-all") && (o = r), r.startsWith("skip")) {
+						p.done(y("Skipped"));
+						continue;
+					}
+					m = !0, await g();
+				}
+				s++, c.push(r), p.done(h === r.name ? n.written || y("Uploaded and checked") : y("Encrypted and checked as “{name}”", { name: h }));
+			} catch (e) {
+				e?.code === "exists" && o === "skip-all" ? p.done(y("Skipped")) : (l.push(d), p.done(W(e), !0));
+			}
+			a.progress((t + 1) / e.length);
+		}
+		n.after && (u = await n.after(c, a));
+	} finally {
+		X = !1, a.finish((l.length ? y("{written} uploaded, {failed} failed. The vault is unchanged where an upload failed.", {
+			written: s,
+			failed: l.length
+		}) : y("{written} uploaded and checked.", { written: s })) + (u ? " " + u : ""), l.length > 0), dn(r.vault.name);
+	}
+}
+function Mn(e = !1) {
+	let t = D("input", {
+		type: "file",
+		multiple: !0,
+		hidden: !0,
+		webkitdirectory: e || null
+	});
+	t.addEventListener("change", () => {
+		let e = [...t.files].map((e) => kn(e, (e.webkitRelativePath || e.name).split("/").slice(0, -1)));
+		t.remove(), jn(e);
+	}), document.body.append(t), t.click();
+}
+async function Nn(e) {
+	let t = [], n = [], r = async (e, i) => {
+		if (e.isFile) t.push(kn(await new Promise((t, n) => e.file(t, n)), i));
+		else if (e.isDirectory) {
+			let t = [...i, e.name];
+			n.push(t);
+			let a = e.createReader();
+			for (;;) {
+				let e = await new Promise((e, t) => a.readEntries(e, t));
+				if (e.length === 0) break;
+				for (let n of e) await r(n, t);
+			}
+		}
+	};
+	for (let t of e) await r(t, []);
+	return {
+		files: t,
+		folders: n
+	};
+}
+async function Pn() {
+	let e = Y();
+	if (!e) return;
+	let t = await Re(y("New folder"), y("Folder name"), (e) => {
+		try {
+			return St(e), null;
+		} catch (e) {
+			return W(e);
+		}
+	});
+	if (t !== null) try {
+		await e.vault.vault.createDirectory(e.dirId, t), dn(e.vault.name);
+	} catch (e) {
+		B(W(e));
+	}
+}
+async function Fn(e, t) {
+	if (X) B(y("Another change to the vault is still running."));
+	else {
+		X = !0;
+		try {
+			await t();
+		} finally {
+			X = !1, dn(e.vault.name);
+		}
+	}
+}
+function In(e, t) {
+	return e?.code === "not-found" ? y("“{name}” is no longer there.", { name: t }) : W(e);
+}
+function Ln(e, t) {
+	let n = G(t) ? Y() : null;
+	return n !== null && e.length > 0 && e.every((e) => e.attributes?.cryptomatorVault === n.vault.seg);
+}
+async function Rn(e) {
+	let t = Y(), n = e.displayname, r = await Re(y("Rename"), y("New name"), (e) => {
+		try {
+			return St(e), null;
+		} catch (e) {
+			return W(e);
+		}
+	}, {
+		initial: n,
+		action: y("Rename")
+	});
+	r !== null && r.normalize("NFC") !== n && await Fn(t, async () => {
+		try {
+			await t.vault.vault.moveEntry(t.dirId, n, t.dirId, r);
+		} catch (e) {
+			B(In(e, n));
+		}
+	});
+}
+async function zn(e) {
+	let t = Y(), { vault: n } = t.vault, r = new Set(e.filter((e) => e.type === i.Folder).map((e) => t.vault.dirs.get(e.basename)?.dirId).filter(Boolean)), a = await Be(e.length === 1 ? y("Move “{name}” to …", { name: e[0].displayname }) : y("Move {count} items to …", { count: e.length }), t.vault.name, async (e) => (await n.list(e)).filter((e) => e.type === "dir").map((e) => ({
+		name: e.name,
+		dirId: e.dirId
+	})), r, y("Move here"));
+	a !== null && a.dirId !== t.dirId && await Fn(t, async () => {
+		let r = [];
+		for (let i of e) try {
+			await n.moveEntry(t.dirId, i.displayname, a.dirId, void 0, { ancestors: a.ancestors });
+		} catch (e) {
+			r.push(i.displayname + ": " + In(e, i.displayname));
+		}
+		r.length && B(r.join("\n"));
+	});
+}
+async function Bn(e) {
+	let t = Y(), n = e.filter((e) => e.type === i.Folder).length;
+	await ze(e.length === 1 ? y("Delete “{name}”?", { name: e[0].displayname }) : y("Delete {count} items?", { count: e.length }), (n ? y("Folders are deleted with everything in them.") + " " : "") + y("The encrypted files go to Nextcloud's deleted files."), y("Delete")) && await Fn(t, async () => {
+		let n = [];
+		for (let r of e) try {
+			await t.vault.vault.removeEntry(t.dirId, r.displayname);
+		} catch (e) {
+			n.push(r.displayname + ": " + In(e, r.displayname));
+		}
+		n.length && B(n.join("\n"));
+	});
+}
+var Vn = 10485760;
+function Q(e) {
+	return [...Tn, ...[...V.values()].map((e) => e.folder)].some((t) => e === t || e.startsWith(t.replace(/\/+$/, "") + "/"));
+}
+function Hn(e) {
+	let t = new Uint8Array(e.reduce((e, t) => e + t.length, 0)), n = 0;
+	for (let r of e) t.set(r, n), n += r.length;
+	return t;
+}
+async function* Un(e, t) {
+	let n = [], r = 0;
+	for await (let i of e) for (n.push(i), r += i.length; r >= t;) {
+		let e = Hn(n);
+		yield e.subarray(0, t), n = r > t ? [e.subarray(t)] : [], r -= t;
+	}
+	r > 0 && (yield Hn(n));
+}
+async function Wn(e) {
+	return new Uint8Array(await crypto.subtle.digest("SHA-256", e));
+}
+function Gn(e, t) {
+	return e.length === t.length && e.every((e, n) => e === t[n]);
+}
+function Kn(e) {
+	let t = V.get(e.attributes?.cryptomatorVault);
+	if (e.type === i.Folder) {
+		let n = t?.dirs.get(e.basename);
+		return n ? {
+			type: "dir",
+			name: n.name,
+			dirId: n.dirId
+		} : null;
+	}
+	return t?.entries.get(e.basename) ?? null;
+}
+async function qn() {
+	let e = Y();
+	if (!e) return;
+	let t = null, n;
+	try {
+		let { getFilePickerBuilder: e } = await wt();
+		n = await e(y("Copy or move into the vault")).setMultiSelect(!0).allowDirectories(!0).setFilter((e) => !Q(e.path)).setButtonFactory((e) => [{
+			label: y("Copy into the vault"),
+			variant: "secondary",
+			disabled: e.length === 0,
+			callback: () => {
+				t = "copy";
+			}
+		}, {
+			label: y("Move into the vault"),
+			variant: "primary",
+			disabled: e.length === 0,
+			callback: () => {
+				t = "move";
+			}
+		}]).build().pick();
+	} catch {
+		return;
+	}
+	if (n = [].concat(n || []), t === null || n.length === 0) return;
+	let r = R(""), i;
+	try {
+		i = await ct(r, n);
+	} catch (e) {
+		B(W(e));
+		return;
+	}
+	await jn(i.flatMap((e) => e.files.map((e) => An(r, e))), i.flatMap((e) => e.folders), {
+		title: y(t === "move" ? "Moving into {vault}" : "Copying into {vault}", { vault: e.vault.name }),
+		written: y("Encrypted and checked"),
+		async check(e) {
+			if ((await r.stat(e.origin.path))?.etag !== e.origin.etag) throw new xt("changed", e.origin.path);
+		},
+		after: t === "move" ? (e, t) => Jn(r, i, e, t) : void 0
+	});
+}
+async function Jn(e, t, n, r) {
+	let i = new Set(n.map((e) => e.origin)), a = 0;
+	for (let n of t) {
+		let t = r.file(n.isDir ? n.name + "/" : n.name);
+		if (!n.files.every((e) => i.has(e))) t.done(y("Original kept: not all of it is in the vault"), !0);
+		else if (!n.permissions.includes("D") || n.permissions.includes("S")) t.done(y("Original kept: it is shared with you"), !0);
+		else try {
+			await e.removeUnchanged(n.path, n.etag, { isDir: n.isDir }), a++, t.done(await lt(n.path) ? y("Original deleted for good") : y("Original deleted; it may still be in the deleted files"));
+		} catch (e) {
+			t.done(W(e), !0);
+		}
+	}
+	return a ? y("Originals deleted for good: {removed}.", { removed: a }) : "";
+}
+async function Yn(e, t, n, r, i, a) {
+	if (n.size < Z) {
+		a("decrypt", 0, 1);
+		let o = await e.readFile(n);
+		if (await t.write(r, o, {
+			create: !i,
+			onProgress: (e, t) => a("upload", e, t)
+		}), a("verify", 0, 1), !Gn(await Wn(await t.read(r)), await Wn(o))) throw new xt("network", "the stored copy differs from the decrypted file");
+		return;
+	}
+	let o = [];
+	async function* s(e) {
+		for await (let t of e) o.push(await Wn(t)), yield t;
+	}
+	if (await t.writeParts(r, n.size, s(Un(e.decryptedPieces(n), Vn)), {
+		create: !i,
+		onProgress: (e, t) => a("upload", e, t)
+	}), (await t.stat(r))?.size !== n.size) throw new xt("network", "the stored copy has another size than the decrypted file");
+	for (let [e, i] of o.entries()) {
+		let s = e * Vn;
+		if (!Gn(await Wn(await t.readRange(r, s, Math.min(s + Vn, n.size))), i)) throw new xt("network", "the stored copy differs from the decrypted file");
+		a("verify", e + 1, o.length);
+	}
+}
+async function Xn(e) {
+	let t = Y();
+	if (!t) return;
+	let n = null, r = null;
+	try {
+		let { getFilePickerBuilder: t } = await wt();
+		await t(e.length === 1 ? y("Export “{name}” decrypted to …", { name: e[0].displayname }) : y("Export {count} items decrypted to …", { count: e.length })).setMultiSelect(!1).allowDirectories(!0).setMimeTypeFilter(["httpd/unix-directory"]).setFilter((e) => e.type === i.Folder && !Q(e.path)).setButtonFactory((e, t) => [{
+			label: y("Copy here"),
+			variant: "secondary",
+			callback: () => {
+				n = "copy", r = t;
+			}
+		}, {
+			label: y("Move here"),
+			variant: "primary",
+			callback: () => {
+				n = "move", r = t;
+			}
+		}]).build().pick();
+	} catch {}
+	if (n === null || r === null) return;
+	if (Q(r)) {
+		B(y("Choose a folder outside the vault."));
+		return;
+	}
+	if (X) {
+		B(y("Another change to the vault is still running."));
+		return;
+	}
+	X = !0;
+	let { vault: a } = t.vault, o = R(""), s = (...e) => [r.replace(/^\/+|\/+$/g, ""), ...e].filter(Boolean).join("/"), c = Ve(y(n === "move" ? "Moving out of {vault}" : "Exporting from {vault}", { vault: t.vault.name })), l = {
+		text: y("Replace the file in your files with the one from the vault? Nextcloud keeps the old one among its versions."),
+		cancel: y("Cancel")
+	}, u = null, d = 0, f = 0, p = !1, m = [];
+	try {
+		let r = [];
+		for (let t of e) {
+			let e = Kn(t), n = {
+				name: t.displayname,
+				files: [],
+				folders: [],
+				complete: e !== null
+			}, i = async (e, t) => {
+				n.folders.push(t);
+				for (let r of await a.list(e)) r.type === "dir" ? await i(r.dirId, [...t, r.name]) : r.type === "file" ? n.files.push({
+					entry: r,
+					dirs: t
+				}) : n.complete = !1;
+			};
+			e?.type === "dir" ? await i(e.dirId, [e.name]) : e?.type === "file" ? n.files.push({
+				entry: e,
+				dirs: []
+			}) : n.complete = !1, r.push(n);
+		}
+		let i = r.reduce((e, t) => e + t.files.length, 0), h = 0;
+		for (let e of r) {
+			for (let t of e.folders) try {
+				await o.mkdir(s(...t), { existsOk: !0 });
+			} catch (n) {
+				e.complete = !1, m.push(t.join("/")), c.file(t.join("/") + "/").done(W(n), !0);
+			}
+			for (let { entry: t, dirs: n } of e.files) {
+				let r = [...n, t.name].join("/"), f = c.file(r);
+				if (h++, c.stopped || p) {
+					e.complete = !1, f.done(y("Not exported"));
+					continue;
+				}
+				let g = {
+					decrypt: y("Decrypting"),
+					upload: t.size >= Z ? y("Decrypting and uploading") : y("Uploading"),
+					verify: y("Checking")
+				}, _ = {
+					decrypt: [0, .2],
+					upload: [.2, .6],
+					verify: [.8, .2]
+				}, ee = (e, t, n) => f.phase(g[e], _[e][0] + _[e][1] * (n ? t / n : 1)), te = u === "replace-all";
+				try {
+					try {
+						await Yn(a, o, t, s(...n, t.name), te, ee);
+					} catch (e) {
+						if (e?.code !== "exists" || u === "skip-all") throw e;
+						let d = u === "replace-all" ? "replace" : await c.ask(r, i, l);
+						if (d === "cancel") throw p = !0, Object.assign(/* @__PURE__ */ Error("cancelled"), { cancelled: !0 });
+						if (d.endsWith("-all") && (u = d), d.startsWith("skip")) throw Object.assign(/* @__PURE__ */ Error("skipped"), { skipped: !0 });
+						te = !0, await Yn(a, o, t, s(...n, t.name), te, ee);
+					}
+					d++, f.done(y("Exported and checked"));
+				} catch (t) {
+					if (e.complete = !1, t?.cancelled) {
+						f.done(y("Not exported"));
+						continue;
+					}
+					t?.skipped || t?.code === "exists" && u === "skip-all" ? f.done(y("Skipped")) : (m.push(r), f.done(W(t), !0));
+				}
+				c.progress(h / Math.max(i, 1));
+			}
+			if (n === "move") {
+				let n = c.file(y("“{name}” in the vault", { name: e.name }));
+				if (!e.complete) {
+					n.done(y("Kept in the vault: not all of it was exported"), !0);
+					continue;
+				}
+				try {
+					await a.removeEntry(t.dirId, e.name), f++, n.done(y("Removed from the vault"));
+				} catch (t) {
+					n.done(In(t, e.name), !0);
+				}
+			}
+		}
+	} catch (e) {
+		m.push(""), B(W(e));
+	} finally {
+		X = !1;
+		let e = m.length ? y("{written} exported, {failed} failed.", {
+			written: d,
+			failed: m.length
+		}) : y("{written} exported and checked.", { written: d });
+		c.finish(e + (f ? " " + y("{removed} removed from the vault.", { removed: f }) : ""), m.length > 0), dn(t.vault.name);
+	}
+}
+h({
+	id: "cryptomator-vaults-rename",
+	displayName: () => y("Rename"),
+	iconSvgInline: () => Rt,
+	enabled: ({ nodes: e, view: t }) => Ln(e, t) && e.length === 1,
+	async exec({ nodes: e }) {
+		return await Rn(e[0]), null;
+	},
+	order: -700
+}), h({
+	id: "cryptomator-vaults-move",
+	displayName: () => y("Move …"),
+	iconSvgInline: () => zt,
+	enabled: ({ nodes: e, view: t }) => Ln(e, t),
+	async exec({ nodes: e }) {
+		return await zn(e), null;
+	},
+	async execBatch({ nodes: e }) {
+		return await zn(e), e.map(() => null);
+	},
+	order: -690
+}), h({
+	id: "cryptomator-vaults-export",
+	displayName: () => y("Export to your files …"),
+	iconSvgInline: () => Ht,
+	enabled: ({ nodes: e, view: t }) => Ln(e, t),
+	async exec({ nodes: e }) {
+		return await Xn(e), null;
+	},
+	async execBatch({ nodes: e }) {
+		return await Xn(e), e.map(() => null);
+	},
+	order: -680
+}), h({
+	id: "cryptomator-vaults-delete",
+	displayName: () => y("Delete"),
+	iconSvgInline: () => Bt,
+	enabled: ({ nodes: e, view: t }) => Ln(e, t),
+	async exec({ nodes: e }) {
+		return await Bn(e), null;
+	},
+	async execBatch({ nodes: e }) {
+		return await Bn(e), e.map(() => null);
+	},
+	destructive: !0,
+	order: 100
+}), g({
+	id: "cryptomator-vaults-upload",
+	displayName: () => y("Upload files …"),
+	iconSvgInline: () => It,
+	order: -2,
+	enabled: ({ view: e }) => G(e) && Y() !== null,
+	exec: async () => (Mn(), null)
+}), g({
+	id: "cryptomator-vaults-upload-folder",
+	displayName: () => y("Upload folder …"),
+	iconSvgInline: () => It,
+	order: -1.5,
+	enabled: ({ view: e }) => G(e) && Y() !== null,
+	exec: async () => (Mn(!0), null)
+}), g({
+	id: "cryptomator-vaults-import",
+	displayName: () => y("Add from your files …"),
+	iconSvgInline: () => Ut,
+	order: -1.2,
+	enabled: ({ view: e }) => G(e) && Y() !== null,
+	exec: async () => (await qn(), null)
+}), g({
+	id: "cryptomator-vaults-new-folder",
+	displayName: () => y("New folder …"),
+	iconSvgInline: () => Lt,
+	order: -1,
+	enabled: ({ view: e }) => G(e) && Y() !== null,
+	exec: async () => (await Pn(), null)
+});
+function Zn(e) {
+	Y() && e.dataTransfer?.types?.includes("Files") && (e.preventDefault(), e.stopPropagation(), e.dataTransfer.dropEffect = "copy");
+}
+function Qn(e) {
+	if (!Y() || !e.dataTransfer?.files?.length) return;
+	e.preventDefault(), e.stopPropagation();
+	let t = [...e.dataTransfer.items || []].map((e) => e.webkitGetAsEntry?.()).filter(Boolean);
+	t.length === 0 ? jn([...e.dataTransfer.files].map((e) => kn(e, []))) : Nn(t).then(({ files: e, folders: t }) => jn(e, t), (e) => B(W(e)));
+}
+window.addEventListener("dragover", Zn, !0), window.addEventListener("drop", Qn, !0);
+var $n = 6e5, $ = null;
+function er(e = !1) {
+	if (e || !$ || Date.now() - $.at > $n) {
+		let e = (async () => {
+			let e = R(""), t = [];
+			for (let n of (await st(dt)).map(z)) try {
+				let r = await e.read(n.slice(1) + "/" + dt);
+				t.push({
+					folder: n,
+					...r.length > 65536 ? { problem: "invalid" } : ht(new TextDecoder().decode(r), n)
+				});
+			} catch {}
+			return t;
+		})();
+		$ = {
+			at: Date.now(),
+			promise: e
+		}, e.catch(() => {
+			$?.promise === e && ($ = null);
+		});
+	}
+	return $.promise;
+}
+function tr() {
+	return "cryptomator_vaults.inbox-auto." + I();
+}
+function nr() {
+	try {
+		let e = JSON.parse(window.localStorage.getItem(tr()) || "[]");
+		return Array.isArray(e) ? e.filter((e) => typeof e == "string") : [];
+	} catch {
+		return [];
+	}
+}
+function rr(e) {
+	return nr().includes(e.folder);
+}
+function ir(e, t) {
+	try {
+		let n = nr().filter((t) => t !== e.folder);
+		window.localStorage.setItem(tr(), JSON.stringify(t ? [...n, e.folder] : n));
+	} catch {}
+}
+async function ar(e) {
+	let t = [], n = [], r = R(""), i = z(e.folder), a;
+	try {
+		a = (await er()).filter((e) => (e.inbox?.vault ?? e.vault) === i);
+	} catch (n) {
+		return e.inbox = {
+			items: t,
+			problems: [y("The search for inboxes failed: {detail}", { detail: n.message })]
+		}, e.inbox;
+	}
+	let o = null;
+	for (let e of a) {
+		let a = e.folder;
+		if (e.problem === "version") n.push(y("The inbox “{inbox}” needs a newer version of this app; it is left alone.", { inbox: a }));
+		else if (e.problem === "loop" || Q(a)) n.push(y("The inbox “{inbox}” is left alone: it is a vault's folder, inside one or holds one.", { inbox: a }));
+		else if (e.inbox) try {
+			if (o === null) {
+				let e = (await r.stat(i.slice(1)))?.permissions ?? "";
+				o = e.includes("C") && e.includes("K");
+			}
+			if (!o) {
+				n.push(y("The inbox “{inbox}” is left alone: you cannot write to this vault.", { inbox: a }));
+				continue;
+			}
+			let s = await r.stat(a.slice(1));
+			if (s === null || !s.isDir) continue;
+			if (s.permissions.includes("S")) {
+				n.push(y("The inbox “{inbox}” is left alone: it is shared with you, and its files are not yours to delete.", { inbox: a }));
+				continue;
+			}
+			t.push({
+				inbox: e.inbox,
+				plan: await yt(e.inbox, (e) => r.list(e))
+			});
+		} catch (e) {
+			n.push(y("The inbox “{inbox}” cannot be read: {detail}", {
+				inbox: a,
+				detail: W(e)
+			}));
+		}
+	}
+	return e.inbox = {
+		items: t,
+		problems: n
+	}, e.inbox;
+}
+function or(e) {
+	let t = (e.inbox?.items ?? []).filter((e) => e.plan.ready.length > 0), n = (e.inbox?.problems ?? []).map((e) => D("div", {
+		class: "cryptomator-banner cryptomator-banner--inbox",
+		role: "note"
+	}, D("span", { class: "cryptomator-banner__text cryptomator-notice--error" }, e)));
+	for (let r of t) {
+		let { inbox: t, plan: i } = r, a = i.ready.length, o = {
+			from: t.from,
+			inbox: t.folder,
+			size: Se(i.ready.reduce((e, t) => e + t.size, 0))
+		}, s = (t.from ? ie("%n file from {from} is waiting in “{inbox}” ({size}).", "%n files from {from} are waiting in “{inbox}” ({size}).", a, o) : ie("%n file is waiting in “{inbox}” ({size}).", "%n files are waiting in “{inbox}” ({size}).", a, o)) + (i.recent.length ? " " + ie("%n more is still being written and comes next time.", "%n more are still being written and come next time.", i.recent.length) : "");
+		n.push(D("div", {
+			class: "cryptomator-banner cryptomator-banner--inbox",
+			role: "status"
+		}, [
+			D("span", {
+				class: "cryptomator-banner__icon",
+				"aria-hidden": "true"
+			}),
+			D("span", { class: "cryptomator-banner__text" }, s),
+			D("button", {
+				type: "button",
+				class: "primary",
+				onclick: () => cr(e, [r])
+			}, y("Move into the vault"))
+		])), n[n.length - 1].querySelector(".cryptomator-banner__icon").innerHTML = Ut;
+	}
+	if (t.length > 0) {
+		let t = D("input", {
+			type: "checkbox",
+			checked: rr(e),
+			onchange: () => ir(e, t.checked)
+		});
+		n.push(D("label", { class: "cryptomator-inbox-auto" }, [t, y("Move files from inboxes automatically when I unlock")]));
+	}
+	return n;
+}
+async function sr(e) {
+	try {
+		await ar(e);
+	} catch {
+		return;
+	}
+	J(q?.folder), rr(e) && e.inbox.items.some((e) => e.plan.ready.length > 0) && await cr(e, e.inbox.items);
+}
+async function cr(e, t) {
+	if (!e.vault?.unlocked) return;
+	if (X) {
+		B(y("Another change to the vault is still running."));
+		return;
+	}
+	let n = new Set(t.map((e) => e.inbox.folder)), r = (await ar(e)).items.filter((e) => n.has(e.inbox.folder) && e.plan.ready.length > 0);
+	if (J(q?.folder), r.length === 0) return;
+	let i = R("");
+	await jn(r.flatMap((e) => e.plan.ready.map((e) => An(i, e))), [], {
+		into: {
+			vault: e,
+			dirId: ""
+		},
+		keepBoth: !0,
+		title: y("Moving from inboxes into {vault}", { vault: e.name }),
+		written: y("Encrypted and checked"),
+		async check(e) {
+			if ((await i.stat(e.origin.path))?.etag !== e.origin.etag) throw new xt("changed", e.origin.path);
+		},
+		after: (e, t) => lr(i, r, e, t)
+	}), await ar(e).catch(() => {}), J(q?.folder);
+}
+async function lr(e, t, n, r) {
+	let i = [];
+	for (let t of n.map((e) => e.origin)) if (!t.permissions.includes("D")) r.file(t.path).done(y("Plain copy kept: you cannot delete it"), !0);
+	else try {
+		await e.removeUnchanged(t.path, t.etag), i.push(t.path);
+	} catch (e) {
+		r.file(t.path).done(W(e), !0);
+	}
+	let a = [];
+	for (let n of t) for (let t of n.plan.folders) {
+		let r = [n.inbox.folder.slice(1), ...t].join("/");
+		if (i.some((e) => e.startsWith(r + "/"))) try {
+			(await e.list(r)).length === 0 && (await e.remove(r), a.push(r));
+		} catch {}
+	}
+	let o = /* @__PURE__ */ new Set();
+	try {
+		o = await ut(i), await ut(a, { onlyEmpty: !0 });
+	} catch (e) {
+		r.file(y("Deleted files")).done(W(e), !0);
+	}
+	let s = i.length - o.size;
+	return (i.length ? y("Plain copies deleted for good: {removed}.", { removed: o.size }) : "") + (s ? " " + y("{count} of them may still be in the deleted files.", { count: s }) : "");
+}
+async function ur(e) {
+	let t = z(e.folder), n = pt(t).slice(0, -1), r = await He({
+		title: y("Make an inbox for {vault}", { vault: e.name }),
+		intro: [y("Files put into an inbox, by you or by an app such as Harvester, are offered for the vault when you unlock it, and moved into it encrypted. Until then they are ordinary files on the server."), y("The folder in the vault the files go to is written unencrypted into the inbox's marker file, {marker}.", { marker: dt })],
+		fields: [
+			{
+				name: "folder",
+				label: y("Inbox folder"),
+				value: "/" + [...n, y("{vault} inbox", { vault: e.name })].join("/")
+			},
+			{
+				name: "target",
+				label: y("Folder in the vault"),
+				value: "/"
+			},
+			{
+				name: "from",
+				label: y("Filled by (optional)"),
+				value: "",
+				optional: !0
+			}
+		],
+		action: y("Make the inbox"),
+		working: y("Making the inbox …"),
+		async run({ folder: e, target: n, from: r }) {
+			let i = z(e), a = z(n);
+			if (i === null || i === "/") throw Error(y("“{name}” cannot be a folder's name.", { name: e }));
+			if (a === null) throw Error(y("“{name}” cannot be a name in a vault.", { name: n }));
+			for (let e of pt(a)) try {
+				St(e);
+			} catch (e) {
+				throw Error(W(e));
+			}
+			if (mt(i, t) || mt(t, i) || Q(i)) throw Error(y("An inbox cannot be a vault's folder, inside one or hold one."));
+			let o = R(""), s = await o.stat(i.slice(1));
+			if (s === null) try {
+				await o.mkdir(i.slice(1));
+			} catch (e) {
+				throw Error(y("“{folder}” could not be created: {detail}", {
+					folder: i,
+					detail: e.message
+				}));
+			}
+			else if (!s.isDir) throw Error(y("“{folder}” is a file.", { folder: i }));
+			try {
+				await o.write(i.slice(1) + "/" + dt, new TextEncoder().encode(gt({
+					vault: t,
+					target: a,
+					from: r.trim()
+				})), { create: !0 });
+			} catch (e) {
+				throw Error(e?.code === "exists" ? y("“{folder}” is an inbox already.", { folder: i }) : W(e));
+			}
+			return i;
+		}
+	});
+	r && (await er(!0).catch(() => {}), e.vault?.unlocked && (await ar(e).catch(() => {}), J(q?.folder)), Tt(y("“{folder}” is an inbox of {vault} now.", {
+		folder: r,
+		vault: e.name
+	})));
+}
+var dr = 8, fr = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm5.65-4A6 6 0 1 0 12.65 14H17v4h4v-4h2v-4H12.65z\"/></svg>", pr = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5A5.5 5.5 0 0 1 7.5 3c1.74 0 3.41.81 4.5 2.09A6 6 0 0 1 16.5 3 5.5 5.5 0 0 1 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35zM11 7v3H8v2h3v3h2v-3h3v-2h-3V7h-2z\"/></svg>";
+function mr() {
+	return import("./cryptomator_vaults-recovery-words-DqCVkwRb.mjs").then((e) => e.default.split("\n"));
+}
+function hr(e, t) {
+	if (e.length < dr) throw Error(y("The password needs at least {count} characters.", { count: dr }));
+	if (e !== t) throw Error(y("The two passwords differ."));
+}
+function gr(e) {
+	switch (e.kind) {
+		case "MissingDirIdBackup": return y("A folder's spare copy of its ID is missing. Repairing writes it.");
+		case "MissingContentDir": return y("A folder's contents are missing; it cannot be opened. Repairing creates it anew, empty.");
+		case "OrphanContentDir": return y("Encrypted files that no folder leads to. Repairing moves them into the folder LOST+FOUND.");
+		case "LooseDirFile": return y("A stray folder file outside any folder. Repairing removes it.");
+		case "EmptyDirFile": return y("A folder whose file is empty; it cannot be opened. Repairing removes the broken entry.");
+		case "UnknownType": return e.fixable ? y("An empty entry that is neither file, folder nor link. Repairing removes it.") : y("An entry that is neither file, folder nor link, and not empty. Look at it in Cryptomator.");
+		case "AmbiguousType": return y("An entry that is several kinds at once. Look at it in Cryptomator.");
+		case "LongShortNamesMismatch": return y("An entry with a long name, stored under the wrong short name. Repairing renames it.");
+		case "TrailingBytesInNameFile": return y("A long name with stray bytes after it. Repairing removes them.");
+		case "MissingLongName":
+		case "NotDecodableLongName":
+		case "ObeseNameFile": return y("An entry whose long name is missing or damaged. Look at it in Cryptomator.");
+		case "ObeseDirFile":
+		case "DirIdCollision": return y("A folder whose ID is damaged or used twice. Look at it in Cryptomator.");
+		default: return e.kind;
+	}
+}
+async function _r() {
+	let e = null;
+	try {
+		let { getFilePickerBuilder: t } = await wt();
+		await t(y("Where should the new vault go?")).startAt("/").setMultiSelect(!1).allowDirectories(!0).setMimeTypeFilter(["httpd/unix-directory"]).setFilter((e) => e.type === i.Folder && !Q(e.path)).setButtonFactory((t, n) => [{
+			label: y("Create the vault here"),
+			variant: "primary",
+			callback: () => {
+				e = n;
+			}
+		}]).build().pick();
+	} catch {}
+	if (e === null) return;
+	if (Q(e)) {
+		B(y("A vault cannot be inside a vault."));
+		return;
+	}
+	let t = R(""), n = await He({
+		title: y("New vault"),
+		intro: [y("The vault is a folder of encrypted files, which Cryptomator opens too. Its password cannot be recovered without the recovery key shown next.")],
+		fields: [
+			{
+				name: "place",
+				label: y("In"),
+				value: e,
+				readonly: !0
+			},
+			{
+				name: "name",
+				label: y("Name"),
+				value: y("Vault")
+			},
+			{
+				name: "password",
+				label: y("Password"),
+				type: "password",
+				autocomplete: "new-password"
+			},
+			{
+				name: "repeated",
+				label: y("Password again"),
+				type: "password",
+				autocomplete: "new-password"
+			}
+		],
+		action: y("Create"),
+		working: y("Creating the vault …"),
+		async run({ name: n, password: r, repeated: i }) {
+			let a = n.trim();
+			if (!a || a === "." || a === ".." || /[/\\]/.test(a)) throw Error(y("“{name}” cannot be a folder's name.", { name: a }));
+			hr(r, i);
+			let o = (e.replace(/\/+$/, "") + "/" + a).replace(/^\/*/, "/");
+			try {
+				await t.mkdir(o.slice(1));
+			} catch (e) {
+				throw Error(e?.code === "exists" ? y("A folder “{name}” is there already.", { name: a }) : W(e));
+			}
+			let s;
+			try {
+				s = await bt.create(R(o), r);
+			} catch (e) {
+				throw await t.remove(o.slice(1)).catch(() => {}), Error(W(e));
+			}
+			return {
+				folder: o,
+				vault: s,
+				key: await s.recoveryKey(r, await mr())
+			};
+		}
+	});
+	if (!n) return;
+	Qt(n.folder), Tn.add(n.folder), await tn();
+	let r = await en(n.folder);
+	r.vault = n.vault, mn(), await Ue(r.name, n.key, { created: !0 }), rn("/" + r.seg);
+}
+async function vr(e) {
+	return e.vault ?? await bt.open(R(e.folder));
+}
+async function yr(e) {
+	await He({
+		title: y("Change the password of {vault}", { vault: e.name }),
+		intro: [y("The files stay as they are; only the vault's key file gets the new password. Cryptomator on your other devices then needs the new one, too.")],
+		fields: [
+			{
+				name: "account",
+				label: y("Vault"),
+				value: e.folder,
+				readonly: !0,
+				account: !0,
+				autocomplete: "username"
+			},
+			{
+				name: "old",
+				label: y("Current password"),
+				type: "password",
+				autocomplete: "current-password"
+			},
+			{
+				name: "password",
+				label: y("New password"),
+				type: "password",
+				autocomplete: "new-password"
+			},
+			{
+				name: "repeated",
+				label: y("New password again"),
+				type: "password",
+				autocomplete: "new-password"
+			}
+		],
+		action: y("Change password"),
+		working: y("Changing the password …"),
+		async run({ old: t, password: n, repeated: r }) {
+			hr(n, r);
+			try {
+				let r = await vr(e);
+				await r.changePassword(t, n), e.vault = r;
+			} catch (e) {
+				throw Error(W(e));
+			}
+			return !0;
+		}
+	}) && Tt(y("The password of {vault} is changed.", { vault: e.name }));
+}
+async function br(e) {
+	let t = await He({
+		title: y("Recovery key of {vault}", { vault: e.name }),
+		intro: [y("Enter the vault's password to see its recovery key.")],
+		fields: [{
+			name: "account",
+			label: y("Vault"),
+			value: e.folder,
+			readonly: !0,
+			account: !0,
+			autocomplete: "username"
+		}, {
+			name: "password",
+			label: y("Password"),
+			type: "password",
+			autocomplete: "current-password"
+		}],
+		action: y("Show"),
+		working: y("Unlocking …"),
+		async run({ password: t }) {
+			try {
+				return await (await vr(e)).recoveryKey(t, await mr());
+			} catch (e) {
+				throw Error(W(e));
+			}
+		}
+	});
+	t && await Ue(e.name, t);
+}
+async function xr(e) {
+	let t = await He({
+		title: y("Reset the password of {vault}", { vault: e.name }),
+		intro: [y("With the vault's recovery key (the words from Cryptomator or from this app) it gets a new password. The files stay as they are.")],
+		fields: [
+			{
+				name: "account",
+				label: y("Vault"),
+				value: e.folder,
+				readonly: !0,
+				account: !0,
+				autocomplete: "username"
+			},
+			{
+				name: "key",
+				label: y("Recovery key"),
+				type: "textarea"
+			},
+			{
+				name: "password",
+				label: y("New password"),
+				type: "password",
+				autocomplete: "new-password"
+			},
+			{
+				name: "repeated",
+				label: y("New password again"),
+				type: "password",
+				autocomplete: "new-password"
+			}
+		],
+		action: y("Set the new password"),
+		working: y("Setting the new password …"),
+		async run({ key: t, password: n, repeated: r }) {
+			hr(n, r);
+			try {
+				return await bt.resetPassword(R(e.folder), t, n, await mr());
+			} catch (e) {
+				throw Error(W(e));
+			}
+		}
+	});
+	t && (e.vault = t, mn(), Tt(y("{vault} has a new password and is unlocked.", { vault: e.name })));
+}
+async function Sr(e) {
+	(e.vault?.unlocked || await on(e)) && We(e.name, {
+		check: (t) => e.vault.checkHealth(t),
+		describe: gr,
+		async repair(t) {
+			if (X) throw Error(y("Another change to the vault is still running."));
+			X = !0;
+			try {
+				for (let n of t) await e.vault.repair(n);
+			} catch (e) {
+				throw Error(W(e));
+			} finally {
+				X = !1, dn(e.name);
+			}
+		}
+	});
+}
+var Cr = (e) => V.get(e[0].attributes.cryptomatorVault), wr = ({ nodes: e, view: t }) => cn && G(t) && e.length === 1 && e[0].attributes?.cryptomatorVaultRoot === !0;
+for (let [e, t, n, r, i] of [
+	[
+		"cryptomator-vaults-change-password",
+		() => y("Change password …"),
+		fr,
+		yr,
+		-790
+	],
+	[
+		"cryptomator-vaults-recovery-key",
+		() => y("Show recovery key …"),
+		fr,
+		br,
+		-780
+	],
+	[
+		"cryptomator-vaults-reset-password",
+		() => y("Reset password with recovery key …"),
+		fr,
+		xr,
+		-770
+	],
+	[
+		"cryptomator-vaults-health",
+		() => y("Check health …"),
+		pr,
+		Sr,
+		-760
+	],
+	[
+		"cryptomator-vaults-make-inbox",
+		() => y("Make an inbox for this vault …"),
+		Ut,
+		ur,
+		-750
+	]
+]) h({
+	id: e,
+	displayName: t,
+	iconSvgInline: () => n,
+	enabled: wr,
+	async exec({ nodes: e }) {
+		return await r(Cr(e)), null;
+	},
+	order: i
+});
+g({
+	id: "cryptomator-vaults-new",
+	displayName: () => y("New vault …"),
+	iconSvgInline: () => Lt,
+	order: -.5,
+	enabled: ({ view: e }) => cn && G(e) && H.kind === "vaults",
+	exec: async () => (await _r(), null)
+}), g({
+	id: "cryptomator-vaults-add",
+	displayName: () => y("Open a vault folder …"),
+	iconSvgInline: () => Wt,
+	order: 0,
+	enabled: ({ view: e }) => G(e),
+	exec: async () => (await _n(), null)
+}), g({
+	id: "cryptomator-vaults-lock-all",
+	displayName: () => y("Lock all vaults"),
+	iconSvgInline: () => Ft,
+	order: 1,
+	enabled: ({ view: e }) => G(e) && [...V.values()].some((e) => e.vault?.unlocked),
+	exec: async () => (pn(), null)
+}), m().register(new f({
+	id: Et,
+	name: y("Vaults"),
+	caption: y("Cryptomator vaults, unlocked in this browser"),
+	emptyTitle: y("No vaults found"),
+	emptyCaption: y("Vaults in your files appear here. Open a vault's folder to add one."),
+	emptyView: un,
+	icon: Mt,
+	order: 90,
+	getContents: ln
+})), xn();
+for (let e of [
+	"pointerdown",
+	"keydown",
+	"wheel",
+	"touchstart"
+]) document.addEventListener(e, hn, { passive: !0 });
 window.addEventListener("pagehide", () => {
-  q(), Gt();
-});
-Le && dt().then(() => st(xe?.folder));
-export {
-  Ht as VIEW_ID
-};
+	j(), pn();
+}), cn && tn().then(() => Dn(K?.folder));
+export { Et as VIEW_ID };
