@@ -10,7 +10,8 @@
 # app writes (tests/compat.sh). On a real Nextcloud with PostgreSQL (the oldest and
 # the newest supported), the app must install over its release, upgrade and pass
 # tests/server/check.sh; the browser test (tests/e2e/check.mjs) must pass on the
-# newest.
+# newest. The results of the PHPUnit and the Node tests go to the pull request as a
+# comment each (dawid/ci-actions' test-report).
 name: CI
 # A failed job mails whoever started the run. Renovate's bot has no mailbox: when its
 # branch fails, Renovate opens a pull request, which mails the repository's watchers.
@@ -36,12 +37,13 @@ jobs:
     timeout-minutes: 10
     steps:
       # What the composer image had: bash and git (the steps), zip and bz2, Composer
-      # from its installer, checked against the signature Composer publishes.
+      # from its installer, checked against the signature Composer publishes; and
+      # Python, which the test report runs with.
       - &tools
         name: Install git, the PHP extensions and Composer
         shell: sh
         run: |
-          apk add -q bash git unzip libzip bzip2
+          apk add -q bash git unzip libzip bzip2 python3
           apk add -q --virtual .build $PHPIZE_DEPS libzip-dev bzip2-dev
           docker-php-ext-install -j"$(nproc)" zip bz2 > /dev/null
           apk del -q .build
@@ -101,7 +103,16 @@ jobs:
         run: composer psalm
 
       - name: Run the PHPUnit tests
-        run: vendor/bin/phpunit
+        id: tests
+        run: vendor/bin/phpunit --log-junit /tmp/phpunit.xml
+
+      # The results as one comment on the pull request (dawid/ci-actions), also when
+      # tests failed; not when an earlier step failed and they did not run.
+      - name: Test report
+        if: always() && steps.tests.outcome != 'skipped'
+        uses: https://git.ciepiela.org/dawid/ci-actions/test-report@main
+        with:
+          junit: /tmp/phpunit.xml
 
   javascript:
     runs-on: docker
@@ -149,8 +160,19 @@ jobs:
       - name: Check the translations are valid and complete
         run: node tests/l10n.js
 
+      # As JUnit too, for the report below.
       - name: Run the tests
-        run: node --test tests/vault.test.js tests/write.test.js tests/keys.test.js tests/health.test.js tests/inbox.test.mjs
+        id: tests
+        run: >-
+          node --test --test-reporter=spec --test-reporter-destination=stdout
+          --test-reporter=junit --test-reporter-destination=/tmp/node.xml
+          tests/vault.test.js tests/write.test.js tests/keys.test.js tests/health.test.js tests/inbox.test.mjs
+
+      - name: Test report
+        if: always() && steps.tests.outcome != 'skipped'
+        uses: https://git.ciepiela.org/dawid/ci-actions/test-report@main
+        with:
+          junit: /tmp/node.xml
 
   # What the app writes, read and checked by Cryptomator's own library (cryptofs):
   # tests/compat.test.js through tests/compat.sh, with Java from the image and Node
