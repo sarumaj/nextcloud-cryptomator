@@ -239,7 +239,8 @@ actions) and loads `@nextcloud/dialogs` (toasts, the file picker, with Vue) only
 so that Files loads about 50 KB more (gzipped), not 350 KB.
 
 CI (`.forgejo/workflows/ci.yml`) also lints the PHP, checks it with php-cs-fixer and Psalm,
-checks `appinfo/info.xml` against the app store's schema and the Markdown with markdownlint.
+checks `appinfo/info.xml` against the app store's schema and the Markdown with markdownlint. The
+results of the PHPUnit and the Node tests go to a pull request as a comment each.
 
 The PHP follows Nextcloud's coding standard and is checked by Psalm against Nextcloud's public
 API (`nextcloud/ocp`); composer holds only these tools, the app needs none:
