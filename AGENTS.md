@@ -78,7 +78,9 @@ and push the tag.
 ## Screenshots
 
 `screenshots/1-…png` to `4-…png` are the English shots of the homelab's guide
-(`docs/assets/screenshots/vaults-*.png` in `dawid/HomeLab`), recorded against a demo Nextcloud
-with demo people and data only, scaled down to 1600 pixels wide
-(`vips thumbnail in.png out.png[compression=9,strip] 1600`). `appinfo/info.xml` links them by
-their raw URLs on `main`. Never show real accounts, addresses or host names.
+(`docs/assets/screenshots/vaults-*.png` in `dawid/HomeLab`), recorded against a demo Nextcloud with
+demo people and data only, scaled down to 1600 pixels wide
+(`vips thumbnail in.png out.png[compression=9,strip] 1600`).
+`appinfo/info.xml` links them by their media URLs on `main`
+(`/media/`: they are in Git LFS, and `/raw/` would serve its pointer). Never show real accounts,
+addresses or host names.

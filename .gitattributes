@@ -1,3 +1,7 @@
 # Built by npm run build (vite.config.mjs) from src/; CI checks they are up to date.
 app/cryptomator_vaults/js/cryptomator_vaults-*.mjs linguist-generated -diff
 app/cryptomator_vaults/css/cryptomator_vaults-files.css linguist-generated -diff
+
+# The README's and the app store's pictures, in Git LFS. info.xml links them by their
+# /media/ URLs, which serve the file; /raw/ would serve the LFS pointer.
+screenshots/*.png filter=lfs diff=lfs merge=lfs -text
