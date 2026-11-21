@@ -3,7 +3,7 @@ import { n as t, r as n, t as r } from "./cryptomator_vaults-sandbox-CllzWuqe.mj
 // src/previews.js
 var i = "<style>body{font:14px/1.5 system-ui,sans-serif;margin:12px 16px;color:#222;background:#fff}pre,code{background:#f4f4f4;border-radius:4px}pre{padding:8px;overflow:auto}code{padding:1px 3px}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:3px 8px;text-align:start}img{max-width:100%}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:12px;color:#555}</style>";
 async function a(e) {
-	let { marked: t } = await import("./cryptomator_vaults-marked.esm-iyYFkRml.mjs"), a = document.createElement("div");
+	let { marked: t } = await import("./cryptomator_vaults-marked.esm-Dm2Jf5gF.mjs"), a = document.createElement("div");
 	return a.innerHTML = await t.parse(new TextDecoder("utf-8").decode(e), {
 		async: !0,
 		gfm: !0

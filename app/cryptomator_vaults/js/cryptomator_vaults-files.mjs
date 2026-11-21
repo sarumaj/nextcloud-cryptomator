@@ -1500,8 +1500,8 @@ var je = {
 	pptx: async (e) => (await import("./cryptomator_vaults-office-DCu7W88h.mjs")).pptxPage(e),
 	odp: async (e) => (await import("./cryptomator_vaults-office-DCu7W88h.mjs")).odpPage(e),
 	odt: async (e) => (await import("./cryptomator_vaults-office-DCu7W88h.mjs")).odtPage(e),
-	markdown: async (e) => (await import("./cryptomator_vaults-previews-C8BtV61t.mjs")).markdownPage(e),
-	zip: async (e) => (await import("./cryptomator_vaults-previews-C8BtV61t.mjs")).zipPage(e)
+	markdown: async (e) => (await import("./cryptomator_vaults-previews-DgnMnGV4.mjs")).markdownPage(e),
+	zip: async (e) => (await import("./cryptomator_vaults-previews-DgnMnGV4.mjs")).zipPage(e)
 };
 function Me(e) {
 	return e in je || e === "heic";
@@ -1509,7 +1509,7 @@ function Me(e) {
 async function Ne(e, t, n) {
 	return e.kind === "heic" ? D("img", {
 		class: "cryptomator-preview",
-		src: O(await (await import("./cryptomator_vaults-previews-C8BtV61t.mjs")).heicToPng(t), "image/png"),
+		src: O(await (await import("./cryptomator_vaults-previews-DgnMnGV4.mjs")).heicToPng(t), "image/png"),
 		alt: n
 	}) : D("iframe", {
 		class: "cryptomator-preview cryptomator-preview--frame cryptomator-preview--document",
