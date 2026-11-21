@@ -31,7 +31,7 @@ npm ci && npm run build && git status --porcelain app/   # the build must be com
 npm test                                                 # Node tests and translations
 npm run notice && git diff --exit-code NOTICE.md         # third-party notice
 npm run test:compat                                      # Java 25 and Maven, or Docker
-composer install && composer cs:check && composer psalm  # PHP 8.5: php:8.5-cli-alpine, as CI
+composer install && composer cs:check && composer psalm  # PHP 8.6: php:8.6-cli-alpine, as CI
 composer test                                            # PHPUnit (tests/php)
 npx --yes markdownlint-cli2 "*.md" "docs/**/*.md"
 ```
