@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<files psalm-version="6.21.4@72023213487628df0bc5b2e02d68cbac614b7ef5">
+<files psalm-version="7.17.0@b5ea40db593f3acc7a4a20cc1a9bd338ce3bd405">
   <file src="app/cryptomator_vaults/lib/AppInfo/Application.php">
     <MissingOverrideAttribute>
       <code><![CDATA[public function boot(IBootContext $context): void {]]></code>
